@@ -18,31 +18,81 @@ export class ListHandler extends BaseChartHandler {
     try {
       logger.info("Handling list subcommand");
 
-      // Create an embed for the list of charts
-      const embed = new EmbedBuilder()
-        .setTitle("Available Chart Types")
-        .setColor("#0099ff")
-        .setDescription("Here are all the available chart types:")
-        .addFields(
-          {
+      // Dynamically get all available chart types from the registry
+      // Use the registry from the ChartsCommandHandler
+      const { ChartCommandRegistry } = await import("../registry");
+      const registry = new ChartCommandRegistry();
+      const subcommands = registry.getAvailableSubcommands();
+
+      // Map subcommands to friendly names/descriptions
+      const chartDescriptions: Record<string, { name: string; value: string }> =
+        {
+          kills: {
             name: "📊 /charts kills [time]",
             value:
               "Show kill activity by character group with stacked horizontal bars",
           },
-          {
+          map: {
             name: "🗺️ /charts map [time]",
             value:
               "Show map activity by character group with stacked horizontal bars",
           },
-          {
+          loss: {
             name: "💥 /charts loss [time]",
             value: "Show ship loss activity by character group",
           },
-          {
+          ratio: {
             name: "📈 /charts ratio [time]",
             value: "Show kill-death ratio by character group",
-          }
+          },
+          shipkill: {
+            name: "🚀 /charts shipkill [time]",
+            value:
+              "Show top ship types destroyed by your group(s) in the selected period.",
+          },
+          shiploss: {
+            name: "💥 /charts shiploss [time]",
+            value:
+              "Show top ship types lost by your group(s) in the selected period.",
+          },
+          distribution: {
+            name: "🥧 /charts distribution [time]",
+            value: "Show pie chart of solo vs. group kills",
+          },
+          corps: {
+            name: "🏢 /charts corps [time]",
+            value: "Show kills per enemy corporation",
+          },
+          trend: {
+            name: "📊 /charts trend [time]",
+            value: "Show line chart of kills over time",
+          },
+          heatmap: {
+            name: "🔥 /charts heatmap [time]",
+            value: "Show heatmap of kill activity by hour and day of week",
+          },
+          list: {
+            name: "📝 /charts list",
+            value: "Show this list of available chart types",
+          },
+        };
+
+      // Build fields for the embed
+      const fields = subcommands
+        .filter(
+          (cmd) =>
+            chartDescriptions[cmd] &&
+            cmd !== "heatmap" &&
+            cmd !== "trend" &&
+            cmd !== "shiptypes"
         )
+        .map((cmd) => chartDescriptions[cmd]);
+
+      const embed = new EmbedBuilder()
+        .setTitle("Available Chart Types")
+        .setColor("#0099ff")
+        .setDescription("Here are all the available chart types:")
+        .addFields(fields)
         .setFooter({
           text: "Use the specific command to generate that chart type",
         });

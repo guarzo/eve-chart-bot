@@ -26,7 +26,7 @@ export class KillRepository extends BaseRepository<any> {
   ): Promise<any[]> {
     return this.executeQuery(
       () =>
-        (this.prisma as any).killFact.findMany({
+        this.prisma.killFact.findMany({
           where: {
             character_id: BigInt(characterId),
             kill_time: {
@@ -55,7 +55,7 @@ export class KillRepository extends BaseRepository<any> {
 
     return this.executeQuery(
       () =>
-        (this.prisma as any).killFact.findMany({
+        this.prisma.killFact.findMany({
           where: {
             character_id: {
               in: bigIntIds,
@@ -380,15 +380,13 @@ export class KillRepository extends BaseRepository<any> {
     startDate: Date,
     endDate: Date,
     limit: number = 10
-  ): Promise<
-    Array<{ shipTypeId: string; shipTypeName: string; count: number }>
-  > {
+  ): Promise<Array<{ shipTypeId: string; count: number }>> {
     return this.executeQuery(async () => {
       // Convert strings to BigInts for query
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
       // Get all kills for the characters in the specified date range
-      const kills = await (this.prisma as any).killFact.findMany({
+      const kills = await this.prisma.killFact.findMany({
         where: {
           character_id: {
             in: bigIntIds,
@@ -401,26 +399,19 @@ export class KillRepository extends BaseRepository<any> {
         select: {
           killmail_id: true,
           ship_type_id: true,
-          ship_type_name: true,
         },
       });
 
       // Group kills by ship type
-      const shipTypeCounts = new Map<
-        string,
-        { id: string; name: string; count: number }
-      >();
+      const shipTypeCounts = new Map<string, { id: string; count: number }>();
 
       for (const kill of kills) {
         const shipTypeId = kill.ship_type_id.toString();
-        const shipTypeName = kill.ship_type_name || "Unknown Ship Type";
-
         if (shipTypeCounts.has(shipTypeId)) {
           shipTypeCounts.get(shipTypeId)!.count++;
         } else {
           shipTypeCounts.set(shipTypeId, {
             id: shipTypeId,
-            name: shipTypeName,
             count: 1,
           });
         }
@@ -430,7 +421,6 @@ export class KillRepository extends BaseRepository<any> {
       const result = Array.from(shipTypeCounts.values())
         .map((item) => ({
           shipTypeId: item.id,
-          shipTypeName: item.name,
           count: item.count,
         }))
         .sort((a, b) => b.count - a.count)
@@ -448,13 +438,13 @@ export class KillRepository extends BaseRepository<any> {
     startDate: Date,
     endDate: Date,
     limit: number = 5
-  ): Promise<Record<string, Record<string, { name: string; count: number }>>> {
+  ): Promise<Record<string, Record<string, { count: number }>>> {
     return this.executeQuery(async () => {
       // Convert strings to BigInts for query
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
       // Get all kills for the characters in the specified date range
-      const kills = await (this.prisma as any).killFact.findMany({
+      const kills = await this.prisma.killFact.findMany({
         where: {
           character_id: {
             in: bigIntIds,
@@ -468,21 +458,18 @@ export class KillRepository extends BaseRepository<any> {
           killmail_id: true,
           kill_time: true,
           ship_type_id: true,
-          ship_type_name: true,
         },
       });
 
       // First, find the top ship types overall
-      const shipTypeCounts = new Map<string, { name: string; count: number }>();
+      const shipTypeCounts = new Map<string, { count: number }>();
 
       for (const kill of kills) {
         const shipTypeId = kill.ship_type_id.toString();
-        const shipTypeName = kill.ship_type_name || "Unknown Ship Type";
-
         if (shipTypeCounts.has(shipTypeId)) {
           shipTypeCounts.get(shipTypeId)!.count++;
         } else {
-          shipTypeCounts.set(shipTypeId, { name: shipTypeName, count: 1 });
+          shipTypeCounts.set(shipTypeId, { count: 1 });
         }
       }
 
@@ -495,7 +482,7 @@ export class KillRepository extends BaseRepository<any> {
       // Group kills by date and ship type
       const resultByDate: Record<
         string,
-        Record<string, { name: string; count: number }>
+        Record<string, { count: number }>
       > = {};
 
       // Function to get the date key in YYYY-MM-DD format
@@ -515,8 +502,7 @@ export class KillRepository extends BaseRepository<any> {
         resultByDate[dateKey] = {};
 
         for (const shipTypeId of topShipTypes) {
-          const shipType = shipTypeCounts.get(shipTypeId)!;
-          resultByDate[dateKey][shipTypeId] = { name: shipType.name, count: 0 };
+          resultByDate[dateKey][shipTypeId] = { count: 0 };
         }
       }
 
@@ -534,7 +520,6 @@ export class KillRepository extends BaseRepository<any> {
 
           if (!resultByDate[dateKey][shipTypeId]) {
             resultByDate[dateKey][shipTypeId] = {
-              name: kill.ship_type_name || "Unknown Ship Type",
               count: 0,
             };
           }
@@ -559,8 +544,8 @@ export class KillRepository extends BaseRepository<any> {
       // Convert strings to BigInts for query
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
-      // Get all kills for the characters in the specified date range
-      const kills = await (this.prisma as any).killFact.findMany({
+      // Get all kills for the characters in the specified date range, including attackers
+      const kills = await this.prisma.killFact.findMany({
         where: {
           character_id: {
             in: bigIntIds,
@@ -572,17 +557,19 @@ export class KillRepository extends BaseRepository<any> {
         },
         select: {
           killmail_id: true,
-          attacker_count: true,
+          attackers: {
+            select: {
+              id: true, // just need to count
+            },
+          },
         },
       });
 
       // Transform the data
-      return kills.map(
-        (kill: { killmail_id: bigint; attacker_count: number }) => ({
-          killmailId: kill.killmail_id.toString(),
-          attackerCount: Number(kill.attacker_count),
-        })
-      );
+      return kills.map((kill) => ({
+        killmailId: kill.killmail_id.toString(),
+        attackerCount: kill.attackers.length,
+      }));
     }, `kills-with-attacker-count-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
   }
 
@@ -599,8 +586,8 @@ export class KillRepository extends BaseRepository<any> {
       // Convert strings to BigInts for query
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
-      // Get all kills for the characters in the specified date range
-      const kills = await (this.prisma as any).killFact.findMany({
+      // Get all kills for the characters in the specified date range, including victims
+      const kills = await this.prisma.killFact.findMany({
         where: {
           character_id: {
             in: bigIntIds,
@@ -612,29 +599,31 @@ export class KillRepository extends BaseRepository<any> {
         },
         select: {
           killmail_id: true,
-          victim_corporation_id: true,
-          victim_corporation_name: true,
+          victims: {
+            select: {
+              corporation_id: true,
+              // If you have a corporation name field in KillVictim, select it here
+            },
+          },
         },
       });
 
       // Group kills by victim corporation
-      const corpKillCounts = new Map<
-        string,
-        { id: string; name: string; count: number }
-      >();
+      const corpKillCounts = new Map<string, { id: string; count: number }>();
 
       for (const kill of kills) {
-        const corpId = kill.victim_corporation_id.toString();
-        const corpName = kill.victim_corporation_name || "Unknown Corporation";
-
-        if (corpKillCounts.has(corpId)) {
-          corpKillCounts.get(corpId)!.count++;
-        } else {
-          corpKillCounts.set(corpId, {
-            id: corpId,
-            name: corpName,
-            count: 1,
-          });
+        for (const victim of kill.victims) {
+          const corpId = victim.corporation_id
+            ? victim.corporation_id.toString()
+            : "unknown";
+          if (corpKillCounts.has(corpId)) {
+            corpKillCounts.get(corpId)!.count++;
+          } else {
+            corpKillCounts.set(corpId, {
+              id: corpId,
+              count: 1,
+            });
+          }
         }
       }
 
@@ -642,7 +631,7 @@ export class KillRepository extends BaseRepository<any> {
       const result = Array.from(corpKillCounts.values())
         .map((item) => ({
           corpId: item.id,
-          corpName: item.name,
+          corpName: item.id, // Placeholder, as we don't have corp name in KillVictim
           killCount: item.count,
         }))
         .sort((a, b) => b.killCount - a.killCount)
@@ -665,7 +654,7 @@ export class KillRepository extends BaseRepository<any> {
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
       // Get count of all kills for the characters in the specified date range
-      const { _count } = await (this.prisma as any).killFact.aggregate({
+      const { _count } = await this.prisma.killFact.aggregate({
         where: {
           character_id: {
             in: bigIntIds,
@@ -695,7 +684,7 @@ export class KillRepository extends BaseRepository<any> {
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
       // Get all kills for the characters in the specified date range
-      const kills = await (this.prisma as any).killFact.findMany({
+      const kills = await this.prisma.killFact.findMany({
         where: {
           character_id: {
             in: bigIntIds,
@@ -751,5 +740,42 @@ export class KillRepository extends BaseRepository<any> {
 
       return result;
     }, `kill-activity-heatmap-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+  }
+
+  /**
+   * Get distribution data for a character
+   */
+  async getDistributionData(
+    characterIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
+    return this.executeQuery(async () => {
+      // Convert strings to BigInts for query
+      const bigIntIds = characterIds.map((id) => BigInt(id));
+
+      // Get all kills for the characters in the specified date range
+      const kills = await this.prisma.killFact.findMany({
+        where: {
+          character_id: {
+            in: bigIntIds,
+          },
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        select: {
+          killmail_id: true,
+          solo: true,
+        },
+      });
+
+      // Map to expected format
+      return kills.map((kill) => ({
+        killmailId: kill.killmail_id.toString(),
+        attackerCount: kill.solo ? 1 : 2, // If not solo, assume at least 2 attackers
+      }));
+    }, `distribution-data-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
   }
 }

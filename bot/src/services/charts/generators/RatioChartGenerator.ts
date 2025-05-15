@@ -28,6 +28,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>;
     displayType: string;
   }): Promise<ChartData> {
@@ -37,91 +38,68 @@ export class RatioChartGenerator extends BaseChartGenerator {
 
     // Create display names based on main character or first character in each group
     const labels = characterGroups.map((group) => {
-      // Find a character with alts (main character) or use the first character
-      const mainCharacter = group.characters.find((char) =>
-        group.characters.some(
-          (c) =>
-            c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-        )
-      );
-
-      // Return proper display name
-      if (mainCharacter) {
-        return mainCharacter.name;
-      } else if (group.characters.length > 0) {
+      // Use main character name if available
+      if (group.mainCharacterId) {
+        const mainChar = group.characters.find(
+          (c) => c.eveId === group.mainCharacterId
+        );
+        if (mainChar) return mainChar.name;
+      }
+      // Fallback to first character or group name
+      if (group.characters.length > 0) {
         return group.characters[0].name;
       } else {
-        return group.name; // Fallback to group name/slug
+        return group.name;
       }
     });
 
-    // Data arrays for chart datasets
-    const ratioData: number[] = [];
-    const efficiencyData: number[] = [];
+    // Prepare data arrays
+    const filteredLabels: string[] = [];
+    const kdRatios: number[] = [];
+    const efficiencies: number[] = [];
 
-    // Process each character group
     for (const group of characterGroups) {
-      // Convert character eveIds to bigints
       const characterIds = group.characters.map((char) => BigInt(char.eveId));
-
-      if (characterIds.length === 0) {
-        // Skip empty groups
-        ratioData.push(0);
-        efficiencyData.push(0);
-        continue;
-      }
-
-      try {
-        // Get kill and loss data for this group
-        const killPromises = characterIds.map(
-          (charId) =>
-            this.killRepository
-              .getKillsForCharacter(charId.toString(), startDate, endDate)
-              .then((kills) => kills.length) // Get the count of kills
+      if (characterIds.length === 0) continue;
+      // Compute stats manually
+      const kills = await this.killRepository.getKillsForCharacters(
+        characterIds.map(String),
+        startDate,
+        endDate
+      );
+      const lossesSummary =
+        await this.lossRepository.getLossesSummaryByCharacters(
+          characterIds,
+          startDate,
+          endDate
         );
-        const lossPromises = characterIds.map((charId) =>
-          this.lossRepository.getLossesByCharacter(charId, startDate, endDate)
-        );
-
-        // Wait for all queries to complete
-        const kills = await Promise.all(killPromises);
-        const losses = await Promise.all(lossPromises);
-
-        // Calculate totals
-        const totalKills = kills.reduce(
-          (sum: number, count: number) => sum + count,
-          0
-        );
-        const totalLosses = losses.reduce(
-          (sum: number, count: number) => sum + count,
-          0
-        );
-
-        // Calculate kill-death ratio and efficiency
-        let ratio = 0;
-        let efficiency = 0;
-
-        if (totalLosses > 0) {
-          ratio = totalKills / totalLosses;
-        } else if (totalKills > 0) {
-          ratio = totalKills; // Infinite ratio capped at kill count
+      const totalKills = kills.length;
+      const totalLosses = lossesSummary.totalLosses;
+      // Only include groups with at least one kill or death
+      if (totalKills > 0 || totalLosses > 0) {
+        // Use main character name if available
+        let label = group.name;
+        if (group.mainCharacterId) {
+          const mainChar = group.characters.find(
+            (c) => c.eveId === group.mainCharacterId
+          );
+          if (mainChar) label = mainChar.name;
+        } else if (group.characters.length > 0) {
+          label = group.characters[0].name;
         }
-
-        // Calculate efficiency (kills as percentage of total activity)
+        filteredLabels.push(label);
+        let kdRatio = 0;
+        if (totalLosses > 0) {
+          kdRatio = totalKills / totalLosses;
+        } else if (totalKills > 0) {
+          kdRatio = totalKills;
+        }
+        let efficiency = 0;
         if (totalKills + totalLosses > 0) {
           efficiency = (totalKills / (totalKills + totalLosses)) * 100;
         }
-
-        // Add to data arrays, capping ratio at 10 for chart readability
-        ratioData.push(Math.min(ratio, 10));
-        efficiencyData.push(efficiency);
-      } catch (error) {
-        logger.error(
-          `Error fetching kill-death data for group ${group.name}:`,
-          error
-        );
-        ratioData.push(0);
-        efficiencyData.push(0);
+        kdRatios.push(kdRatio);
+        efficiencies.push(efficiency);
       }
     }
 
@@ -130,27 +108,27 @@ export class RatioChartGenerator extends BaseChartGenerator {
     let summary = `Kill-Death ratios for tracked characters (${timeRangeText})`;
 
     // Add top performer if there's data
-    if (Math.max(...ratioData) > 0) {
-      const bestGroupIndex = ratioData.indexOf(Math.max(...ratioData));
+    if (Math.max(...kdRatios) > 0) {
+      const bestGroupIndex = kdRatios.indexOf(Math.max(...kdRatios));
       summary += `\nBest performer: ${
-        labels[bestGroupIndex]
-      } with K/D ratio of ${ratioData[bestGroupIndex].toFixed(2)}`;
+        filteredLabels[bestGroupIndex]
+      } with K/D ratio of ${kdRatios[bestGroupIndex].toFixed(2)}`;
     }
 
     return {
-      labels,
+      labels: filteredLabels,
       datasets: [
         {
           label: "K/D Ratio",
-          data: ratioData,
-          backgroundColor: RatioChartConfig.metrics[0].color,
-          borderColor: RatioChartConfig.metrics[0].color,
+          data: kdRatios,
+          backgroundColor: "#3366CC",
+          borderColor: "#3366CC",
         },
         {
           label: "Efficiency %",
-          data: efficiencyData,
-          backgroundColor: RatioChartConfig.metrics[1].color,
-          borderColor: RatioChartConfig.metrics[1].color,
+          data: efficiencies,
+          backgroundColor: "#DC3912",
+          borderColor: "#DC3912",
         },
       ],
       title: `Kill-Death Ratio - ${timeRangeText}`,

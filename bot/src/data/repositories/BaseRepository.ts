@@ -16,19 +16,7 @@ export abstract class BaseRepository<T> {
   constructor(modelName: string) {
     this.prisma = new PrismaClient();
     this.modelName = modelName;
-
-    // Get the actual database table name with correct case
-    this.dbTableName = DatabaseUtils.getTableName(this.prisma, modelName);
-
-    if (!this.dbTableName) {
-      logger.warn(
-        `BaseRepository: Could not determine table name for model ${modelName}`
-      );
-    } else {
-      logger.debug(
-        `BaseRepository: Model ${modelName} maps to table ${this.dbTableName}`
-      );
-    }
+    this.dbTableName = null; // Table name resolution is not needed with Prisma client
   }
 
   /**

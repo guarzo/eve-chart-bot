@@ -7,3 +7,5 @@ export { DistributionChartGenerator } from "./DistributionChartGenerator";
 export { CorpsChartGenerator } from "./CorpsChartGenerator";
 export { TrendChartGenerator } from "./TrendChartGenerator";
 export { HeatmapChartGenerator } from "./HeatmapChartGenerator";
+export { ShipKillChartGenerator } from "./ShipKillChartGenerator";
+export { ShipLossChartGenerator } from "./ShipLossChartGenerator";

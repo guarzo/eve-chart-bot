@@ -4,12 +4,15 @@ import { CorpsChartConfig } from "../config";
 import { KillRepository } from "../../../data/repositories";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
+import axios from "axios";
 
 /**
  * Generator for enemy corporation charts
  */
 export class CorpsChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
+  // Helper to fetch corp ticker from ESI and cache it
+  private corpTickerCache: Record<string, string> = {};
 
   constructor() {
     super();
@@ -61,6 +64,21 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     }
   }
 
+  // Helper to fetch corp ticker from ESI and cache it
+  private async getCorpTicker(corpId: string): Promise<string> {
+    if (this.corpTickerCache[corpId]) return this.corpTickerCache[corpId];
+    try {
+      const resp = await axios.get(
+        `https://esi.evetech.net/latest/corporations/${corpId}/?datasource=tranquility`
+      );
+      const ticker = resp.data.ticker || corpId;
+      this.corpTickerCache[corpId] = ticker;
+      return ticker;
+    } catch {
+      return corpId;
+    }
+  }
+
   /**
    * Generate a horizontal bar chart showing top enemy corporations
    */
@@ -96,6 +114,11 @@ export class CorpsChartGenerator extends BaseChartGenerator {
       );
     }
 
+    // Lookup tickers for all corpIds
+    const labelTickers = await Promise.all(
+      corpsData.map((corp) => this.getCorpTicker(corp.corpId))
+    );
+
     // Sort by kill count in descending order
     corpsData.sort((a, b) => b.killCount - a.killCount);
 
@@ -104,10 +127,11 @@ export class CorpsChartGenerator extends BaseChartGenerator {
 
     // Get top corporation information for summary
     const topCorp = corpsData[0];
+    const topCorpTicker = labelTickers[0];
 
     // Create chart data
     const chartData: ChartData = {
-      labels: corpsData.map((corp) => corp.corpName),
+      labels: labelTickers,
       datasets: [
         {
           label: "Kills",
@@ -133,7 +157,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
       summary: CorpsChartConfig.getDefaultSummary(
         corpsData.length,
         totalKills,
-        topCorp.corpName,
+        topCorpTicker,
         topCorp.killCount
       ),
     };
@@ -225,7 +249,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     const othersThreshold = totalAllCorpsKills * 0.01;
 
     // Copy the data and add "Others" if needed
-    let pieLabels = corpsData.map((corp) => corp.corpName);
+    let pieLabels = corpsData.map((corp) => corp.corpName || corp.corpId);
     let pieData = corpsData.map((corp) => corp.killCount);
     let pieColors = corpsData.map(
       (_, i) => CorpsChartConfig.colors[i % CorpsChartConfig.colors.length]
@@ -262,7 +286,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
       summary: CorpsChartConfig.getDefaultSummary(
         corpsData.length,
         totalAllCorpsKills,
-        topCorp.corpName,
+        topCorp.corpName || topCorp.corpId,
         topCorp.killCount
       ),
     };

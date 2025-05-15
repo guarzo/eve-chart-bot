@@ -334,4 +334,62 @@ export class LossRepository extends BaseRepository<LossFact> {
       return result;
     }, "get-by-time-range-grouped");
   }
+
+  /**
+   * Get the top ship types lost within a date range
+   */
+  async getTopShipTypesLost(
+    characterIds: string[],
+    startDate: Date,
+    endDate: Date,
+    limit: number = 10
+  ): Promise<Array<{ shipTypeId: string; count: number }>> {
+    return this.executeQuery(async () => {
+      // Convert strings to BigInts for query
+      const bigIntIds = characterIds.map((id) => BigInt(id));
+
+      // Get all losses for the characters in the specified date range
+      const losses = await this.prisma.lossFact.findMany({
+        where: {
+          character_id: {
+            in: bigIntIds,
+          },
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        select: {
+          killmail_id: true,
+          ship_type_id: true,
+        },
+      });
+
+      // Group losses by ship type
+      const shipTypeCounts = new Map<string, { id: string; count: number }>();
+
+      for (const loss of losses) {
+        const shipTypeId = loss.ship_type_id.toString();
+        if (shipTypeCounts.has(shipTypeId)) {
+          shipTypeCounts.get(shipTypeId)!.count++;
+        } else {
+          shipTypeCounts.set(shipTypeId, {
+            id: shipTypeId,
+            count: 1,
+          });
+        }
+      }
+
+      // Convert to array and sort by count
+      const result = Array.from(shipTypeCounts.values())
+        .map((item) => ({
+          shipTypeId: item.id,
+          count: item.count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+
+      return result;
+    }, `top-ship-types-lost-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+  }
 }

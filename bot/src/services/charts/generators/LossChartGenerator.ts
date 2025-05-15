@@ -32,29 +32,11 @@ export class LossChartGenerator extends BaseChartGenerator {
 
     const { startDate, endDate, characterGroups } = options;
 
-    // Create display names based on main character or first character in each group
-    const labels = characterGroups.map((group) => {
-      // Find a character with alts (main character) or use the first character
-      const mainCharacter = group.characters.find((char) =>
-        group.characters.some(
-          (c) =>
-            c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-        )
-      );
-
-      // Return proper display name
-      if (mainCharacter) {
-        return mainCharacter.name;
-      } else if (group.characters.length > 0) {
-        return group.characters[0].name;
-      } else {
-        return group.name; // Fallback to group name/slug
-      }
-    });
-
     // Data arrays for chart datasets
+    const filteredLabels: string[] = [];
     const totalLossesData: number[] = [];
     const highValueLossesData: number[] = [];
+    const totalIskData: number[] = [];
     let grandTotalLosses = 0;
     let grandTotalValue = BigInt(0);
 
@@ -65,8 +47,6 @@ export class LossChartGenerator extends BaseChartGenerator {
 
       if (characterIds.length === 0) {
         // Skip empty groups
-        totalLossesData.push(0);
-        highValueLossesData.push(0);
         continue;
       }
 
@@ -79,8 +59,28 @@ export class LossChartGenerator extends BaseChartGenerator {
             endDate
           );
 
-        totalLossesData.push(lossSummary.totalLosses);
-        highValueLossesData.push(lossSummary.highValueLosses);
+        // Only include groups with at least one loss
+        if (lossSummary.totalLosses > 0) {
+          // Find a character with alts (main character) or use the first character
+          const mainCharacter = group.characters.find((char) =>
+            group.characters.some(
+              (c) =>
+                c.eveId !== char.eveId &&
+                c.name.includes(char.name.split(" ")[0])
+            )
+          );
+          if (mainCharacter) {
+            filteredLabels.push(mainCharacter.name);
+          } else if (group.characters.length > 0) {
+            filteredLabels.push(group.characters[0].name);
+          } else {
+            filteredLabels.push(group.name); // Fallback to group name/slug
+          }
+
+          totalLossesData.push(lossSummary.totalLosses);
+          highValueLossesData.push(lossSummary.highValueLosses);
+          totalIskData.push(Number(lossSummary.totalValueLost));
+        }
 
         // Update grand totals
         grandTotalLosses += lossSummary.totalLosses;
@@ -90,8 +90,6 @@ export class LossChartGenerator extends BaseChartGenerator {
           `Error fetching loss data for group ${group.name}:`,
           error
         );
-        totalLossesData.push(0);
-        highValueLossesData.push(0);
       }
     }
 
@@ -101,7 +99,7 @@ export class LossChartGenerator extends BaseChartGenerator {
     const summary = `Ship losses for tracked characters (${timeRangeText}): ${grandTotalLosses} losses totaling ${formattedTotalValue} ISK`;
 
     return {
-      labels,
+      labels: filteredLabels,
       datasets: [
         {
           label: "Total Losses",
@@ -114,6 +112,12 @@ export class LossChartGenerator extends BaseChartGenerator {
           data: highValueLossesData,
           backgroundColor: this.getDatasetColors("loss").secondary,
           borderColor: this.getDatasetColors("loss").secondary,
+        },
+        {
+          label: "ISK Value Lost",
+          data: totalIskData,
+          backgroundColor: "#FFD700",
+          borderColor: "#FFD700",
         },
       ],
       title: `Ship Losses - ${timeRangeText}`,

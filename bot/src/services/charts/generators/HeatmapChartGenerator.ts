@@ -103,30 +103,48 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
       }
     }
 
-    // Create datasets for the heatmap
-    // For heatmaps, we'll create one dataset per hour (rows) with days as columns
-    const datasets = [];
-    const hourLabels = HeatmapChartConfig.hours;
-
-    // Group data by hour of day
+    // Create a 2D matrix for the heatmap: rows = hours, columns = days
+    const matrix: number[][] = [];
     for (let hour = 0; hour < 24; hour++) {
-      const hourData = [];
+      const row: number[] = [];
       for (let day = 0; day < 7; day++) {
         const activity = activityData.find(
           (d) => d.hourOfDay === hour && d.dayOfWeek === day
         );
-        hourData.push(activity ? activity.kills : 0);
+        row.push(activity ? activity.kills : 0);
       }
+      matrix.push(row);
+    }
 
-      // Only include hours with activity
-      if (hourData.some((count) => count > 0)) {
-        datasets.push({
-          label: hourLabels[hour],
-          data: hourData,
-          backgroundColor: this.getColorForValues(hourData, peakKills),
+    // Only include hours with activity
+    const filteredMatrix: number[][] = [];
+    const filteredHourLabels: string[] = [];
+    for (let hour = 0; hour < 24; hour++) {
+      if (matrix[hour].some((count) => count > 0)) {
+        filteredMatrix.push(matrix[hour]);
+        filteredHourLabels.push(HeatmapChartConfig.hours[hour]);
+      }
+    }
+
+    // Convert the 2D matrix to ComplexDataPoint[] for heatmap plugin compatibility
+    const heatmapData = [];
+    for (let i = 0; i < filteredMatrix.length; i++) {
+      for (let j = 0; j < filteredMatrix[i].length; j++) {
+        heatmapData.push({
+          x: HeatmapChartConfig.shortDaysOfWeek[j],
+          y: filteredHourLabels[i],
+          v: filteredMatrix[i][j],
         });
       }
     }
+
+    const datasets = [
+      {
+        label: "Kill Activity",
+        data: heatmapData,
+        backgroundColor: undefined, // Let the plugin handle coloring
+      },
+    ];
 
     // Create chart data
     const chartData: ChartData = {
@@ -141,7 +159,7 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
       summary: HeatmapChartConfig.getDefaultSummary(
         totalKills,
         HeatmapChartConfig.daysOfWeek[peakDay],
-        hourLabels[peakHour],
+        HeatmapChartConfig.hours[peakHour],
         peakKills
       ),
     };
