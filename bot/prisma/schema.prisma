@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Tracks the ingestion checkpoint for each stream (e.g. RedisQ)
+model IngestionCheckpoint {
+  streamName   String   @id
+  lastSeenId   BigInt
+  lastSeenTime DateTime
+
+  @@map("ingestion_checkpoints")
+}
+
+model Character {
+  eveId              String          @id @map("eve_id")
+  name               String
+  allianceId         Int?            @map("alliance_id")
+  allianceTicker     String?         @map("alliance_ticker")
+  corporationId      Int             @map("corporation_id")
+  corporationTicker  String          @map("corporation_ticker")
+  isMain             Boolean         @map("is_main")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  characterGroupId   String?         @map("character_group_id")
+  mainCharacterId    String?         @map("main_character_id")
+  lastBackfillAt     DateTime?       @map("last_backfill_at")
+  groupMainCharacter CharacterGroup? @relation("GroupMainCharacter")
+  characterGroup     CharacterGroup? @relation("GroupCharacters", fields: [characterGroupId], references: [id])
+  mainCharacter      Character?      @relation("MainCharacter", fields: [mainCharacterId], references: [eveId])
+  altCharacters      Character[]     @relation("MainCharacter")
+
+  @@index([characterGroupId])
+  @@map("characters")
+}
+
+model CharacterGroup {
+  id              String      @id @default(uuid())
+  slug            String      @unique
+  mainCharacterId String?     @unique @map("main_character_id")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+  mainCharacter   Character?  @relation("GroupMainCharacter", fields: [mainCharacterId], references: [eveId])
+  characters      Character[] @relation("GroupCharacters")
+
+  @@map("character_groups")
+}
+
+model MapActivity {
+  characterId   BigInt   @map("character_id")
+  timestamp     DateTime
+  signatures    Int
+  connections   Int
+  passages      Int
+  allianceId    Int?     @map("alliance_id")
+  corporationId Int      @map("corporation_id")
+
+  @@id([characterId, timestamp])
+  @@index([characterId, timestamp])
+  @@index([corporationId, timestamp])
+  @@map("map_activities")
+}
+
+model KillFact {
+  killmail_id  BigInt   @id
+  character_id BigInt
+  kill_time    DateTime
+  npc          Boolean
+  solo         Boolean
+  awox         Boolean
+  ship_type_id Int
+  system_id    Int
+  labels       String[]
+  total_value  BigInt
+  points       Int
+
+  // Define relationships to the new tables
+  attackers KillAttacker[]
+  victims KillVictim[]
+
+  @@index([character_id, kill_time])
+  @@map("KillFact")
+}
+
+model LossFact {
+  killmail_id    BigInt   @id
+  character_id   BigInt
+  kill_time      DateTime
+  ship_type_id   Int
+  system_id      Int
+  total_value    BigInt
+  attacker_count Int
+  labels         String[]
+
+  @@index([character_id, kill_time])
+  @@map("LossFact")
+}
+
+// New models for the kill relationship tables
+model KillAttacker {
+  id            Int      @id @default(autoincrement())
+  killmail_id   BigInt
+  character_id  BigInt?
+  corporation_id BigInt?
+  alliance_id   BigInt?
+  damage_done   Int
+  final_blow    Boolean
+  security_status Float?
+  ship_type_id  Int?
+  weapon_type_id Int?
+  created_at    DateTime @default(now())
+  
+  // Define relationship back to kill
+  kill         KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+
+  @@index([killmail_id])
+  @@index([character_id])
+  @@map("KillAttacker")
+}
+
+model KillVictim {
+  id            Int      @id @default(autoincrement())
+  killmail_id   BigInt
+  character_id  BigInt?
+  corporation_id BigInt?
+  alliance_id   BigInt?
+  ship_type_id  Int
+  damage_taken  Int
+  created_at    DateTime @default(now())
+  
+  // Define relationship back to kill
+  kill         KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+
+  @@index([killmail_id])
+  @@index([character_id])
+  @@map("KillVictim")
+}

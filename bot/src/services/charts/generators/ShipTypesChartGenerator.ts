@@ -1,0 +1,266 @@
+import { BaseChartGenerator } from "../BaseChartGenerator";
+import { ChartData } from "../../../types/chart";
+import { ShipTypesChartConfig } from "../config";
+import { KillRepository } from "../../../data/repositories";
+import { format } from "date-fns";
+import { logger } from "../../../lib/logger";
+
+/**
+ * Generator for ship types charts
+ */
+export class ShipTypesChartGenerator extends BaseChartGenerator {
+  private killRepository: KillRepository;
+
+  constructor() {
+    super();
+    this.killRepository = new KillRepository();
+  }
+
+  /**
+   * Generate a ship types chart based on the provided options
+   */
+  async generateChart(options: {
+    startDate: Date;
+    endDate: Date;
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+    }>;
+    displayType: string;
+  }): Promise<ChartData> {
+    try {
+      const { startDate, endDate, characterGroups, displayType } = options;
+      logger.info(
+        `Generating ship types chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
+      logger.debug(
+        `Chart type: ${displayType}, Groups: ${characterGroups.length}`
+      );
+
+      // Select chart generation function based on display type
+      if (displayType === "horizontalBar") {
+        return this.generateHorizontalBarChart(
+          characterGroups,
+          startDate,
+          endDate
+        );
+      } else if (displayType === "verticalBar") {
+        return this.generateVerticalBarChart(
+          characterGroups,
+          startDate,
+          endDate
+        );
+      } else {
+        // Default to line chart (timeline)
+        return this.generateTimelineChart(characterGroups, startDate, endDate);
+      }
+    } catch (error) {
+      logger.error("Error generating ship types chart:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a horizontal bar chart showing top ship types destroyed
+   */
+  private async generateHorizontalBarChart(
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+    }>,
+    startDate: Date,
+    endDate: Date
+  ): Promise<ChartData> {
+    // Extract all character IDs from the groups
+    const characterIds = characterGroups
+      .flatMap((group) => group.characters)
+      .map((character) => character.eveId);
+
+    if (characterIds.length === 0) {
+      throw new Error("No characters found in the provided groups");
+    }
+
+    // Get the top ship types data
+    const shipTypesData = await this.killRepository.getTopShipTypesDestroyed(
+      characterIds,
+      startDate,
+      endDate,
+      15 // Limit to top 15 ship types
+    );
+
+    if (shipTypesData.length === 0) {
+      throw new Error("No ship type data found for the specified time period");
+    }
+
+    // Sort by count in descending order
+    shipTypesData.sort((a, b) => b.count - a.count);
+
+    // Calculate total destroyed
+    const totalDestroyed = shipTypesData.reduce(
+      (sum, shipType) => sum + shipType.count,
+      0
+    );
+
+    // Create chart data
+    const chartData: ChartData = {
+      labels: shipTypesData.map((type) => type.shipTypeName),
+      datasets: [
+        {
+          label: "Ships Destroyed",
+          data: shipTypesData.map((type) => type.count),
+          backgroundColor: this.getVisibleColors(
+            shipTypesData.map((type) => type.count),
+            ShipTypesChartConfig.colors
+          ),
+          borderColor: ShipTypesChartConfig.colors.map((color) =>
+            this.adjustColorBrightness(color, -20)
+          ),
+        },
+      ],
+      displayType: "horizontalBar",
+      title: `${ShipTypesChartConfig.title} - ${format(
+        startDate,
+        "MMM d"
+      )} to ${format(endDate, "MMM d, yyyy")}`,
+      options: ShipTypesChartConfig.horizontalBarOptions,
+      summary: ShipTypesChartConfig.getDefaultSummary(
+        shipTypesData.length,
+        totalDestroyed
+      ),
+    };
+
+    return chartData;
+  }
+
+  /**
+   * Generate a vertical bar chart showing top ship types destroyed
+   */
+  private async generateVerticalBarChart(
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+    }>,
+    startDate: Date,
+    endDate: Date
+  ): Promise<ChartData> {
+    // This is similar to horizontal bar chart but with a different orientation
+    const chartData = await this.generateHorizontalBarChart(
+      characterGroups,
+      startDate,
+      endDate
+    );
+
+    // Override options for vertical orientation
+    chartData.options = ShipTypesChartConfig.verticalBarOptions;
+    chartData.displayType = "bar";
+    return chartData;
+  }
+
+  /**
+   * Generate a timeline chart showing ship types destroyed over time
+   */
+  private async generateTimelineChart(
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+    }>,
+    startDate: Date,
+    endDate: Date
+  ): Promise<ChartData> {
+    // Extract all character IDs from the groups
+    const characterIds = characterGroups
+      .flatMap((group) => group.characters)
+      .map((character) => character.eveId);
+
+    if (characterIds.length === 0) {
+      throw new Error("No characters found in the provided groups");
+    }
+
+    // Get the top ship types data over time
+    const shipTypesTimeData = await this.killRepository.getShipTypesOverTime(
+      characterIds,
+      startDate,
+      endDate,
+      5 // Limit to top 5 ship types for clearer timeline display
+    );
+
+    if (Object.keys(shipTypesTimeData).length === 0) {
+      throw new Error("No ship type time data found for the specified period");
+    }
+
+    // Sort dates to ensure chronological order
+    const dates = Object.keys(shipTypesTimeData).sort();
+
+    // Get the top 5 ship types by total count across all dates
+    const shipTypeTotals = new Map<string, { name: string; total: number }>();
+
+    for (const date of dates) {
+      const dateData = shipTypesTimeData[date];
+      for (const [shipTypeId, data] of Object.entries(dateData)) {
+        const current = shipTypeTotals.get(shipTypeId) || {
+          name: data.name,
+          total: 0,
+        };
+        current.total += data.count;
+        shipTypeTotals.set(shipTypeId, current);
+      }
+    }
+
+    // Sort ship types by total count and take top 5
+    const topShipTypes = Array.from(shipTypeTotals.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, 5)
+      .map(([id, data]) => ({ id, name: data.name }));
+
+    // Create datasets for each ship type
+    const datasets = topShipTypes.map((shipType, index) => {
+      const data = dates.map((date) => {
+        const dateData = shipTypesTimeData[date];
+        return dateData[shipType.id]?.count || 0;
+      });
+
+      return {
+        label: shipType.name,
+        data,
+        backgroundColor:
+          ShipTypesChartConfig.colors[
+            index % ShipTypesChartConfig.colors.length
+          ],
+        borderColor:
+          ShipTypesChartConfig.colors[
+            index % ShipTypesChartConfig.colors.length
+          ],
+      };
+    });
+
+    // Calculate total destroyed across all dates and types
+    let totalDestroyed = 0;
+    for (const date of dates) {
+      const dateData = shipTypesTimeData[date];
+      for (const data of Object.values(dateData)) {
+        totalDestroyed += data.count;
+      }
+    }
+
+    // Create chart data
+    const chartData: ChartData = {
+      labels: dates.map((date) => format(new Date(date), "MMM d")),
+      datasets,
+      displayType: "line",
+      title: `${ShipTypesChartConfig.title} Over Time - ${format(
+        startDate,
+        "MMM d"
+      )} to ${format(endDate, "MMM d, yyyy")}`,
+      options: ShipTypesChartConfig.timelineOptions,
+      summary: `Showing top ${
+        topShipTypes.length
+      } ship types destroyed over time (${totalDestroyed.toLocaleString()} total kills)`,
+    };
+
+    return chartData;
+  }
+}

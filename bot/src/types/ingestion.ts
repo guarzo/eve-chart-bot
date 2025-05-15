@@ -1,0 +1,128 @@
+import { z } from "zod";
+
+// API Response Types
+export const ZkillResponseSchema = z.object({
+  killmail_id: z.number(),
+  zkb: z.object({
+    locationID: z.number(),
+    hash: z.string(),
+    fittedValue: z.number(),
+    droppedValue: z.number(),
+    destroyedValue: z.number(),
+    totalValue: z.number(),
+    points: z.number(),
+    npc: z.boolean(),
+    solo: z.boolean(),
+    awox: z.boolean(),
+    labels: z.array(z.string()),
+  }),
+});
+
+// Character Schema
+export const CharacterSchema = z.object({
+  eve_id: z.string(),
+  name: z.string(),
+  alliance_id: z.number().nullable(),
+  alliance_ticker: z.string().nullable(),
+  corporation_id: z.number(),
+  corporation_ticker: z.string(),
+});
+
+// Map Activity Response Schema
+export const MapActivityResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      timestamp: z.string(),
+      character: CharacterSchema,
+      signatures: z.number(),
+      connections: z.number(),
+      passages: z.number(),
+    })
+  ),
+});
+
+// User Characters Response Schema
+export const UserCharactersResponseSchema = z.object({
+  data: z.array(
+    z.object({
+      main_character_eve_id: z.string().nullable(),
+      characters: z.array(CharacterSchema),
+    })
+  ),
+});
+
+// Database Types
+export interface KillFact {
+  killmailId: bigint;
+  killTime: Date;
+  systemId: number;
+  totalValue: bigint;
+  points: number;
+  position?: any | null;
+  items?: any | null;
+}
+
+export interface MapActivity {
+  characterId: string;
+  timestamp: Date;
+  signatures: number;
+  connections: number;
+  passages: number;
+  allianceId: number | null;
+  corporationId: number;
+}
+
+export interface Character {
+  eveId: string;
+  name: string;
+  allianceId: number | null;
+  allianceTicker: string | null;
+  corporationId: number;
+  corporationTicker: string;
+  isMain: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+  lastBackfillAt?: Date | null;
+  characterGroupId?: string | null;
+  mainCharacterId?: string | null;
+}
+
+export interface CharacterGroup {
+  id: string;
+  slug: string;
+  mainCharacterId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface CharacterWithRelations extends Character {
+  characterGroup?: CharacterGroup | null;
+  mainCharacter?: Character | null;
+  altCharacters?: Character[];
+  groupMainCharacter?: CharacterGroup | null;
+}
+
+export interface CharacterGroupWithRelations extends CharacterGroup {
+  mainCharacter?: Character | null;
+  characters: Character[];
+}
+
+// Ingestion Config
+export interface IngestionConfig {
+  zkillApiUrl: string;
+  mapApiUrl?: string;
+  mapApiKey?: string;
+  esiApiUrl?: string;
+  redisUrl?: string;
+  cacheTtl?: number;
+  batchSize?: number;
+  backoffMs?: number;
+  maxRetries?: number;
+}
+
+// Checkpoint Types
+export interface IngestionCheckpoint {
+  streamName: string;
+  lastSeenId: bigint;
+  lastSeenTime: Date;
+}
