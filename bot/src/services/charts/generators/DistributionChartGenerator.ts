@@ -26,6 +26,7 @@ export class DistributionChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>;
     displayType: string;
   }): Promise<ChartData> {
@@ -64,6 +65,7 @@ export class DistributionChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>,
     startDate: Date,
     endDate: Date
@@ -119,6 +121,7 @@ export class DistributionChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>,
     startDate: Date,
     endDate: Date

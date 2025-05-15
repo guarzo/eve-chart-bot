@@ -26,6 +26,7 @@ export class MapChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>;
     displayType: string;
   }): Promise<ChartData> {
@@ -69,6 +70,7 @@ export class MapChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>,
     startDate: Date,
     endDate: Date
@@ -96,20 +98,17 @@ export class MapChartGenerator extends BaseChartGenerator {
       // Determine proper display name for the group
       let displayName = group.name;
 
-      // Try to find the main character or use the first character
-      if (group.characters.length > 0) {
-        const mainCharacter = group.characters.find((char) =>
-          group.characters.some(
-            (c) =>
-              c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-          )
+      // Use the main character from the group if available
+      if (group.mainCharacterId) {
+        const mainChar = group.characters.find(
+          (c) => c.eveId === group.mainCharacterId
         );
-
-        if (mainCharacter) {
-          displayName = mainCharacter.name;
-        } else {
-          displayName = group.characters[0].name;
+        if (mainChar) {
+          displayName = mainChar.name;
         }
+      } else if (group.characters.length > 0) {
+        // Fallback to first character if no main character is set
+        displayName = group.characters[0].name;
       }
 
       labels.push(displayName);
@@ -168,6 +167,7 @@ export class MapChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>,
     startDate: Date,
     endDate: Date
@@ -190,6 +190,7 @@ export class MapChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>,
     startDate: Date,
     endDate: Date
@@ -239,20 +240,17 @@ export class MapChartGenerator extends BaseChartGenerator {
       // Determine proper display name for the group
       let displayName = group.name;
 
-      // Try to find the main character or use the first character
-      if (group.characters.length > 0) {
-        const mainCharacter = group.characters.find((char) =>
-          group.characters.some(
-            (c) =>
-              c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-          )
+      // Use the main character from the group if available
+      if (group.mainCharacterId) {
+        const mainChar = group.characters.find(
+          (c) => c.eveId === group.mainCharacterId
         );
-
-        if (mainCharacter) {
-          displayName = mainCharacter.name;
-        } else {
-          displayName = group.characters[0].name;
+        if (mainChar) {
+          displayName = mainChar.name;
         }
+      } else if (group.characters.length > 0) {
+        // Fallback to first character if no main character is set
+        displayName = group.characters[0].name;
       }
 
       // Extract the data points and collect labels

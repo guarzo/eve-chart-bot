@@ -25,6 +25,7 @@ export class LossChartGenerator extends BaseChartGenerator {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>;
     displayType: string;
   }): Promise<ChartData> {
@@ -61,21 +62,20 @@ export class LossChartGenerator extends BaseChartGenerator {
 
         // Only include groups with at least one loss
         if (lossSummary.totalLosses > 0) {
-          // Find a character with alts (main character) or use the first character
-          const mainCharacter = group.characters.find((char) =>
-            group.characters.some(
-              (c) =>
-                c.eveId !== char.eveId &&
-                c.name.includes(char.name.split(" ")[0])
-            )
-          );
-          if (mainCharacter) {
-            filteredLabels.push(mainCharacter.name);
+          // Use the main character from the group if available
+          let label = group.name;
+          if (group.mainCharacterId) {
+            const mainChar = group.characters.find(
+              (c) => c.eveId === group.mainCharacterId
+            );
+            if (mainChar) {
+              label = mainChar.name;
+            }
           } else if (group.characters.length > 0) {
-            filteredLabels.push(group.characters[0].name);
-          } else {
-            filteredLabels.push(group.name); // Fallback to group name/slug
+            // Fallback to first character if no main character is set
+            label = group.characters[0].name;
           }
+          filteredLabels.push(label);
 
           totalLossesData.push(lossSummary.totalLosses);
           highValueLossesData.push(lossSummary.highValueLosses);

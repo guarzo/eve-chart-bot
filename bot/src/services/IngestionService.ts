@@ -523,6 +523,16 @@ export class IngestionService {
         );
         logger.info(`User has ${user.characters.length} characters`);
 
+        // Log the main character name if it exists
+        const mainChar = user.characters.find(
+          (char) => char.eve_id === mainCharacterId
+        );
+        if (mainChar) {
+          logger.info(
+            `Main character from API: ${mainChar.name} (${mainCharacterId})`
+          );
+        }
+
         // Skip if there are no characters
         if (user.characters.length === 0) {
           logger.warn(`Skipping user with no characters`);
@@ -557,6 +567,18 @@ export class IngestionService {
             logger.info(
               `Found existing group ${characterGroup.id} (${characterGroup.slug}) for ${existingCharacters.length} characters`
             );
+
+            // Log the current main character of the group
+            if (characterGroup.mainCharacterId) {
+              const currentMainChar = await this.prisma.character.findUnique({
+                where: { eveId: characterGroup.mainCharacterId },
+              });
+              logger.info(
+                `Current main character in group: ${
+                  currentMainChar?.name || "Unknown"
+                } (${characterGroup.mainCharacterId})`
+              );
+            }
           } else {
             logger.warn(
               `Unexpected null character group for existing character`
@@ -590,7 +612,7 @@ export class IngestionService {
             return await tx.characterGroup.create({
               data: {
                 slug: groupId,
-                mainCharacterId: null,
+                mainCharacterId: mainCharacterId || null,
               },
             });
           });
@@ -609,6 +631,13 @@ export class IngestionService {
         logger.info(
           `Using character group: ${characterGroup.id} (${characterGroup.slug}) for user with ${user.characters.length} characters`
         );
+
+        // First, clear main character status for all characters in this group
+        // This ensures we start fresh with the API data
+        await this.prisma.character.updateMany({
+          where: { characterGroupId: characterGroup.id },
+          data: { isMain: false },
+        });
 
         // Process each character
         for (const char of user.characters) {
@@ -653,17 +682,17 @@ export class IngestionService {
                 corporationTicker: character.corporationTicker,
                 isMain: character.isMain,
                 characterGroupId: characterGroup.id,
-                mainCharacterId: null, // Clear any existing main character reference
+                mainCharacterId: character.isMain ? null : mainCharacterId, // Only set mainCharacterId if this is not the main character
               },
               create: {
                 ...character,
                 characterGroupId: characterGroup.id,
-                mainCharacterId: null,
+                mainCharacterId: character.isMain ? null : mainCharacterId, // Only set mainCharacterId if this is not the main character
               },
             });
 
             logger.info(
-              `Processed character: ${character.name} (${character.eveId})`
+              `Processed character: ${character.name} (${character.eveId}) - isMain: ${character.isMain}`
             );
 
             // If this is the main character, update the group's main character reference
@@ -677,14 +706,17 @@ export class IngestionService {
 
               // Update all characters in this group to reference the main character
               await this.prisma.character.updateMany({
-                where: { characterGroupId: characterGroup.id },
+                where: {
+                  characterGroupId: characterGroup.id,
+                  eveId: { not: updatedCharacter.eveId }, // Don't update the main character itself
+                },
                 data: {
                   mainCharacterId: updatedCharacter.eveId,
                 },
               });
 
               logger.info(
-                `Set main character for group: ${updatedCharacter.eveId}`
+                `Set main character for group: ${updatedCharacter.name} (${updatedCharacter.eveId})`
               );
             }
           } catch (error) {
@@ -692,6 +724,39 @@ export class IngestionService {
             logger.error(
               { error, character },
               `Failed to process character: ${character.name} (${character.eveId})`
+            );
+          }
+        }
+
+        // After processing all characters, verify the group's main character
+        const updatedGroup = await this.prisma.characterGroup.findUnique({
+          where: { id: characterGroup.id },
+          include: {
+            characters: true,
+          },
+        });
+
+        if (updatedGroup) {
+          logger.info(`Group ${updatedGroup.slug} final state:`);
+          logger.info(`Main character ID: ${updatedGroup.mainCharacterId}`);
+
+          const mainChar = updatedGroup.characters.find(
+            (c) => c.eveId === updatedGroup.mainCharacterId
+          );
+          if (mainChar) {
+            logger.info(`Main character name: ${mainChar.name}`);
+          }
+
+          // Log all characters in the group and their main character references
+          logger.info("Characters in group:");
+          for (const char of updatedGroup.characters) {
+            const mainCharRef = char.mainCharacterId
+              ? updatedGroup.characters.find(
+                  (c) => c.eveId === char.mainCharacterId
+                )?.name
+              : "none";
+            logger.info(
+              `- ${char.name} (${char.eveId}) - isMain: ${char.isMain} - mainCharacterRef: ${mainCharRef}`
             );
           }
         }
