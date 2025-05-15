@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts loss command
@@ -42,7 +43,7 @@ export class LossHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const lossGenerator = this.chartFactory.getGenerator("loss");
+      const lossGenerator = ChartFactory.createGenerator("loss");
 
       // Generate chart data
       const chartData = await lossGenerator.generateChart({

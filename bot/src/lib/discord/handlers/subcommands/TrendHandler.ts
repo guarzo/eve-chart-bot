@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts trend command
@@ -42,7 +43,7 @@ export class TrendHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const trendGenerator = this.chartFactory.getGenerator("trend");
+      const trendGenerator = ChartFactory.createGenerator("trend");
 
       // Check if view option is specified (line, area, or dual)
       const displayType = interaction.options.getString("view") ?? "line";

@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts map command
@@ -42,7 +43,7 @@ export class MapHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const mapGenerator = this.chartFactory.getGenerator("map_activity");
+      const mapGenerator = ChartFactory.createGenerator("map_activity");
 
       // Generate chart data
       const chartData = await mapGenerator.generateChart({

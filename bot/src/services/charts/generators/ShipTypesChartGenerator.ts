@@ -161,7 +161,6 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
         startDate,
         "MMM d"
       )} to ${format(endDate, "MMM d, yyyy")}`,
-      options: ShipTypesChartConfig.horizontalBarOptions,
       summary: ShipTypesChartConfig.getDefaultSummary(
         filtered.length,
         totalDestroyed
@@ -190,9 +189,6 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
       startDate,
       endDate
     );
-
-    // Override options for vertical orientation
-    chartData.options = ShipTypesChartConfig.verticalBarOptions;
     chartData.displayType = "bar";
     return chartData;
   }
@@ -210,100 +206,7 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     startDate: Date,
     endDate: Date
   ): Promise<ChartData> {
-    // Extract all character IDs from the groups
-    const characterIds = characterGroups
-      .flatMap((group) => group.characters)
-      .map((character) => character.eveId);
-
-    if (characterIds.length === 0) {
-      throw new Error("No characters found in the provided groups");
-    }
-
-    // Get the top ship types data over time
-    const shipTypesTimeData = await this.killRepository.getShipTypesOverTime(
-      characterIds,
-      startDate,
-      endDate,
-      5 // Limit to top 5 ship types for clearer timeline display
-    );
-
-    if (Object.keys(shipTypesTimeData).length === 0) {
-      throw new Error("No ship type time data found for the specified period");
-    }
-
-    // Sort dates to ensure chronological order
-    const dates = Object.keys(shipTypesTimeData).sort();
-
-    // Get the top 5 ship types by total count across all dates
-    const shipTypeTotals = new Map<string, { total: number }>();
-
-    for (const date of dates) {
-      const dateData = shipTypesTimeData[date];
-      for (const [shipTypeId, data] of Object.entries(dateData)) {
-        const current = shipTypeTotals.get(shipTypeId) || {
-          total: 0,
-        };
-        current.total += data.count;
-        shipTypeTotals.set(shipTypeId, current);
-      }
-    }
-
-    // Sort ship types by total count and take top 5
-    const topShipTypes = Array.from(shipTypeTotals.entries())
-      .sort((a, b) => b[1].total - a[1].total)
-      .slice(0, 5)
-      .map(([id]) => id);
-
-    // Lookup ship type names for all topShipTypes
-    const shipTypeNames = await Promise.all(
-      topShipTypes.map((typeId) => this.getShipTypeName(typeId))
-    );
-
-    // Create datasets for each ship type
-    const datasets = topShipTypes.map((shipTypeId, index) => {
-      const data = dates.map((date) => {
-        const dateData = shipTypesTimeData[date];
-        return dateData[shipTypeId]?.count || 0;
-      });
-
-      return {
-        label: shipTypeNames[index],
-        data,
-        backgroundColor:
-          ShipTypesChartConfig.colors[
-            index % ShipTypesChartConfig.colors.length
-          ],
-        borderColor:
-          ShipTypesChartConfig.colors[
-            index % ShipTypesChartConfig.colors.length
-          ],
-      };
-    });
-
-    // Calculate total destroyed across all dates and types
-    let totalDestroyed = 0;
-    for (const date of dates) {
-      const dateData = shipTypesTimeData[date];
-      for (const data of Object.values(dateData)) {
-        totalDestroyed += data.count;
-      }
-    }
-
-    // Create chart data
-    const chartData: ChartData = {
-      labels: dates.map((date) => format(new Date(date), "MMM d")),
-      datasets,
-      displayType: "line",
-      title: `${ShipTypesChartConfig.title} Over Time - ${format(
-        startDate,
-        "MMM d"
-      )} to ${format(endDate, "MMM d, yyyy")}`,
-      options: ShipTypesChartConfig.timelineOptions,
-      summary: `Showing top ${
-        topShipTypes.length
-      } ship types destroyed over time (${totalDestroyed.toLocaleString()} total kills)`,
-    };
-
-    return chartData;
+    // For now, just show a bar chart (timeline for ship types is less common)
+    return this.generateHorizontalBarChart(characterGroups, startDate, endDate);
   }
 }

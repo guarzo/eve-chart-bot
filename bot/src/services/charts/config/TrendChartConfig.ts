@@ -1,23 +1,47 @@
 import { ChartOptions } from "../../../types/chart";
+import { theme } from "./theme";
 
-/**
- * Configuration for Trend charts
- */
-export const TrendChartConfig = {
-  title: "Kill Activity Trends",
-  description: "Shows kills over time with trend analysis",
+interface TrendChartConfigType extends ChartOptions {
+  colors: string[];
+  title: string;
+  timelineOptions: ChartOptions;
+  areaOptions: ChartOptions;
+  dualAxisOptions: ChartOptions;
+  getDefaultSummary: (
+    totalKills: number,
+    startDate: Date,
+    endDate: Date,
+    averageKillsPerDay: number,
+    trend: "increasing" | "stable" | "decreasing"
+  ) => string;
+}
 
+export const TrendChartConfig: TrendChartConfigType = {
+  responsive: true,
+  maintainAspectRatio: false,
+  colors: [
+    "#3366CC", // deep blue
+    "#DC3912", // red
+    "#FF9900", // orange
+    "#109618", // green
+    "#990099", // purple
+    "#0099C6", // teal
+    "#DD4477", // pink
+    "#66AA00", // lime
+    "#B82E2E", // dark red
+    "#316395", // navy
+  ],
+  title: "Kill Trends Over Time",
   timelineOptions: {
     responsive: true,
     maintainAspectRatio: false,
-    aspectRatio: 2,
     plugins: {
       title: {
         display: true,
-        text: "Kill Activity Over Time",
+        text: "Kill Trends Over Time",
         font: {
-          size: 40,
-          weight: "bold",
+          size: theme.text.font.size.large,
+          weight: theme.text.font.weight.bold,
         },
       },
       legend: {
@@ -25,88 +49,35 @@ export const TrendChartConfig = {
         position: "top",
       },
       tooltip: {
+        mode: "index",
+        intersect: false,
         callbacks: {
-          label: function (context: any) {
+          label: (context: any) => {
             const label = context.dataset.label || "";
             const value = context.parsed.y;
-            return `${label}: ${value.toLocaleString()} kills`;
+            return `${label}: ${value.toLocaleString()}`;
           },
         },
       },
     },
     scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: "Kill Count",
-          font: {
-            size: 16,
-          },
-        },
-        ticks: {
-          callback: function (value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
-            return value.toString();
-          },
-        },
-      },
       x: {
-        title: {
-          display: true,
-          text: "Date",
-          font: {
-            size: 16,
-          },
-        },
         type: "time",
         time: {
           unit: "day",
           displayFormats: {
-            hour: "HH:mm",
             day: "MMM d",
-            week: "MMM d",
-            month: "MMM yyyy",
           },
         },
-      },
-    },
-  } as ChartOptions,
-
-  dualAxisOptions: {
-    responsive: true,
-    maintainAspectRatio: false,
-    aspectRatio: 2,
-    plugins: {
-      title: {
-        display: true,
-        text: "Kills vs. Value Over Time",
-        font: {
-          size: 40,
-          weight: "bold",
+        title: {
+          display: true,
+          text: "Date",
+        },
+        grid: {
+          color: theme.grid.color,
         },
       },
-      legend: {
-        display: true,
-        position: "top",
-      },
-      tooltip: {
-        callbacks: {
-          label: function (context: any) {
-            const label = context.dataset.label || "";
-            const value = context.parsed.y;
-            if (context.dataset.yAxisID === "y1") {
-              return `${label}: ${value.toLocaleString()} kills`;
-            } else {
-              return `${label}: ${value.toLocaleString()} ISK`;
-            }
-          },
-        },
-      },
-    },
-    scales: {
-      y1: {
+      y: {
         type: "linear",
         display: true,
         position: "left",
@@ -115,11 +86,157 @@ export const TrendChartConfig = {
           display: true,
           text: "Kill Count",
           font: {
-            size: 16,
+            size: theme.text.font.size.medium,
           },
         },
+        grid: {
+          color: theme.grid.color,
+        },
         ticks: {
-          callback: function (value: any) {
+          callback: (value: any) => {
+            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
+            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+            return value.toString();
+          },
+        },
+      },
+    },
+  },
+  areaOptions: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      title: {
+        display: true,
+        text: "Cumulative Kills Over Time",
+        font: {
+          size: theme.text.font.size.large,
+          weight: theme.text.font.weight.bold,
+        },
+      },
+      legend: {
+        display: true,
+        position: "top",
+      },
+      tooltip: {
+        mode: "index",
+        intersect: false,
+        callbacks: {
+          label: (context: any) => {
+            const label = context.dataset.label || "";
+            const value = context.parsed.y;
+            return `${label}: ${value.toLocaleString()}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        type: "time",
+        time: {
+          unit: "day",
+          displayFormats: {
+            day: "MMM d",
+          },
+        },
+        title: {
+          display: true,
+          text: "Date",
+        },
+        grid: {
+          color: theme.grid.color,
+        },
+      },
+      y: {
+        type: "linear",
+        display: true,
+        position: "left",
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: "Cumulative Kills",
+          font: {
+            size: theme.text.font.size.medium,
+          },
+        },
+        grid: {
+          color: theme.grid.color,
+        },
+        ticks: {
+          callback: (value: any) => {
+            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
+            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+            return value.toString();
+          },
+        },
+      },
+    },
+  },
+  dualAxisOptions: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      title: {
+        display: true,
+        text: "Kills vs. Value Over Time",
+        font: {
+          size: theme.text.font.size.large,
+          weight: theme.text.font.weight.bold,
+        },
+      },
+      legend: {
+        display: true,
+        position: "top",
+      },
+      tooltip: {
+        mode: "index",
+        intersect: false,
+        callbacks: {
+          label: (context: any) => {
+            const label = context.dataset.label || "";
+            const value = context.parsed.y;
+            if (label.includes("Value")) {
+              return `${label}: ${value.toFixed(1)}B ISK`;
+            }
+            return `${label}: ${value.toLocaleString()}`;
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        type: "time",
+        time: {
+          unit: "day",
+          displayFormats: {
+            day: "MMM d",
+          },
+        },
+        title: {
+          display: true,
+          text: "Date",
+        },
+        grid: {
+          color: theme.grid.color,
+        },
+      },
+      y: {
+        type: "linear",
+        display: true,
+        position: "left",
+        beginAtZero: true,
+        title: {
+          display: true,
+          text: "Kill Count",
+          font: {
+            size: theme.text.font.size.medium,
+          },
+        },
+        grid: {
+          color: theme.grid.color,
+        },
+        ticks: {
+          callback: (value: any) => {
             if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
             if (value >= 1000) return (value / 1000).toFixed(1) + "K";
             return value.toString();
@@ -133,142 +250,40 @@ export const TrendChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "ISK Value",
+          text: "ISK Value (Billions)",
           font: {
-            size: 16,
+            size: theme.text.font.size.medium,
           },
         },
         grid: {
-          drawOnChartArea: false, // only want the grid lines for y1 axis
+          color: theme.grid.color,
+          drawOnChartArea: false,
         },
         ticks: {
-          callback: function (value: any) {
-            if (value >= 1000000000)
-              return (value / 1000000000).toFixed(1) + "B";
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
-            return value.toString();
-          },
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: "Date",
-          font: {
-            size: 16,
-          },
-        },
-        type: "time",
-        time: {
-          unit: "day",
-          displayFormats: {
-            hour: "HH:mm",
-            day: "MMM d",
-            week: "MMM d",
-            month: "MMM yyyy",
+          callback: (value: any) => {
+            return value.toFixed(1) + "B";
           },
         },
       },
     },
-  } as ChartOptions,
-
-  areaOptions: {
-    responsive: true,
-    maintainAspectRatio: false,
-    aspectRatio: 2,
-    plugins: {
-      title: {
-        display: true,
-        text: "Cumulative Kills Over Time",
-        font: {
-          size: 40,
-          weight: "bold",
-        },
-      },
-      legend: {
-        display: true,
-        position: "top",
-      },
-      tooltip: {
-        callbacks: {
-          label: function (context: any) {
-            const label = context.dataset.label || "";
-            const value = context.parsed.y;
-            return `${label}: ${value.toLocaleString()} total kills`;
-          },
-        },
-      },
-    },
-    scales: {
-      y: {
-        beginAtZero: true,
-        title: {
-          display: true,
-          text: "Cumulative Kills",
-          font: {
-            size: 16,
-          },
-        },
-        ticks: {
-          callback: function (value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
-            return value.toString();
-          },
-        },
-      },
-      x: {
-        title: {
-          display: true,
-          text: "Date",
-          font: {
-            size: 16,
-          },
-        },
-        type: "time",
-        time: {
-          unit: "day",
-          displayFormats: {
-            hour: "HH:mm",
-            day: "MMM d",
-            week: "MMM d",
-            month: "MMM yyyy",
-          },
-        },
-      },
-    },
-  } as ChartOptions,
-
-  // Get default summary based on trend data
+  },
   getDefaultSummary: (
     totalKills: number,
     startDate: Date,
     endDate: Date,
     averageKillsPerDay: number,
     trend: "increasing" | "stable" | "decreasing"
-  ): string => {
-    const dayCount = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+  ) => {
+    const trendEmoji =
+      trend === "increasing" ? "📈" : trend === "decreasing" ? "📉" : "➡️";
     const trendText =
       trend === "increasing"
-        ? "increasing trend"
+        ? "increasing"
         : trend === "decreasing"
-        ? "decreasing trend"
-        : "stable trend";
-
-    return `${totalKills.toLocaleString()} kills over ${dayCount} days (avg: ${averageKillsPerDay.toFixed(
+        ? "decreasing"
+        : "stable";
+    return `${trendEmoji} ${totalKills.toLocaleString()} total kills (${averageKillsPerDay.toFixed(
       1
-    )}/day) with ${trendText}`;
+    )} per day) with ${trendText} trend`;
   },
-
-  // Color palette for trend lines
-  colors: [
-    "#3366CC", // deep blue
-    "#DC3912", // red
-    "#FF9900", // orange
-    "#109618", // green
-    "#990099", // purple
-  ],
 };

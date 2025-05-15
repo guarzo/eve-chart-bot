@@ -9,6 +9,8 @@ import { DistributionHandler } from "./subcommands/DistributionHandler";
 import { CorpsHandler } from "./subcommands/CorpsHandler";
 import { ShipKillHandler } from "./subcommands/ShipKillHandler";
 import { ShipLossHandler } from "./subcommands/ShipLossHandler";
+import { HeatmapHandler } from "./subcommands/HeatmapHandler";
+import { EfficiencyHandler } from "./subcommands/EfficiencyHandler";
 
 /**
  * Registry for chart command handlers
@@ -34,6 +36,8 @@ export class ChartCommandRegistry {
     this.handlers.set("shiploss", new ShipLossHandler());
     this.handlers.set("distribution", new DistributionHandler());
     this.handlers.set("corps", new CorpsHandler());
+    this.handlers.set("heatmap", new HeatmapHandler());
+    this.handlers.set("efficiency", new EfficiencyHandler());
   }
 
   /**

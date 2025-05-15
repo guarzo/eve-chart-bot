@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts corps command
@@ -42,7 +43,7 @@ export class CorpsHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const corpsGenerator = this.chartFactory.getGenerator("corps");
+      const corpsGenerator = ChartFactory.createGenerator("corps");
 
       // Check if view option is specified (horizontalBar, verticalBar, or pie)
       const displayType =

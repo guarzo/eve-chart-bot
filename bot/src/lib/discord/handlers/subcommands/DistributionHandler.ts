@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts distribution command
@@ -43,7 +44,7 @@ export class DistributionHandler extends BaseChartHandler {
       }
 
       // Get the chart generator
-      const generator = this.chartFactory.getGenerator("distribution");
+      const generator = ChartFactory.createGenerator("distribution");
 
       // Generate the chart data
       const chartData = await generator.generateChart({

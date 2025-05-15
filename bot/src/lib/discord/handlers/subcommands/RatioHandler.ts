@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts ratio command
@@ -42,7 +43,7 @@ export class RatioHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const ratioGenerator = this.chartFactory.getGenerator("ratio");
+      const ratioGenerator = ChartFactory.createGenerator("ratio");
 
       // Generate chart data
       const chartData = await ratioGenerator.generateChart({

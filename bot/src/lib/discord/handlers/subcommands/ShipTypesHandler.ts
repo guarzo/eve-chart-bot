@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts shiptypes command
@@ -42,7 +43,7 @@ export class ShipTypesHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const shipTypesGenerator = this.chartFactory.getGenerator("shiptypes");
+      const shipTypesGenerator = ChartFactory.createGenerator("shiptypes");
 
       // Generate chart data
       const chartData = await shipTypesGenerator.generateChart({

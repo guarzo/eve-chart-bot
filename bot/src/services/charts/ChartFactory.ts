@@ -11,23 +11,21 @@ import {
   HeatmapChartGenerator,
 } from "./generators";
 import { logger } from "../../lib/logger";
+import { MapActivityRepository } from "../../data/repositories/MapActivityRepository";
 
 /**
  * Factory for creating chart generators
  */
 export class ChartFactory {
-  private generators: Map<string, new () => BaseChartGenerator> = new Map();
+  private static generators: Map<
+    string,
+    new (...args: any[]) => BaseChartGenerator
+  > = new Map();
 
-  constructor() {
-    this.registerGenerators();
-  }
-
-  /**
-   * Register available chart generators
-   */
-  private registerGenerators(): void {
+  static {
+    // Register chart generators
     this.generators.set("kills", KillsChartGenerator);
-    this.generators.set("map_activity", MapChartGenerator);
+    this.generators.set("map", MapChartGenerator);
 
     // Uncommented implementations for Phase 4
     this.generators.set("loss", LossChartGenerator);
@@ -48,12 +46,17 @@ export class ChartFactory {
   /**
    * Get a chart generator based on chart type
    */
-  public getGenerator(chartType: string): BaseChartGenerator {
-    const GeneratorClass = this.generators.get(chartType);
+  public static createGenerator(type: string): BaseChartGenerator {
+    const GeneratorClass = this.generators.get(type);
 
     if (!GeneratorClass) {
-      logger.error(`Unknown chart type: ${chartType}`);
-      throw new Error(`Unknown chart type: ${chartType}`);
+      logger.error(`Unknown chart type: ${type}`);
+      throw new Error(`Unknown chart type: ${type}`);
+    }
+
+    // Special case for MapChartGenerator which requires a repository
+    if (type === "map") {
+      return new MapChartGenerator(new MapActivityRepository());
     }
 
     return new GeneratorClass();
@@ -62,7 +65,7 @@ export class ChartFactory {
   /**
    * Get a list of all available chart types
    */
-  public getAvailableChartTypes(): string[] {
+  public static getAvailableChartTypes(): string[] {
     return Array.from(this.generators.keys());
   }
 }

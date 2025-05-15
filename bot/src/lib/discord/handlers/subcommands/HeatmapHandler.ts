@@ -1,11 +1,13 @@
 import { BaseChartHandler } from "./BaseChartHandler";
 import { CommandInteraction } from "discord.js";
-import { ChartData, ChartOptions } from "../../../../types/chart";
+import { ChartData } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts heatmap command
+ * Shows kill activity by hour and day of week
  */
 export class HeatmapHandler extends BaseChartHandler {
   private chartRenderer: ChartRenderer;
@@ -15,9 +17,6 @@ export class HeatmapHandler extends BaseChartHandler {
     this.chartRenderer = new ChartRenderer();
   }
 
-  /**
-   * Handle the heatmap chart command
-   */
   async handle(interaction: CommandInteraction): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
@@ -42,21 +41,18 @@ export class HeatmapHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const heatmapGenerator = this.chartFactory.getGenerator("heatmap");
-
-      // Check if view option is specified (matrix or calendar)
-      const displayType = interaction.options.getString("view") ?? "matrix";
+      const heatmapGenerator = ChartFactory.createGenerator("heatmap");
 
       // Generate chart data
       const chartData = await heatmapGenerator.generateChart({
         characterGroups: groups,
         startDate,
         endDate,
-        displayType: displayType,
+        displayType: "heatmap",
       });
 
       // Render chart to buffer
-      logger.info(`Rendering heatmap chart with ${displayType} view`);
+      logger.info("Rendering heatmap chart");
       const buffer = await this.renderChart(chartData);
 
       // Send the chart with summary
@@ -75,32 +71,42 @@ export class HeatmapHandler extends BaseChartHandler {
    * Render chart to buffer using appropriate options
    */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
-    // Create options object based on chartData.options or use defaults
-    const options: ChartOptions = chartData.options || {
+    const options = {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         title: {
           display: true,
-          text: chartData.title || "Activity Heatmap",
-          font: {
-            size: 40,
-            weight: "bold",
-          },
+          text: chartData.title || "Activity by Hour and Day",
         },
         legend: {
           display: true,
-          position: "right",
+          position: "top" as const,
+        },
+      },
+      scales: {
+        x: {
+          type: "linear",
+          min: 0,
+          max: 23,
+          title: {
+            display: true,
+            text: "Hour of Day",
+          },
+        },
+        y: {
+          type: "category",
+          labels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+          title: {
+            display: true,
+            text: "Day of Week",
+          },
         },
       },
     };
 
-    // For heatmap/matrix view, use a nearly square format
-    if (chartData.displayType === "heatmap") {
-      return new ChartRenderer(2400, 2000).renderToBuffer(chartData, options);
-    }
-
-    // For calendar view, use a wider format
-    return new ChartRenderer(3000, 1800).renderToBuffer(chartData, options);
+    // Use a square canvas for heatmap display
+    const renderer = new ChartRenderer(2400, 2400);
+    return renderer.renderToBuffer(chartData, options);
   }
 }

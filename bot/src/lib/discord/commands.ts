@@ -192,18 +192,21 @@ export const commands = [
               { name: "30 Days", value: "30" }
             )
         )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("efficiency")
+        .setDescription("Show efficiency metrics with bullet charts")
         .addStringOption((option) =>
           option
-            .setName("view")
-            .setDescription("Chart visualization type")
+            .setName("time")
+            .setDescription("Time period")
             .setRequired(false)
             .addChoices(
-              { name: "Matrix View", value: "matrix" },
-              { name: "Calendar View", value: "calendar" }
+              { name: "7 Days", value: "7" },
+              { name: "24 Days", value: "24" },
+              { name: "30 Days", value: "30" }
             )
         )
-    )
-    .setDefaultMemberPermissions(
-      PermissionFlagsBits.SendMessages | PermissionFlagsBits.ViewChannel
     ),
 ];

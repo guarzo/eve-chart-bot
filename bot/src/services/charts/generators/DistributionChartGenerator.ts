@@ -109,7 +109,6 @@ export class DistributionChartGenerator extends BaseChartGenerator {
         "MMM d"
       )} to ${format(endDate, "MMM d, yyyy")}`,
       summary: `Distribution of kills by number of attackers (group size) for the selected period.`,
-      options: DistributionChartConfig.barOptions,
     };
   }
 

@@ -3,6 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts/ChartFactory";
 
 /**
  * Handler for the /charts kills command
@@ -41,11 +42,11 @@ export class KillsHandler extends BaseChartHandler {
         return;
       }
 
-      // Get the chart generator from the factory
-      const killsGenerator = this.chartFactory.getGenerator("kills");
+      // Get the appropriate chart generator
+      const generator = ChartFactory.createGenerator("kills");
 
       // Generate chart data
-      const chartData = await killsGenerator.generateChart({
+      const chartData = await generator.generateChart({
         characterGroups: groups,
         startDate,
         endDate,
@@ -77,7 +78,6 @@ export class KillsHandler extends BaseChartHandler {
       indexAxis: "y", // Horizontal bar chart
       responsive: true,
       maintainAspectRatio: false,
-      aspectRatio: 2.5, // Wider aspect ratio for better horizontal display
       plugins: {
         title: {
           display: true,
