@@ -3,7 +3,7 @@ import { CommandInteraction } from "discord.js";
 import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
-import { EfficiencyBulletConfig } from "../../../../services/charts/config/EfficiencyBulletConfig";
+import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts efficiency command
@@ -18,78 +18,96 @@ export class EfficiencyHandler extends BaseChartHandler {
   }
 
   async handle(interaction: CommandInteraction): Promise<void> {
+    if (!interaction.isChatInputCommand()) return;
+
     try {
       await interaction.deferReply();
 
-      const timePeriod = interaction.options.getString("time") || "7";
-      const { startDate, endDate } = this.getTimeRange(timePeriod);
+      // Get time period from command options
+      const time = interaction.options.getString("time") ?? "7";
+      const { startDate, endDate } = this.getTimeRange(time);
+
+      logger.info(`Generating efficiency chart for ${time} days`);
 
       // Get character groups
-      const groups = await this.characterRepository.getCharacterGroups();
+      const groups = await this.getCharacterGroups();
 
-      // Get efficiency data for each group
-      const efficiencyData = await Promise.all(
-        groups.map(async (group) => {
-          const kills = await this.characterRepository.getKillsByTimeRange(
-            startDate,
-            endDate,
-            group.id
-          );
-          const losses = await this.characterRepository.getLossesByTimeRange(
-            startDate,
-            endDate,
-            group.id
-          );
+      if (groups.length === 0) {
+        await interaction.editReply({
+          content:
+            "No character groups found. Please add characters to groups first.",
+        });
+        return;
+      }
 
-          // Calculate efficiency metrics
-          const totalKills = kills.length;
-          const totalLosses = losses.length;
-          const efficiency = (totalKills / (totalKills + totalLosses)) * 100;
+      // Get the chart generator from the factory
+      const efficiencyGenerator = ChartFactory.createGenerator("efficiency");
 
-          return {
-            group: group.name,
-            efficiency: Math.min(100, Math.max(0, efficiency)), // Clamp between 0-100
-            target: 75, // Target efficiency percentage
-          };
-        })
-      );
-
-      // Sort by efficiency
-      efficiencyData.sort((a, b) => b.efficiency - a.efficiency);
-
-      // Create chart data
-      const chartData: ChartData = {
-        type: "bar",
-        data: {
-          labels: efficiencyData.map((d) => d.group),
-          datasets: [
-            {
-              ...EfficiencyBulletConfig.data.datasets[0],
-              data: efficiencyData.map((d) => d.efficiency),
-            },
-            {
-              ...EfficiencyBulletConfig.data.datasets[1],
-              data: efficiencyData.map((d) => d.target),
-            },
-          ],
-        },
-        options: EfficiencyBulletConfig.options,
-      };
-
-      // Generate and send chart
-      const chartBuffer = await this.chartRenderer.renderChart(chartData);
-      await interaction.editReply({
-        files: [
-          {
-            attachment: chartBuffer,
-            name: "efficiency.png",
-          },
-        ],
+      // Generate chart data
+      const chartData = await efficiencyGenerator.generateChart({
+        characterGroups: groups,
+        startDate,
+        endDate,
+        displayType: "bar",
       });
 
-      logger.info("Successfully generated efficiency chart");
+      // Render chart to buffer
+      logger.info("Rendering efficiency chart");
+      const buffer = await this.renderChart(chartData);
+
+      // Send the chart with summary
+      await interaction.editReply({
+        content: chartData.summary || "Efficiency Chart",
+        files: [{ attachment: buffer, name: "efficiency-chart.png" }],
+      });
+
+      logger.info("Successfully sent efficiency chart");
     } catch (error) {
       await this.handleError(interaction, error);
     }
+  }
+
+  /**
+   * Render chart to buffer using appropriate options
+   */
+  private async renderChart(chartData: ChartData): Promise<Buffer> {
+    const options: ChartOptions = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: chartData.title || "Efficiency by Character Group",
+          font: {
+            size: 40,
+            weight: "bold",
+          },
+        },
+        legend: {
+          display: true,
+          position: "top" as const,
+        },
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          suggestedMax: 100,
+          title: {
+            display: true,
+            text: "Efficiency (%)",
+          },
+        },
+        y: {
+          title: {
+            display: true,
+            text: "Character Group",
+          },
+        },
+      },
+    };
+
+    // Use a wide canvas for better display
+    const renderer = new ChartRenderer(3000, 1600);
+    return renderer.renderToBuffer(chartData, options);
   }
 }

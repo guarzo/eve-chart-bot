@@ -55,6 +55,9 @@ export interface ScaleOptions {
   type?: string;
   position?: "left" | "right";
   display?: boolean;
+  suggestedMin?: number;
+  suggestedMax?: number;
+  labels?: string[];
   title?: {
     display: boolean;
     text: string;

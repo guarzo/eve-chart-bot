@@ -1,84 +1,76 @@
 import { BaseChartHandler } from "./BaseChartHandler";
-import { ShipKillChartGenerator } from "../../../../services/charts/generators/ShipKillChartGenerator";
 import { CommandInteraction } from "discord.js";
-import { logger } from "../../../../lib/logger";
+import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
-import { ChartData } from "../../../../types/chart";
-import { Character } from "@prisma/client";
+import { logger } from "../../../logger";
+import { ChartFactory } from "../../../../services/charts";
 
+/**
+ * Handler for the /charts shipkill command
+ */
 export class ShipKillHandler extends BaseChartHandler {
-  private chartGenerator: ShipKillChartGenerator;
   private chartRenderer: ChartRenderer;
 
   constructor() {
     super();
-    this.chartGenerator = new ShipKillChartGenerator();
     this.chartRenderer = new ChartRenderer();
   }
 
   async handle(interaction: CommandInteraction): Promise<void> {
+    if (!interaction.isChatInputCommand()) return;
+
     try {
-      // Get time range from interaction options
-      const timePeriod =
-        (interaction.options.get("time")?.value as string) || "7";
-      const { startDate, endDate } = this.getTimeRange(timePeriod);
+      await interaction.deferReply();
 
-      // Get character groups from interaction
-      const groupId = interaction.options.get("group")?.value as string;
-      if (!groupId) {
-        await interaction.reply({
-          content: "Please specify a character group.",
-          ephemeral: true,
+      // Get time period from command options
+      const time = interaction.options.getString("time") ?? "7";
+      const { startDate, endDate } = this.getTimeRange(time);
+
+      logger.info(`Generating ship kill chart for ${time} days`);
+
+      // Get character groups
+      const groups = await this.getCharacterGroups();
+
+      if (groups.length === 0) {
+        await interaction.editReply({
+          content:
+            "No character groups found. Please add characters to groups first.",
         });
         return;
       }
 
-      // Get group details
-      const groups = await this.characterRepository.getCharacterGroups();
-      const group = groups.find((g) => g.groupId === groupId);
-      if (!group) {
-        await interaction.reply({
-          content: "Character group not found.",
-          ephemeral: true,
-        });
-        return;
-      }
+      // Get the chart generator from the factory
+      const shipKillGenerator = ChartFactory.createGenerator("shipkill");
 
       // Generate chart data
-      const chartData = await this.chartGenerator.generateChart({
+      const chartData = await shipKillGenerator.generateChart({
+        characterGroups: groups,
         startDate,
         endDate,
-        characterGroups: [
-          {
-            groupId: group.groupId,
-            name: group.name,
-            characters: group.characters.map((c) => ({
-              eveId: c.eveId,
-              name: c.name,
-            })),
-          },
-        ],
         displayType: "horizontalBar",
       });
 
-      // Render and send the chart
+      // Render chart to buffer
+      logger.info("Rendering ship kill chart");
       const buffer = await this.renderChart(chartData);
-      await interaction.reply({
-        files: [
-          {
-            attachment: buffer,
-            name: "ship-kills.png",
-          },
-        ],
+
+      // Send the chart with summary
+      await interaction.editReply({
+        content: chartData.summary || "Ship Kill Chart",
+        files: [{ attachment: buffer, name: "shipkill-chart.png" }],
       });
+
+      logger.info("Successfully sent ship kill chart");
     } catch (error) {
-      logger.error("Error generating ship kill chart:", error);
       await this.handleError(interaction, error);
     }
   }
 
+  /**
+   * Render chart to buffer using appropriate options
+   */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
-    const options = {
+    const options: ChartOptions = {
       indexAxis: "y" as const,
       responsive: true,
       maintainAspectRatio: false,
@@ -86,6 +78,10 @@ export class ShipKillHandler extends BaseChartHandler {
         title: {
           display: true,
           text: chartData.title || "Ships Destroyed by Type",
+          font: {
+            size: 40,
+            weight: "bold",
+          },
         },
         legend: {
           display: true,
@@ -111,6 +107,8 @@ export class ShipKillHandler extends BaseChartHandler {
       },
     };
 
-    return this.chartRenderer.renderToBuffer(chartData, options);
+    // Use a wide canvas for better display
+    const renderer = new ChartRenderer(3000, 1600);
+    return renderer.renderToBuffer(chartData, options);
   }
 }

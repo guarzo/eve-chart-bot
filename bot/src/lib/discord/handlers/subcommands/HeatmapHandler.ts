@@ -1,6 +1,6 @@
 import { BaseChartHandler } from "./BaseChartHandler";
 import { CommandInteraction } from "discord.js";
-import { ChartData } from "../../../../types/chart";
+import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
 import { ChartFactory } from "../../../../services/charts";
@@ -71,13 +71,17 @@ export class HeatmapHandler extends BaseChartHandler {
    * Render chart to buffer using appropriate options
    */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
-    const options = {
+    const options: ChartOptions = {
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         title: {
           display: true,
           text: chartData.title || "Activity by Hour and Day",
+          font: {
+            size: 40,
+            weight: "bold",
+          },
         },
         legend: {
           display: true,
@@ -87,8 +91,8 @@ export class HeatmapHandler extends BaseChartHandler {
       scales: {
         x: {
           type: "linear",
-          min: 0,
-          max: 23,
+          suggestedMin: 0,
+          suggestedMax: 23,
           title: {
             display: true,
             text: "Hour of Day",
@@ -96,7 +100,10 @@ export class HeatmapHandler extends BaseChartHandler {
         },
         y: {
           type: "category",
-          labels: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+          ticks: {
+            callback: (value: any) =>
+              ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][value],
+          },
           title: {
             display: true,
             text: "Day of Week",
