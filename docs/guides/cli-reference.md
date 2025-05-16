@@ -16,6 +16,7 @@ The CLI is organized into the following command groups:
 - `database` - Commands for database management
 - `character` - Commands for character management
 - `killmail` - Commands for killmail processing
+- `loss` - Commands for loss data processing
 - `discord` - Commands for Discord bot management
 
 ## Ingestion Commands
@@ -26,7 +27,7 @@ The CLI is organized into the following command groups:
 npm run cli ingestion start-redisq
 ```
 
-Starts the RedisQ ingestion service for real-time killmail processing.
+Starts the RedisQ ingestion service for real-time killmail and loss processing.
 
 ### Sync Map Activity
 
@@ -43,6 +44,14 @@ npm run cli ingestion sync-kills
 ```
 
 Synchronizes killmail data from ZKillboard.
+
+### Sync Losses
+
+```bash
+npm run cli ingestion sync-losses
+```
+
+Synchronizes loss data from ZKillboard.
 
 ### Sync Characters
 
@@ -234,13 +243,55 @@ npm run cli killmail check-actual-solo-kills
 
 Checks actual solo kills based on attacker data.
 
+## Loss Commands
+
+### Backfill Loss Data
+
+```bash
+npm run cli loss backfill
+```
+
+Backfills historical loss data from ZKillboard.
+
+### Verify Loss Data
+
+```bash
+npm run cli loss verify-data
+```
+
+Verifies loss data integrity.
+
+### Check Loss Details
+
+```bash
+npm run cli loss check-details
+```
+
+Checks loss details and relationships.
+
+### Fix Loss Relations
+
+```bash
+npm run cli loss fix-relations
+```
+
+Fixes loss relation issues.
+
 ### Add Test Losses
 
 ```bash
-npm run cli killmail add-test-losses
+npm run cli loss add-test
 ```
 
 Adds test loss data to the database.
+
+### Cleanup Loss Data
+
+```bash
+npm run cli loss cleanup
+```
+
+Cleans up loss data issues.
 
 ## Discord Commands
 
@@ -250,60 +301,55 @@ Adds test loss data to the database.
 npm run cli discord register-commands [--guild]
 ```
 
-Registers Discord slash commands. Use `--guild` to register to a specific guild (faster for development).
+Registers Discord bot commands. Use `--guild` to register commands for a specific guild only.
 
-### Reset Commands
-
-```bash
-npm run cli discord reset-commands
-```
-
-Resets all Discord slash commands.
-
-### Check Commands
-
-```bash
-npm run cli discord check-commands
-```
-
-Checks current Discord slash commands.
-
-### Register to Guild
-
-```bash
-npm run cli discord register-to-guild --guild <id>
-```
-
-Registers the bot to a specific guild.
-
-### Register Test Commands
-
-```bash
-npm run cli discord register-test-commands
-```
-
-Registers test Discord commands.
-
-### Test Discord
+### Test Bot
 
 ```bash
 npm run cli discord test
 ```
 
-Tests Discord integration.
+Tests the Discord bot functionality.
 
-### Test Interaction Handler
-
-```bash
-npm run cli discord test-interaction
-```
-
-Tests the interaction handler.
-
-### Restart Bot
+### Check Permissions
 
 ```bash
-npm run cli discord restart
+npm run cli discord check-permissions
 ```
 
-Restarts the Discord bot.
+Checks Discord bot permissions.
+
+## Common Options
+
+Most commands support the following options:
+
+- `--help` - Show help information
+- `--debug` - Enable debug logging
+- `--dry-run` - Show what would be done without making changes
+- `--force` - Skip confirmation prompts
+
+## Examples
+
+### Register Commands for Development
+
+```bash
+npm run cli discord register-commands --guild
+```
+
+### Reset Database with Force
+
+```bash
+npm run cli database reset --force
+```
+
+### Debug Character Groups
+
+```bash
+npm run cli character debug-groups --debug
+```
+
+### Test Ingestion Pipeline
+
+```bash
+npm run cli ingestion test --dry-run
+```

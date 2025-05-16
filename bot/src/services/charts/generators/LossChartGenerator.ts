@@ -1,8 +1,24 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
+import {
+  ChartData,
+  ChartDisplayType,
+  SimpleTimeRange,
+} from "../../../types/chart";
 import { LossChartConfig } from "../config";
 import { logger } from "../../../lib/logger";
 import { LossRepository } from "../../../data/repositories/LossRepository";
+import { format } from "date-fns";
+
+interface Loss {
+  killmail_id: bigint;
+  labels: string[];
+  character_id: bigint;
+  kill_time: Date;
+  ship_type_id: number;
+  system_id: number;
+  total_value: bigint;
+  attacker_count: number;
+}
 
 /**
  * Generator for loss charts
@@ -29,100 +45,225 @@ export class LossChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    logger.info("Generating loss chart");
+    const { startDate, endDate, characterGroups, displayType } = options;
 
-    const { startDate, endDate, characterGroups } = options;
+    // Get all character IDs from all groups
+    const characterIds = characterGroups.flatMap((group) =>
+      group.characters.map((c) => BigInt(c.eveId))
+    );
 
-    // Data arrays for chart datasets
-    const filteredLabels: string[] = [];
-    const totalLossesData: number[] = [];
-    const highValueLossesData: number[] = [];
-    const totalIskData: number[] = [];
-    let grandTotalLosses = 0;
-    let grandTotalValue = BigInt(0);
+    // Debug: Log character IDs and time range
+    logger.info(
+      `[LossChart] Character IDs: ${characterIds.map(String).join(", ")}`
+    );
+    logger.info(
+      `[LossChart] Time range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+    );
 
-    // Process each character group
-    for (const group of characterGroups) {
-      // Convert character eveIds to bigints
-      const characterIds = group.characters.map((char) => BigInt(char.eveId));
+    // Get losses for all characters
+    const timeRange: SimpleTimeRange = { start: startDate, end: endDate };
+    const losses = await this.lossRepository.getLossesByTimeRange(
+      characterIds.map((id) => id.toString()),
+      timeRange
+    );
 
-      if (characterIds.length === 0) {
-        // Skip empty groups
-        continue;
-      }
+    // Debug: Log total number of losses returned
+    logger.info(
+      `[LossChart] Total losses returned from repository: ${losses.length}`
+    );
 
-      try {
-        // Get loss data for this group
-        const lossSummary =
-          await this.lossRepository.getLossesSummaryByCharacters(
-            characterIds,
-            startDate,
-            endDate
-          );
-
-        // Only include groups with at least one loss
-        if (lossSummary.totalLosses > 0) {
-          // Use the main character from the group if available
-          let label = group.name;
-          if (group.mainCharacterId) {
-            const mainChar = group.characters.find(
-              (c) => c.eveId === group.mainCharacterId
-            );
-            if (mainChar) {
-              label = mainChar.name;
-            }
-          } else if (group.characters.length > 0) {
-            // Fallback to first character if no main character is set
-            label = group.characters[0].name;
-          }
-          filteredLabels.push(label);
-
-          totalLossesData.push(lossSummary.totalLosses);
-          highValueLossesData.push(lossSummary.highValueLosses);
-          totalIskData.push(Number(lossSummary.totalValueLost));
-        }
-
-        // Update grand totals
-        grandTotalLosses += lossSummary.totalLosses;
-        grandTotalValue += lossSummary.totalValueLost;
-      } catch (error) {
-        logger.error(
-          `Error fetching loss data for group ${group.name}:`,
-          error
-        );
+    // Remove duplicate killmail_ids from losses
+    const seenKillmails = new Set<bigint>();
+    const dedupedLosses: Loss[] = [];
+    let duplicateCount = 0;
+    for (const loss of losses) {
+      if (!seenKillmails.has(loss.killmail_id)) {
+        seenKillmails.add(loss.killmail_id);
+        dedupedLosses.push(loss);
+      } else {
+        duplicateCount++;
       }
     }
+    if (duplicateCount > 0) {
+      logger.warn(
+        `[LossChart] Removed ${duplicateCount} duplicate losses by killmail_id`
+      );
+    } else {
+      logger.info(`[LossChart] No duplicate losses found by killmail_id`);
+    }
 
-    // Generate summary text
-    const timeRangeText = this.getTimeRangeText(startDate, endDate);
-    const formattedTotalValue = this.formatIsk(grandTotalValue);
-    const summary = `Ship losses for tracked characters (${timeRangeText}): ${grandTotalLosses} losses totaling ${formattedTotalValue} ISK`;
+    // Log unique victim character_ids
+    const uniqueVictims = Array.from(
+      new Set(dedupedLosses.map((loss) => loss.character_id))
+    );
+
+
+    // Group losses by character group
+    const groupData = characterGroups.map((group) => {
+      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
+      const groupLosses = dedupedLosses.filter((loss: Loss) =>
+        groupCharacterIds.includes(loss.character_id)
+      );
+
+      // Debug: Log number of losses for this group
+      logger.info(
+        `[LossChart] Group '${group.name}' (${group.groupId}) has ${groupLosses.length} losses`
+      );
+
+      // Calculate total losses and value
+      const totalLosses = groupLosses.length;
+      const totalValue = groupLosses.reduce(
+        (sum: bigint, loss: Loss) => sum + loss.total_value,
+        BigInt(0)
+      );
+      const highValueLosses = groupLosses.filter(
+        (loss) => loss.total_value >= BigInt(100000000)
+      ).length;
+
+      return {
+        group,
+        losses: groupLosses,
+        totalLosses,
+        totalValue,
+        highValueLosses,
+      };
+    });
+
+    // Filter out groups with no losses
+    const groupsWithLosses = groupData.filter((data) => data.totalLosses > 0);
+
+    // If no groups have losses, return empty chart
+    if (groupsWithLosses.length === 0) {
+      logger.info("No groups with losses found, returning empty chart");
+      return {
+        labels: [],
+        datasets: [],
+        displayType: "horizontalBar" as ChartDisplayType,
+        summary: "No losses found in the specified time period",
+      };
+    }
+
+    // Sort groups by total value
+    groupsWithLosses.sort((a, b) => {
+      if (a.totalValue > b.totalValue) return -1;
+      if (a.totalValue < b.totalValue) return 1;
+      return 0;
+    });
+
+    // Calculate totals for summary
+    const totalLosses = groupsWithLosses.reduce(
+      (sum, data) => sum + data.totalLosses,
+      0
+    );
+    const totalHighValueLosses = groupsWithLosses.reduce(
+      (sum, data) => sum + data.highValueLosses,
+      0
+    );
+    const totalIskLost = groupsWithLosses.reduce(
+      (sum, data) => sum + data.totalValue,
+      BigInt(0)
+    );
+
+    // Format ISK value
+    const formatIsk = (value: bigint): string => {
+      const valueNumber = Number(value);
+      if (valueNumber >= 1_000_000_000_000) {
+        return `${(valueNumber / 1_000_000_000_000).toFixed(2)}T`;
+      } else if (valueNumber >= 1_000_000_000) {
+        return `${(valueNumber / 1_000_000_000).toFixed(2)}B`;
+      } else if (valueNumber >= 1_000_000) {
+        return `${(valueNumber / 1_000_000).toFixed(2)}M`;
+      } else if (valueNumber >= 1_000) {
+        return `${(valueNumber / 1_000).toFixed(2)}K`;
+      } else {
+        return valueNumber.toString();
+      }
+    };
+
+    // Create chart data
+    // Round ISK lost to billions for chart
+    const valueLostBillions = groupsWithLosses.map(
+      (data) => +(Number(data.totalValue) / 1_000_000_000).toFixed(2)
+    );
 
     return {
-      labels: filteredLabels,
+      labels: groupsWithLosses.map((data) =>
+        this.getGroupDisplayName(data.group)
+      ),
       datasets: [
         {
-          label: "Total Losses",
-          data: totalLossesData,
-          backgroundColor: this.getDatasetColors("loss").primary,
-          borderColor: this.getDatasetColors("loss").primary,
-        },
-        {
-          label: "High Value Losses",
-          data: highValueLossesData,
+          label: "Number of Losses",
+          data: groupsWithLosses.map((data) => data.totalLosses),
           backgroundColor: this.getDatasetColors("loss").secondary,
-          borderColor: this.getDatasetColors("loss").secondary,
+          yAxisID: "y",
+          type: "bar",
         },
         {
-          label: "ISK Value Lost",
-          data: totalIskData,
-          backgroundColor: "#FFD700",
-          borderColor: "#FFD700",
+          label: "Total Value Lost (B ISK)",
+          data: valueLostBillions,
+          backgroundColor: this.getDatasetColors("loss").primary + "33",
+          borderColor: this.getDatasetColors("loss").primary,
+          borderWidth: 2,
+          tension: 0.3,
+          yAxisID: "y2",
+          type: "line",
         },
       ],
-      title: `Ship Losses - ${timeRangeText}`,
-      summary,
-      displayType: "horizontalBar",
+      displayType: "horizontalBar" as ChartDisplayType,
+      options: {
+        indexAxis: "y",
+        scales: {
+          x: {
+            grid: {
+              color: "#444",
+            },
+            ticks: {
+              color: "#fff",
+            },
+          },
+          y: {
+            type: "linear",
+            position: "left",
+            title: {
+              display: true,
+              text: "Loss Count",
+            },
+            beginAtZero: true,
+            grid: {
+              color: "#444",
+            },
+            ticks: {
+              color: "#fff",
+            },
+          },
+          y2: {
+            type: "linear",
+            position: "right",
+            title: {
+              display: true,
+              text: "ISK Lost (Billion)",
+            },
+            beginAtZero: true,
+            grid: {
+              drawOnChartArea: false,
+              color: "#444",
+            },
+            ticks: {
+              color: "#fff",
+            },
+          },
+        },
+        plugins: {
+          legend: {
+            position: "top",
+          },
+        },
+      },
+      summary: LossChartConfig.getDefaultSummary(
+        totalLosses,
+        totalHighValueLosses,
+        formatIsk(totalIskLost)
+      ),
     };
   }
 

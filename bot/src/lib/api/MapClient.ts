@@ -122,15 +122,6 @@ export class MapClient {
         }
       }
 
-      // Log information about the response
-      logger.debug(
-        `Received raw response: ${JSON.stringify(response.data).substring(
-          0,
-          200
-        )}...`
-      );
-      logger.info(`Response data type: ${typeof response.data}`);
-
       if (Array.isArray(response.data)) {
         logger.info(`Response is an array with ${response.data.length} items`);
         // Convert array to expected format

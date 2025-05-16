@@ -10,8 +10,10 @@ import {
   TrendChartGenerator,
   HeatmapChartGenerator,
 } from "./generators";
+import { ShipKillChartGenerator } from "./generators/ShipKillChartGenerator";
+import { ShipLossChartGenerator } from "./generators/ShipLossChartGenerator";
+import { EfficiencyChartGenerator } from "./generators/EfficiencyChartGenerator";
 import { logger } from "../../lib/logger";
-import { MapActivityRepository } from "../../data/repositories/MapActivityRepository";
 
 /**
  * Factory for creating chart generators
@@ -26,21 +28,16 @@ export class ChartFactory {
     // Register chart generators
     this.generators.set("kills", KillsChartGenerator);
     this.generators.set("map", MapChartGenerator);
-
-    // Uncommented implementations for Phase 4
     this.generators.set("loss", LossChartGenerator);
     this.generators.set("ratio", RatioChartGenerator);
-
-    // Phase 2: Ship Type Analysis
     this.generators.set("shiptypes", ShipTypesChartGenerator);
-
-    // Phase 3: Distribution and Enemy Analysis
+    this.generators.set("shipkill", ShipKillChartGenerator);
+    this.generators.set("shiploss", ShipLossChartGenerator);
     this.generators.set("distribution", DistributionChartGenerator);
     this.generators.set("corps", CorpsChartGenerator);
-
-    // Phase 4: Time-Based Analysis
     this.generators.set("trend", TrendChartGenerator);
     this.generators.set("heatmap", HeatmapChartGenerator);
+    this.generators.set("efficiency", EfficiencyChartGenerator);
   }
 
   /**
@@ -52,11 +49,6 @@ export class ChartFactory {
     if (!GeneratorClass) {
       logger.error(`Unknown chart type: ${type}`);
       throw new Error(`Unknown chart type: ${type}`);
-    }
-
-    // Special case for MapChartGenerator which requires a repository
-    if (type === "map") {
-      return new MapChartGenerator(new MapActivityRepository());
     }
 
     return new GeneratorClass();

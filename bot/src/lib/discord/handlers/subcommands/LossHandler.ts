@@ -88,14 +88,14 @@ export class LossHandler extends BaseChartHandler {
       },
       scales: {
         x: {
-          stacked: false,
+          stacked: true,
           title: {
             display: true,
             text: "ISK Lost",
           },
         },
         y: {
-          stacked: false,
+          stacked: true,
           beginAtZero: true,
           title: {
             display: true,

@@ -4,6 +4,7 @@ import { ChartData, ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
 import { ChartFactory } from "../../../../services/charts/ChartFactory";
+import { theme } from "../../../../services/charts/config/theme";
 
 /**
  * Handler for the /charts kills command
@@ -88,41 +89,52 @@ export class KillsHandler extends BaseChartHandler {
           },
         },
         legend: {
-          display: true,
           position: "top",
+          labels: {
+            color: theme.text.primary,
+            font: {
+              size: 12,
+            },
+          },
         },
         tooltip: {
+          backgroundColor: theme.colors.background,
+          titleColor: theme.text.primary,
+          bodyColor: theme.text.primary,
+          borderColor: theme.colors.primary,
+          borderWidth: 1,
+          padding: 10,
+          displayColors: true,
           callbacks: {
-            label: (context: any): string => {
+            label: (context) => {
               const label = context.dataset.label || "";
-              const value = context.parsed.x;
-              return `${label}: ${value.toLocaleString()}`;
+              const value = context.parsed.y;
+              return `${label}: ${value}`;
             },
           },
         },
       },
       scales: {
         x: {
-          stacked: false, // Not stacked so solo kills can be seen
-          ticks: {
-            callback: (value: any): string => {
-              // Format numbers with K/M/B suffixes
-              if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-              if (value >= 1000) return (value / 1000).toFixed(1) + "K";
-              return value.toString();
-            },
+          grid: {
+            color: theme.grid.color,
           },
-          title: {
-            display: true,
-            text: "Count",
+          ticks: {
+            color: theme.text.primary,
+            font: {
+              size: 12,
+            },
           },
         },
         y: {
-          stacked: false, // Not stacked so solo kills can be seen
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: "Character",
+          grid: {
+            color: theme.grid.color,
+          },
+          ticks: {
+            color: theme.text.primary,
+            font: {
+              size: 12,
+            },
           },
         },
       },

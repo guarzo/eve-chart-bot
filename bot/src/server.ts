@@ -69,42 +69,6 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Debug endpoint to check data counts
-app.get("/debug/counts", async (req, res) => {
-  try {
-    // Use app.locals.prisma if available, otherwise fall back to ingestionService.prisma
-    const prisma =
-      app.locals.prisma || (ingestionService && ingestionService.prisma);
-
-    if (!prisma) {
-      return res.status(503).json({
-        status: "error",
-        message: "Database connection not available",
-      });
-    }
-
-    const mapActivityCount = await prisma.mapActivity.count();
-    const lossesCount = await prisma.lossFact.count();
-    const killsCount = await prisma.killFact.count();
-    const charactersCount = await prisma.character.count();
-
-    res.json({
-      status: "ok",
-      counts: {
-        mapActivity: mapActivityCount,
-        losses: lossesCount,
-        kills: killsCount,
-        characters: charactersCount,
-      },
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-});
-
 // Get available chart types
 app.get("/v1/charts/types", (req, res) => {
   res.json({
@@ -133,6 +97,12 @@ app.post("/v1/charts/generate", async (req, res) => {
 
     // Generate chart data
     const chartData = await chartService.generateChart(config);
+
+    // Ensure ChartConfig has required 'data' property
+    const chartConfigWithData = {
+      ...config,
+      data: chartData,
+    };
 
     // Create chart options
     const options: ChartOptions = {

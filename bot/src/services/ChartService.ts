@@ -1,12 +1,14 @@
 import { PrismaClient } from "@prisma/client";
 import {
   ChartConfig,
+  ChartConfigInput,
   ChartData,
   ChartDisplayType,
   ChartMetric,
 } from "../types/chart";
 import { format } from "date-fns";
 import { logger } from "../lib/logger";
+import { KillRepository } from "../data/repositories/KillRepository";
 
 interface KillData {
   killTime: Date;
@@ -24,6 +26,7 @@ interface ActivityData {
 
 export class ChartService {
   private prisma: PrismaClient;
+  private killRepository: KillRepository;
   private colors: string[] = [
     "#3366CC", // deep blue
     "#DC3912", // red
@@ -45,9 +48,10 @@ export class ChartService {
 
   constructor() {
     this.prisma = new PrismaClient();
+    this.killRepository = new KillRepository();
   }
 
-  async generateChart(config: ChartConfig): Promise<ChartData> {
+  async generateChart(config: ChartConfigInput): Promise<ChartData> {
     const {
       type,
       characterIds,
@@ -722,6 +726,7 @@ export class ChartService {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>;
     startDate: Date;
     endDate: Date;
@@ -733,83 +738,38 @@ export class ChartService {
       `Generating grouped kills chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
     );
 
-    // If no character groups provided, get all characters
-    if (!characterGroups || characterGroups.length === 0) {
-      logger.info(
-        "No character groups provided, creating default group with all characters"
-      );
-      try {
-        const allCharacters = await this.prisma.character.findMany({
-          select: {
-            eveId: true,
-            name: true,
-          },
-        });
-
-        if (allCharacters.length === 0) {
-          logger.warn("No characters found in database");
-          return {
-            labels: ["No Characters"],
-            datasets: [
-              {
-                label: "Total Kills",
-                data: [0],
-                backgroundColor: "#3366CC",
-              },
-              {
-                label: "Solo Kills",
-                data: [0],
-                backgroundColor: "#DC3912",
-              },
-            ],
-            displayType: "horizontalBar" as ChartDisplayType,
-          };
-        }
-
-        // Continue with default group
-        return this.generateGroupedKillsChart({
-          characterGroups: [
-            {
-              groupId: "default",
-              name: "All Characters",
-              characters: allCharacters,
-            },
-          ],
-          startDate,
-          endDate,
-          displayType,
-        });
-      } catch (error) {
-        logger.error("Error creating default character group:", error);
-        throw new Error(
-          "No character groups available and could not create default group"
-        );
-      }
-    }
-
     // Enhanced group data with main character information
     const enhancedGroups = await Promise.all(
       characterGroups.map(async (group) => {
         // Try to find main character in the group
         let mainCharacter = null;
 
-        // First, try to find characters that are designated as mains
-        for (const character of group.characters) {
-          // Check if this character has alts (other characters pointing to it as main)
-          const hasAlts = await this.prisma.character.count({
-            where: {
-              mainCharacterId: character.eveId,
-            },
-          });
+        // First, check if the group has a mainCharacterId set
+        if (group.mainCharacterId) {
+          mainCharacter = group.characters.find(
+            (c) => c.eveId === group.mainCharacterId
+          );
+        }
 
-          if (hasAlts > 0) {
-            // This is a main character
-            mainCharacter = character;
-            break;
+        // If no main was found by ID, try to find characters that are designated as mains
+        if (!mainCharacter) {
+          for (const character of group.characters) {
+            // Check if this character has alts (other characters pointing to it as main)
+            const hasAlts = await this.prisma.character.count({
+              where: {
+                mainCharacterId: character.eveId,
+              },
+            });
+
+            if (hasAlts > 0) {
+              // This is a main character
+              mainCharacter = character;
+              break;
+            }
           }
         }
 
-        // If no main was found, just use the first character
+        // If still no main was found, just use the first character
         if (!mainCharacter && group.characters.length > 0) {
           mainCharacter = group.characters[0];
         }
@@ -841,20 +801,21 @@ export class ChartService {
       );
       displayGroups.forEach((group, index) => {
         logger.info(
-          `Group ${index + 1}: "${group.displayName}" - ${
-            group.characters.length
-          } characters`
+          `Group ${index + 1}: "${group.displayName}" (Main: ${
+            group.mainCharacter?.name
+          }) - ${group.characters.length} characters`
         );
       });
     } else {
       logger.warn("No valid character groups found with characters");
     }
 
-    // Collect all groups with their kill data first, so we can filter out empty ones
+    // First, collect all groups with their kill data and filter out those without kills
     const groupsWithData = [];
+    const groupsWithoutKills = [];
 
     try {
-      // For each group, get the kill statistics
+      // For each group, get the kill statistics using enhanced stats
       for (const group of displayGroups) {
         // Get all character IDs in this group
         const characterIds = group.characters.map((c) => BigInt(c.eveId));
@@ -875,32 +836,93 @@ export class ChartService {
               lte: endDate,
             },
           },
-          select: {
-            solo: true,
+          include: {
+            attackers: {
+              select: {
+                character_id: true,
+                corporation_id: true,
+                alliance_id: true,
+                ship_type_id: true,
+                weapon_type_id: true,
+                damage_done: true,
+                final_blow: true,
+              },
+            },
           },
         });
 
         if (kills.length === 0) {
-          logger.info(`No kills found for group ${group.displayName}`);
+          logger.info(
+            `No kills found for group ${group.displayName}, skipping`
+          );
+          groupsWithoutKills.push(group.displayName);
           continue;
         }
 
-        // Count total and solo kills
-        const totalKills = kills.length;
-        const soloKills = kills.filter((kill) => kill.solo === true).length;
+        // Calculate solo kills (where all attackers are from this group)
+        let soloKills = 0;
+        for (const kill of kills) {
+          // Skip kills with no attackers
+          if (!kill.attackers || kill.attackers.length === 0) continue;
+
+          // Get all player attackers (those with character IDs)
+          const playerAttackers = kill.attackers.filter((a) => a.character_id);
+          if (playerAttackers.length === 0) continue;
+
+          // Check if all attackers are from this group
+          const allFromGroup = playerAttackers.every((attacker) => {
+            if (!attacker.character_id) return false;
+            return characterIds.includes(BigInt(attacker.character_id));
+          });
+
+          if (allFromGroup) {
+            soloKills++;
+            logger.info(
+              `Found solo kill for group ${group.displayName}: Kill ID ${kill.killmail_id}`
+            );
+          }
+        }
 
         // Only add to our results if there are actually kills
-        if (totalKills > 0) {
+        if (kills.length > 0) {
+          // Always use the main character's name as the display name
+          const displayName = group.mainCharacter
+            ? group.mainCharacter.name
+            : group.displayName;
+
           groupsWithData.push({
-            group,
-            totalKills,
-            soloKills,
+            group: {
+              ...group,
+              displayName,
+            },
+            totalKills: kills.length,
+            soloKills: soloKills,
           });
 
           logger.info(
-            `Group ${group.displayName}: ${totalKills} total kills, ${soloKills} solo kills`
+            `Group ${displayName} (Main: ${group.mainCharacter?.name}): ${kills.length} total kills, ${soloKills} solo kills`
           );
         }
+      }
+
+      // Log groups that were filtered out
+      if (groupsWithoutKills.length > 0) {
+        logger.info(
+          `Filtered out ${
+            groupsWithoutKills.length
+          } groups with no kills: ${groupsWithoutKills.join(", ")}`
+        );
+      }
+
+      // If no groups have kills, return empty chart
+      if (groupsWithData.length === 0) {
+        logger.info("No groups with kills found, returning empty chart");
+        return {
+          labels: [],
+          datasets: [],
+          displayType: "horizontalBar" as ChartDisplayType,
+          summary: "No kills found in the specified time period",
+        };
       }
 
       // Sort groups by total kills in descending order
@@ -911,7 +933,10 @@ export class ChartService {
       const totalKillsData = groupsWithData.map((item) => item.totalKills);
       const soloKillsData = groupsWithData.map((item) => item.soloKills);
 
-      // Return the final chart data
+      // Calculate overall statistics
+      const overallTotalKills = totalKillsData.reduce((a, b) => a + b, 0);
+      const overallSoloKills = soloKillsData.reduce((a, b) => a + b, 0);
+
       return {
         labels: groupLabels,
         datasets: [
@@ -927,14 +952,15 @@ export class ChartService {
           },
         ],
         displayType: "horizontalBar" as ChartDisplayType,
+        summary: `Total kills: ${overallTotalKills.toLocaleString()}\nSolo kills: ${overallSoloKills.toLocaleString()} (${
+          overallTotalKills > 0
+            ? Math.round((overallSoloKills / overallTotalKills) * 100)
+            : 0
+        }%)`,
       };
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.error("Error generating grouped kills chart:", error);
-      throw new Error(
-        `Failed to generate grouped kills chart: ${errorMessage}`
-      );
+    } catch (error) {
+      logger.error("Error generating kills chart:", error);
+      throw error;
     }
   }
 
@@ -1247,6 +1273,7 @@ export class ChartService {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>
   > {
     try {
@@ -1323,7 +1350,10 @@ export class ChartService {
 
       // Standard approach for a reasonable number of groups
       const groups = await this.prisma.characterGroup.findMany({
-        include: {
+        select: {
+          id: true,
+          slug: true,
+          mainCharacterId: true,
           characters: {
             select: {
               eveId: true,
@@ -1341,11 +1371,12 @@ export class ChartService {
 
       return validGroups.map((group) => ({
         groupId: group.id,
-        name: group.slug || `Group ${group.id.substring(0, 8)}`, // Fallback if slug is missing
+        name: group.slug || `Group ${group.id.substring(0, 8)}`,
         characters: group.characters.map((char) => ({
           eveId: char.eveId,
           name: char.name,
         })),
+        mainCharacterId: group.mainCharacterId || undefined,
       }));
     } catch (error: unknown) {
       logger.error("Error fetching character groups:", {
@@ -1374,7 +1405,11 @@ export class ChartService {
         // Manually group them
         const groupMap = new Map<
           string,
-          { characters: Array<{ eveId: string; name: string }>; slug?: string }
+          {
+            characters: Array<{ eveId: string; name: string }>;
+            slug?: string;
+            mainCharacterId?: string;
+          }
         >();
 
         for (const char of characters) {
@@ -1396,6 +1431,7 @@ export class ChartService {
             groupId,
             name: data.slug || `Group ${groupId.substring(0, 8)}`,
             characters: data.characters,
+            mainCharacterId: data.mainCharacterId, // Include mainCharacterId
           })
         );
 
@@ -1409,25 +1445,9 @@ export class ChartService {
           fallbackError
         );
 
-        // Last resort: create a default group with a sample of characters
-        logger.info(
-          "Creating a default group with some characters as last resort"
-        );
-        const sampleCharacters = await this.prisma.character.findMany({
-          take: 50,
-          select: {
-            eveId: true,
-            name: true,
-          },
-        });
-
-        return [
-          {
-            groupId: "default",
-            name: "Default Characters",
-            characters: sampleCharacters,
-          },
-        ];
+        // Last resort: return an empty array instead of a default group
+        logger.info("No valid character groups found, returning empty array");
+        return [];
       }
     }
   }

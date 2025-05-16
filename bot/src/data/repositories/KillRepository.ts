@@ -65,6 +65,17 @@ export class KillRepository extends BaseRepository<any> {
               lte: endDate,
             },
           },
+          select: {
+            killmail_id: true,
+            character_id: true,
+            kill_time: true,
+            solo: true,
+            attackers: {
+              select: {
+                character_id: true,
+              },
+            },
+          },
           orderBy: {
             kill_time: "asc",
           },

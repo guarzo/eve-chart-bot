@@ -1,8 +1,18 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
-import { MapActivityRepository } from "../../../data/repositories";
+import { ChartData, ChartDisplayType } from "../../../types/chart";
+import { MapActivityRepository } from "../../../data/repositories/MapActivityRepository";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
+
+interface MapActivity {
+  allianceId: number | null;
+  corporationId: number;
+  timestamp: Date;
+  characterId: bigint;
+  signatures: number;
+  connections: number;
+  passages: number;
+}
 
 /**
  * Generator for map activity charts
@@ -10,9 +20,9 @@ import { logger } from "../../../lib/logger";
 export class MapChartGenerator extends BaseChartGenerator {
   private mapActivityRepository: MapActivityRepository;
 
-  constructor(mapActivityRepository: MapActivityRepository) {
+  constructor() {
     super();
-    this.mapActivityRepository = mapActivityRepository;
+    this.mapActivityRepository = new MapActivityRepository();
   }
 
   /**
@@ -29,39 +39,82 @@ export class MapChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    try {
-      const { startDate, endDate, characterGroups, displayType } = options;
-      logger.info(
-        `Generating map activity chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
-      );
-      logger.debug(
-        `Chart type: ${displayType}, Groups: ${characterGroups.length}`
+    const { startDate, endDate, characterGroups, displayType } = options;
+
+    // Get all character IDs from all groups
+    const characterIds = characterGroups.flatMap((group) =>
+      group.characters.map((c) => BigInt(c.eveId))
+    );
+
+    // Get map activity for all characters
+    const activities =
+      await this.mapActivityRepository.getActivityForCharacters(
+        characterIds.map((id) => id.toString()),
+        startDate,
+        endDate
       );
 
-      switch (displayType) {
-        case "bar":
-          return this.generateVerticalBarChart(
-            characterGroups,
-            startDate,
-            endDate
-          );
-        case "line":
-          return this.generateTimelineChart(
-            characterGroups,
-            startDate,
-            endDate
-          );
-        default:
-          return this.generateHorizontalBarChart(
-            characterGroups,
-            startDate,
-            endDate
-          );
-      }
-    } catch (error) {
-      logger.error("Error generating map activity chart:", error);
-      throw error;
-    }
+    // Group activities by character group
+    const groupData = characterGroups.map((group) => {
+      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
+      const groupActivities = activities.filter((activity: MapActivity) =>
+        groupCharacterIds.includes(activity.characterId)
+      );
+
+      // Calculate totals for each metric
+      const totalSignatures = groupActivities.reduce(
+        (sum: number, activity: MapActivity) => sum + activity.signatures,
+        0
+      );
+      const totalConnections = groupActivities.reduce(
+        (sum: number, activity: MapActivity) => sum + activity.connections,
+        0
+      );
+      const totalPassages = groupActivities.reduce(
+        (sum: number, activity: MapActivity) => sum + activity.passages,
+        0
+      );
+
+      return {
+        group,
+        activities: groupActivities,
+        totalSignatures,
+        totalConnections,
+        totalPassages,
+      };
+    });
+
+    // Sort groups by total activity (sum of all metrics)
+    groupData.sort(
+      (a, b) =>
+        b.totalSignatures +
+        b.totalConnections +
+        b.totalPassages -
+        (a.totalSignatures + a.totalConnections + a.totalPassages)
+    );
+
+    // Create chart data
+    return {
+      labels: groupData.map((data) => this.getGroupDisplayName(data.group)),
+      datasets: [
+        {
+          label: "Signatures",
+          data: groupData.map((data) => data.totalSignatures),
+          backgroundColor: this.getDatasetColors("map").primary,
+        },
+        {
+          label: "Connections",
+          data: groupData.map((data) => data.totalConnections),
+          backgroundColor: this.getDatasetColors("map").secondary,
+        },
+        {
+          label: "Passages",
+          data: groupData.map((data) => data.totalPassages),
+          backgroundColor: this.getColorForIndex(2),
+        },
+      ],
+      displayType: "horizontalBar" as ChartDisplayType,
+    };
   }
 
   /**
@@ -80,39 +133,54 @@ export class MapChartGenerator extends BaseChartGenerator {
     // Get activity data for each group
     const activityData = await Promise.all(
       characterGroups.map(async (group) => {
-        const stats = await this.mapActivityRepository.getGroupActivityStats(
-          group.groupId,
+        const characterIds = group.characters.map((char) => char.eveId);
+        // Join character IDs into a single string for the repository method
+        const activity = await this.mapActivityRepository.getGroupActivityStats(
+          characterIds.join(","),
           startDate,
           endDate
         );
+
         return {
-          groupName: group.name,
-          systems: stats.totalSystems,
-          signatures: stats.totalSignatures,
+          group,
+          systems: activity.totalSystems,
+          signatures: activity.totalSignatures,
         };
       })
     );
 
+    // Filter out groups with no activity
+    const filteredData = activityData.filter(
+      (data) => data.systems > 0 || data.signatures > 0
+    );
+
     // Sort by total activity
-    activityData.sort(
+    filteredData.sort(
       (a, b) => b.systems + b.signatures - (a.systems + a.signatures)
     );
 
     return {
-      labels: activityData.map((data) => data.groupName),
+      labels: filteredData.map((data) => this.getGroupDisplayName(data.group)),
       datasets: [
         {
           label: "Systems Visited",
-          data: activityData.map((data) => data.systems),
+          data: filteredData.map((data) => data.systems),
           backgroundColor: "#3366CC",
         },
         {
           label: "Signatures Scanned",
-          data: activityData.map((data) => data.signatures),
+          data: filteredData.map((data) => data.signatures),
           backgroundColor: "#DC3912",
         },
       ],
-      displayType: "horizontalBar",
+      displayType: "bar",
+      options: {
+        indexAxis: "y",
+        scales: {
+          x: { stacked: true },
+          y: { stacked: true },
+        },
+      },
       title: `Map Activity - ${format(startDate, "MMM d")} to ${format(
         endDate,
         "MMM d, yyyy"

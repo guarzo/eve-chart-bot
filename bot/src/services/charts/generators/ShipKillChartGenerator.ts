@@ -123,12 +123,14 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
           ),
         },
       ],
-      displayType: "horizontalBar",
+      displayType: "bar",
+      options: {
+        indexAxis: "y",
+      },
       title: `${ShipTypesChartConfig.title} - ${format(
         startDate,
         "MMM d"
       )} to ${format(endDate, "MMM d, yyyy")}`,
-      options: ShipTypesChartConfig.horizontalBarOptions,
       summary: ShipTypesChartConfig.getDefaultSummary(
         filtered.length,
         totalDestroyed

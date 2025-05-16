@@ -1,25 +1,33 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
+import { ChartData, ChartDisplayType } from "../../../types/chart";
 import { ShipTypesChartConfig } from "../config";
-import { KillRepository } from "../../../data/repositories";
-import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
+import { KillRepository } from "../../../data/repositories/KillRepository";
+import { LossRepository } from "../../../data/repositories/LossRepository";
+import { format } from "date-fns";
 import axios from "axios";
 
+interface ShipTypeData {
+  shipTypeId: string;
+  count: number;
+}
+
 /**
- * Generator for ship types charts
+ * Generator for ship types chart
  */
 export class ShipTypesChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
+  private lossRepository: LossRepository;
   private shipTypeNameCache: Record<string, string> = {};
 
   constructor() {
     super();
     this.killRepository = new KillRepository();
+    this.lossRepository = new LossRepository();
   }
 
   /**
-   * Generate a ship types chart based on the provided options
+   * Generate a ship types chart
    */
   async generateChart(options: {
     startDate: Date;
@@ -32,35 +40,73 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    try {
-      const { startDate, endDate, characterGroups, displayType } = options;
-      logger.info(
-        `Generating ship types chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
-      );
-      logger.debug(
-        `Chart type: ${displayType}, Groups: ${characterGroups.length}`
+    const { startDate, endDate, characterGroups, displayType } = options;
+
+    // Get all character IDs from all groups
+    const characterIds = characterGroups.flatMap((group) =>
+      group.characters.map((c) => BigInt(c.eveId))
+    );
+
+    // Get ship types for all characters
+    const shipTypes = await this.killRepository.getTopShipTypesDestroyed(
+      characterIds.map((id) => id.toString()),
+      startDate,
+      endDate
+    );
+
+    // Group ship types by character group
+    const groupData = characterGroups.map((group) => {
+      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
+      const groupShipTypes = shipTypes.filter((data: ShipTypeData) =>
+        groupCharacterIds.includes(BigInt(data.shipTypeId))
       );
 
-      // Select chart generation function based on display type
-      if (displayType === "horizontalBar") {
-        return this.generateHorizontalBarChart(
-          characterGroups,
-          startDate,
-          endDate
-        );
-      } else if (displayType === "verticalBar") {
-        return this.generateVerticalBarChart(
-          characterGroups,
-          startDate,
-          endDate
-        );
-      } else {
-        // Default to line chart (timeline)
-        return this.generateTimelineChart(characterGroups, startDate, endDate);
-      }
-    } catch (error) {
-      logger.error("Error generating ship types chart:", error);
-      throw error;
+      // Calculate total ships
+      const totalShips = groupShipTypes.reduce(
+        (sum: number, data: ShipTypeData) => sum + data.count,
+        0
+      );
+
+      return {
+        group,
+        shipTypes: groupShipTypes,
+        totalShips,
+      };
+    });
+
+    // Sort groups by total ships
+    groupData.sort((a, b) => b.totalShips - a.totalShips);
+
+    // Create chart data
+    return {
+      labels: groupData.map((data) => this.getGroupDisplayName(data.group)),
+      datasets: [
+        {
+          label: "Total Ships",
+          data: groupData.map((data) => data.totalShips),
+          backgroundColor: this.getDatasetColors("shiptypes").primary,
+        },
+      ],
+      displayType: "horizontalBar" as ChartDisplayType,
+    };
+  }
+
+  /**
+   * Get a formatted string describing the time range
+   */
+  private getTimeRangeText(startDate: Date, endDate: Date): string {
+    const diffDays = Math.floor(
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (diffDays <= 1) {
+      return "Last 24 hours";
+    } else if (diffDays <= 7) {
+      return "Last 7 days";
+    } else if (diffDays <= 30) {
+      return "Last 30 days";
+    } else {
+      return `${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
     }
   }
 
@@ -79,134 +125,5 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     } catch {
       return typeId;
     }
-  }
-
-  /**
-   * Generate a horizontal bar chart showing top ship types destroyed
-   */
-  private async generateHorizontalBarChart(
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>,
-    startDate: Date,
-    endDate: Date
-  ): Promise<ChartData> {
-    // Extract all character IDs from the groups
-    const characterIds = characterGroups
-      .flatMap((group) => group.characters)
-      .map((character) => character.eveId);
-
-    if (characterIds.length === 0) {
-      throw new Error("No characters found in the provided groups");
-    }
-
-    // Get the top ship types data
-    const shipTypesData = await this.killRepository.getTopShipTypesDestroyed(
-      characterIds,
-      startDate,
-      endDate,
-      15 // Limit to top 15 ship types
-    );
-
-    if (shipTypesData.length === 0) {
-      throw new Error("No ship type data found for the specified time period");
-    }
-
-    // Lookup ship type names for all shipTypeIds
-    const shipTypeNames = await Promise.all(
-      shipTypesData.map((type) => this.getShipTypeName(type.shipTypeId))
-    );
-
-    // Exclude 'Capsule' from the results
-    const filtered = shipTypesData
-      .map((type, i) => ({ ...type, name: shipTypeNames[i] }))
-      .filter((entry) => entry.name.toLowerCase() !== "capsule");
-
-    if (filtered.length === 0) {
-      throw new Error(
-        "No ship type data found for the specified time period (after filtering capsules)"
-      );
-    }
-
-    // Sort by count in descending order
-    filtered.sort((a, b) => b.count - a.count);
-
-    // Calculate total destroyed
-    const totalDestroyed = filtered.reduce(
-      (sum, shipType) => sum + shipType.count,
-      0
-    );
-
-    // Create chart data
-    const chartData: ChartData = {
-      labels: filtered.map((type) => type.name),
-      datasets: [
-        {
-          label: "Ships Destroyed",
-          data: filtered.map((type) => type.count),
-          backgroundColor: this.getVisibleColors(
-            filtered.map((type) => type.count),
-            ShipTypesChartConfig.colors
-          ),
-          borderColor: ShipTypesChartConfig.colors.map((color) =>
-            this.adjustColorBrightness(color, -20)
-          ),
-        },
-      ],
-      displayType: "horizontalBar",
-      title: `${ShipTypesChartConfig.title} - ${format(
-        startDate,
-        "MMM d"
-      )} to ${format(endDate, "MMM d, yyyy")}`,
-      summary: ShipTypesChartConfig.getDefaultSummary(
-        filtered.length,
-        totalDestroyed
-      ),
-    };
-
-    return chartData;
-  }
-
-  /**
-   * Generate a vertical bar chart showing top ship types destroyed
-   */
-  private async generateVerticalBarChart(
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>,
-    startDate: Date,
-    endDate: Date
-  ): Promise<ChartData> {
-    // This is similar to horizontal bar chart but with a different orientation
-    const chartData = await this.generateHorizontalBarChart(
-      characterGroups,
-      startDate,
-      endDate
-    );
-    chartData.displayType = "bar";
-    return chartData;
-  }
-
-  /**
-   * Generate a timeline chart showing ship types destroyed over time
-   */
-  private async generateTimelineChart(
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>,
-    startDate: Date,
-    endDate: Date
-  ): Promise<ChartData> {
-    // For now, just show a bar chart (timeline for ship types is less common)
-    return this.generateHorizontalBarChart(characterGroups, startDate, endDate);
   }
 }

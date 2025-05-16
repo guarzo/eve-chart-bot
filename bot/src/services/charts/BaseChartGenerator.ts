@@ -1,29 +1,13 @@
 import { ChartData, ChartOptions } from "../../types/chart";
 import { logger } from "../../lib/logger";
+import { chartPalette } from "./config/theme";
 
 /**
  * Base class for all chart generators
  * Provides common functionality for generating charts
  */
 export abstract class BaseChartGenerator {
-  protected colors: string[] = [
-    "#3366CC", // deep blue
-    "#DC3912", // red
-    "#FF9900", // orange
-    "#109618", // green
-    "#990099", // purple
-    "#0099C6", // teal
-    "#DD4477", // pink
-    "#66AA00", // lime
-    "#B82E2E", // dark red
-    "#316395", // navy
-    "#994499", // violet
-    "#22AA99", // seafoam
-    "#AAAA11", // olive
-    "#6633CC", // indigo
-    "#E67300", // amber
-    "#8B0707", // maroon
-  ];
+  protected colors: string[] = chartPalette;
 
   /**
    * Generate chart data based on input options
@@ -35,7 +19,12 @@ export abstract class BaseChartGenerator {
     characterGroups: Array<{
       groupId: string;
       name: string;
-      characters: Array<{ eveId: string; name: string }>;
+      characters: Array<{
+        eveId: string;
+        name: string;
+        mainCharacterId?: string;
+      }>;
+      mainCharacterId?: string;
     }>;
     displayType: string;
   }): Promise<ChartData>;
@@ -200,26 +189,74 @@ export abstract class BaseChartGenerator {
     return `rgba(${r}, ${g}, ${b}, ${opacity})`;
   }
 
-  // Get consistent dataset colors for a specific chart type
-  protected getDatasetColors(chartType: string): {
+  /**
+   * Get display name for a character group
+   * Prioritizes main character name if available
+   */
+  protected getGroupDisplayName(group: {
+    name: string;
+    characters: Array<{ eveId: string; name: string }>;
+    mainCharacterId?: string;
+  }): string {
+    // Debug log: print group info
+    const charList = group.characters
+      .map((c) => `${c.eveId}:${c.name}`)
+      .join(", ");
+    // eslint-disable-next-line no-console
+    console.log(
+      `[getGroupDisplayName] group: ${group.name}, mainCharacterId: ${group.mainCharacterId}, characters: [${charList}]`
+    );
+    if (group.mainCharacterId) {
+      const main = group.characters.find(
+        (c) => c.eveId === group.mainCharacterId
+      );
+      if (main) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[getGroupDisplayName] Returning main character name: ${main.name}`
+        );
+        return main.name;
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[getGroupDisplayName] mainCharacterId ${group.mainCharacterId} not found in characters.`
+        );
+      }
+    }
+    if (group.characters.length > 0) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[getGroupDisplayName] Returning first character name: ${group.characters[0].name}`
+      );
+      return group.characters[0].name;
+    }
+    // eslint-disable-next-line no-console
+    console.log(`[getGroupDisplayName] Returning group name: ${group.name}`);
+    return group.name;
+  }
+
+  /**
+   * Get dataset colors for a specific chart type
+   */
+  protected getDatasetColors(type: string): {
     primary: string;
     secondary: string;
   } {
-    switch (chartType) {
+    switch (type) {
       case "kills":
         return {
-          primary: this.colors[0], // deep blue for total kills
-          secondary: this.colors[1], // red for solo kills
+          primary: this.colors[0],
+          secondary: this.colors[1],
         };
       case "loss":
         return {
-          primary: this.colors[1], // red for total losses
-          secondary: this.colors[2], // orange for high value losses
+          primary: this.colors[2],
+          secondary: this.colors[3],
         };
       case "map":
         return {
-          primary: this.colors[0], // deep blue for systems
-          secondary: this.colors[3], // green for signatures
+          primary: this.colors[4],
+          secondary: this.colors[5],
         };
       default:
         return {

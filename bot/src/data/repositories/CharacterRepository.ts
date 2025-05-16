@@ -95,12 +95,16 @@ export class CharacterRepository extends BaseRepository<Character> {
       groupId: string;
       name: string;
       characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
     }>
   > {
     return this.executeQuery(async () => {
       // Get all character groups
       const groups = await this.prisma.characterGroup.findMany({
-        include: {
+        select: {
+          id: true,
+          slug: true,
+          mainCharacterId: true,
           characters: {
             select: {
               eveId: true,
@@ -117,6 +121,7 @@ export class CharacterRepository extends BaseRepository<Character> {
       return groups.map((group) => ({
         groupId: group.id,
         name: group.slug,
+        mainCharacterId: group.mainCharacterId || undefined,
         characters: group.characters.map(
           (char: { eveId: string; name: string }) => ({
             eveId: char.eveId,

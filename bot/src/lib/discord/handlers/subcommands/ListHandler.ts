@@ -63,17 +63,13 @@ export class ListHandler extends BaseChartHandler {
             name: "🏢 /charts corps [time]",
             value: "Show kills per enemy corporation",
           },
-          trend: {
-            name: "📊 /charts trend [time]",
-            value: "Show line chart of kills over time",
-          },
           heatmap: {
-            name: "🔥 /charts heatmap [time]",
+            name: "🌡️ /charts heatmap [time]",
             value: "Show heatmap of kill activity by hour and day of week",
           },
-          list: {
-            name: "📝 /charts list",
-            value: "Show this list of available chart types",
+          efficiency: {
+            name: "📊 /charts efficiency [time]",
+            value: "Show efficiency metrics with gauge charts",
           },
         };
 

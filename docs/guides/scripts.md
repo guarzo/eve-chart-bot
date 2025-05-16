@@ -60,6 +60,15 @@ npm run migrate-map-activity
   npm run sync:kills
   ```
 
+#### Loss Data Sync
+
+- **File**: `bot/src/scripts/sync-losses.ts`
+- **Purpose**: Historical loss data backfill from zKillboard
+- **Usage**:
+  ```bash
+  npm run sync:losses
+  ```
+
 #### Map Activity Sync
 
 - **File**: `bot/src/scripts/sync-map-activity.ts`
@@ -72,7 +81,7 @@ npm run migrate-map-activity
 #### RedisQ Ingestion
 
 - **File**: `bot/src/scripts/start-redisq.ts`
-- **Purpose**: Real-time killmail ingestion from RedisQ
+- **Purpose**: Real-time killmail and loss ingestion from RedisQ
 - **Usage**:
 
   ```bash
@@ -142,6 +151,9 @@ npm run test:ingestion
 # Test map ingestion
 npm run test:map-ingestion
 
+# Test loss ingestion
+npm run test:loss-ingestion
+
 # Test Discord integration
 npm run test:discord
 
@@ -179,13 +191,19 @@ The following processes are defined in `ecosystem.config.js`:
 1. **redisq-consumer**
 
    - Script: `dist/scripts/start-redisq.js`
-   - Purpose: Real-time killmail ingestion
+   - Purpose: Real-time killmail and loss ingestion
    - Schedule: Runs continuously
 
 2. **kill-backfill**
+
    - Script: `dist/scripts/sync-kills.js`
    - Purpose: Daily historical killmail backfill
    - Schedule: Runs daily at midnight (cron: `0 0 * * *`)
+
+3. **loss-backfill**
+   - Script: `dist/scripts/sync-losses.js`
+   - Purpose: Daily historical loss data backfill
+   - Schedule: Runs daily at 1 AM (cron: `0 1 * * *`)
 
 ## Environment Setup
 
@@ -242,10 +260,12 @@ MAX_RETRIES=3
 | Start Ingestion          | `bot/src/scripts/start-ingestion.ts`          | Start all ingestion processes       | Manual run                     |
 | Sync Characters          | `bot/src/scripts/sync-characters.ts`          | Sync character data                 | `npm run sync:characters`      |
 | Sync Kills               | `bot/src/scripts/sync-kills.ts`               | Sync kill data                      | `npm run sync:kills`           |
+| Sync Losses              | `bot/src/scripts/sync-losses.ts`              | Sync loss data                      | `npm run sync:losses`          |
 | Sync Map Activity        | `bot/src/scripts/sync-map-activity.ts`        | Sync map activity data              | `npm run sync:map-activity`    |
 | Cleanup                  | `bot/src/scripts/cleanup.ts`                  | Clean up temporary data             | Manual run                     |
 | Test Ingestion           | `bot/src/scripts/test-ingestion.ts`           | Test ingestion system               | `npm run test:ingestion`       |
 | Test Map Ingestion       | `bot/src/scripts/test-map-ingestion.ts`       | Test map ingestion                  | `npm run test:map-ingestion`   |
+| Test Loss Ingestion      | `bot/src/scripts/test-loss-ingestion.ts`      | Test loss ingestion                 | `npm run test:loss-ingestion`  |
 | Test Discord             | `bot/src/scripts/test-discord.ts`             | Test Discord integration            | `npm run test:discord`         |
 | Test Interaction Handler | `bot/src/scripts/test-interaction-handler.ts` | Test interaction handler            | Manual run                     |
 | Reset DB                 | `bot/scripts/reset-db.ts`                     | Reset database                      | `npm run reset-db`             |

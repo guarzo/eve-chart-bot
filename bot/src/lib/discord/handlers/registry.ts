@@ -4,11 +4,10 @@ import { MapHandler } from "./subcommands/MapHandler";
 import { LossHandler } from "./subcommands/LossHandler";
 import { RatioHandler } from "./subcommands/RatioHandler";
 import { ListHandler } from "./subcommands/ListHandler";
-import { ShipTypesHandler } from "./subcommands/ShipTypesHandler";
-import { DistributionHandler } from "./subcommands/DistributionHandler";
-import { CorpsHandler } from "./subcommands/CorpsHandler";
 import { ShipKillHandler } from "./subcommands/ShipKillHandler";
 import { ShipLossHandler } from "./subcommands/ShipLossHandler";
+import { DistributionHandler } from "./subcommands/DistributionHandler";
+import { CorpsHandler } from "./subcommands/CorpsHandler";
 import { HeatmapHandler } from "./subcommands/HeatmapHandler";
 import { EfficiencyHandler } from "./subcommands/EfficiencyHandler";
 

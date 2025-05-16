@@ -1,6 +1,6 @@
 # Chart Reference
 
-This technical reference document describes the data models and chart types used in our Discord bot. For user-facing documentation, see [chart-commands.md](chart-commands.md). :contentReference[oaicite:0]{index=0}:contentReference[oaicite:1]{index=1}
+This technical reference document describes the data models and chart types used in our Discord bot. For user-facing documentation, see [chart-commands.md](../api/chart-commands.md).
 
 ## Data Models
 
@@ -57,122 +57,108 @@ model MapActivity {
 }
 ```
 
+### LossFact
+
+```prisma
+model LossFact {
+  killmailId    BigInt   @id
+  characterId   BigInt
+  lossTime      DateTime
+  shipTypeId    Int
+  systemId      Int
+  totalValue    BigInt
+  attackerCount Int
+  attackers     Json     // Detailed attacker info
+
+  @@index([characterId, lossTime])
+  @@map("losses_fact")
+}
+```
+
 ---
 
-## Simplified Chart Types
+## Chart Types
 
 ### Current Implementation
 
-1. **Kills Chart**  
-   - **Command:** `/charts kills [time]`  
-   - **Data:** Aggregates **KillFact** by character group  
-   - **Display:** Stacked horizontal bar chart showing _total kills_ and _solo kills_  
+1. **Kills Chart**
 
-2. **Map Activity Chart**  
-   - **Command:** `/charts map [time]`  
-   - **Data:** Aggregates **MapActivity** by character group  
-   - **Display:** Stacked horizontal bar chart showing _signatures_, _connections_, and _passages_  
+   - **Command:** `/charts kills [time]`
+   - **Data:** Aggregates **KillFact** by character group
+   - **Display:** Stacked horizontal bar chart showing _total kills_ and _solo kills_
 
-### Planned & New Future Chart Types
+2. **Map Activity Chart**
 
-1. **Deaths Chart**  
-   - **Command:** `/charts deaths [time]`  
-   - **Data:** _KillFact_ where our characters are _victims_ (requires a **LossFact** or inverse query)  
-   - **Display:** Stacked horizontal bar showing _total deaths_ and _solo deaths_  
+   - **Command:** `/charts map [time]`
+   - **Data:** Aggregates **MapActivity** by character group
+   - **Display:** Stacked horizontal bar chart showing _signatures_, _connections_, and _passages_
 
-2. **Kill-Death Ratio Chart**  
-   - **Command:** `/charts ratio [time]`  
-   - **Data:** Ratio of kills to deaths per character group (and optional ISK efficiency)  
-   - **Display:** Horizontal bar (K/D) + line (ISK efficiency %) on dual axes  
+3. **Losses Chart**
 
-3. **Ship Types Chart**  
-   - **Command:** `/charts shiptypes [time]`  
-   - **Data:** Aggregates **KillFact.shipTypeId**  
-   - **Display:** Horizontal bar of top ship types destroyed  
+   - **Command:** `/charts losses [time]`
+   - **Data:** Aggregates **LossFact** by character group
+   - **Display:** Dual-axis chart with total losses (bars) and ISK lost (line)
 
-4. **Kill Distribution Chart**  
-   - **Command:** `/charts distribution [time]`  
-   - **Data:** Categorizes kills as _solo_, _small-group (2–5)_, or _large-group (6+)_  
-   - **Display:** Pie chart (or 3-bar horizontal)  
+4. **Kill-Death Ratio Chart**
 
-5. **Hourly Activity Chart**  
-   - **Command:** `/charts hourly [time]`  
-   - **Data:** Aggregates **KillFact** by _hour of day_  
-   - **Display:** Vertical bar  
+   - **Command:** `/charts ratio [time]`
+   - **Data:** Ratio of kills to deaths per character group
+   - **Display:** Gauge chart for K/D ratio and bullet chart for efficiency
 
-6. **Corporation Kills Chart**  
-   - **Command:** `/charts corps [time]`  
-   - **Data:** Aggregates **KillFact** by _victim corporation_  
-   - **Display:** Horizontal bar  
+5. **Ship Types Chart**
 
----
+   - **Command:** `/charts shiptypes [time]`
+   - **Data:** Aggregates **KillFact.shipTypeId**
+   - **Display:** Horizontal bar of top ship types destroyed
 
-#### **New Additions from Your Examples**
+6. **Distribution Chart**
 
-7. **Damage vs Final Blows Chart**  
-   - **Command:** `/charts damage [time]`  
-   - **Data:**  
-     - **Damage Done** = sum(attacker.damage) from **KillFact.attackers** JSON  
-     - **Final Blows** = count(attacker.finalBlow = true)  
-   - **Display:** Mixed: bar (damage) + line (final‐blow count) with dual axes  
+   - **Command:** `/charts distribution [time]`
+   - **Data:** Analyzes **KillFact.attackerCount** distribution
+   - **Display:** Box plot and violin chart showing group size distribution
 
-8. **Character Performance Chart**  
-   - **Command:** `/charts performance [time]`  
-   - **Data:**  
-     - _Total kills_ and _solo kills_ (from **KillFact**)  
-     - _Points_ (from **KillFact.points**)  
-   - **Display:** Stacked bar (kills + solo) + line (points) on dual axes  
+7. **Heatmap Chart**
 
-9. **Ship Usage Chart**  
-   - **Command:** `/charts shipusage [time]`  
-   - **Data:** Distribution of kills by **shipTypeId** per character group  
-   - **Display:** Stacked horizontal bar (each segment = one ship type)  
+   - **Command:** `/charts heatmap [time]`
+   - **Data:** Aggregates **KillFact** by hour and day of week
+   - **Display:** 7×24 heatmap showing activity patterns
 
-10. **Trend (Time-Series) Chart**  
-    - **Command:** `/charts trend [time]`  
-    - **Data:** Daily aggregates of kills (or value) from **KillFact**  
-    - **Display:** Area or line chart over time  
+8. **Trend Chart**
 
-11. **Kills Heatmap**  
-    - **Command:** `/charts heatmap [time]`  
-    - **Data:** Counts of kills binned by _weekday_ & _hour_ (from **killTime**)  
-    - **Display:** Calendar-style heatmap  
+   - **Command:** `/charts trend [time]`
+   - **Data:** Daily aggregates of **KillFact**
+   - **Display:** Time-series line chart showing activity over time
 
-12. **Ships Word Cloud**  
-    - **Command:** `/charts wordcloud [time]`  
-    - **Data:** Top ship types (\`shipTypeId\`) frequency  
-    - **Display:** Word cloud (size ∝ kill count)  
-
-13. **Fleet Activity Chart**  
-    - **Command:** `/charts fleet [time]`  
-    - **Data:**  
-      - _Total value_ killed (sum **totalValue**)  
-      - _Average fleet size_ (avg **attackerCount**)  
-    - **Display:** Dual‐axis line chart over time  
-
-14. **Combined Losses Chart** _(optional)_  
-    - **Command:** `/charts losses [time]`  
-    - **Data:** Requires tracking losses (victim side)  
-    - **Display:** Bar (loss value) + line (loss count)  
+9. **Corporation Kills Chart**
+   - **Command:** `/charts corps [time]`
+   - **Data:** Aggregates **KillFact** by victim corporation
+   - **Display:** Horizontal bar chart of top corporations
 
 ---
 
 ## Chart Implementation
 
-We use Chart.js (plus plugins where needed) with:
+We use Chart.js with the following plugins:
 
-```javascript
+- chartjs-chart-matrix (for heatmaps)
+- chartjs-chart-boxplot (for box plots and violin charts)
+- chartjs-plugin-datalabels (for value labels)
+
+Example configuration:
+
+```typescript
 const chartConfig = {
-  type: "bar" | "horizontalBar" | "pie" | "line" | "mixed",   // etc.
+  type: "bar" | "line" | "boxplot" | "violin" | "matrix",
   data: {
     labels: [...],
     datasets: [
       {
         label: "Primary Metric",
         data: [...],
-        backgroundColor: "#36a2eb",
-        type: "bar",       // for mixed charts
-        yAxisID: "y1",     // when dual axes
+        backgroundColor: getThemeColors()[0],
+        borderColor: getThemeColors()[0],
+        borderWidth: 1,
+        yAxisID: "y1",     // for dual-axis charts
       },
       {
         label: "Secondary Metric",
@@ -180,21 +166,36 @@ const chartConfig = {
         type: "line",
         yAxisID: "y2",
       },
-      // ...
     ],
   },
   options: {
-    indexAxis: "y",      // for horizontalBar
+    responsive: true,
+    maintainAspectRatio: false,
     scales: {
-      x: { stacked: true },
-      y: { stacked: false, position: "left", id: "y1" },
-      y2: { position: "right", grid: { drawOnChartArea: false } },
+      x: {
+        stacked: true,
+        title: { display: true, text: "X Axis" }
+      },
+      y: {
+        stacked: true,
+        title: { display: true, text: "Y Axis" }
+      },
+      y2: {
+        position: "right",
+        grid: { drawOnChartArea: false }
+      }
     },
     plugins: {
-      legend: { display: true },
-      title: { display: true, text: "Chart Title" },
-    },
-  },
+      legend: {
+        position: "top",
+        labels: { usePointStyle: true }
+      },
+      tooltip: {
+        mode: "index",
+        intersect: false
+      }
+    }
+  }
 };
 ```
 
@@ -218,20 +219,34 @@ GROUP BY c.characterGroupId
 ORDER BY totalKills DESC;
 ```
 
-### Damage vs Final Blows Query
+### Loss Aggregation Query
 
 ```typescript
-// Assumes attackers JSON array with {damage, finalBlow} per entry
+// For losses chart
 SELECT
   c.characterGroupId,
-  SUM((attacker->>'damage')::int) AS totalDamage,
-  SUM(CASE WHEN (attacker->>'finalBlow') = 'true' THEN 1 ELSE 0 END) AS finalBlows
+  COUNT(l.killmailId) AS totalLosses,
+  SUM(l.totalValue) AS totalValue
+FROM losses_fact l
+JOIN characters c ON l.characterId = c.eveId
+WHERE l.lossTime BETWEEN ${start} AND ${end}
+GROUP BY c.characterGroupId
+ORDER BY totalLosses DESC;
+```
+
+### Distribution Query
+
+```typescript
+// For distribution chart
+SELECT
+  c.characterGroupId,
+  k.attackerCount,
+  COUNT(*) as count
 FROM kills_fact k
 JOIN characters c ON k.characterId = c.eveId
-CROSS JOIN LATERAL json_array_elements(k.attackers) AS attacker
 WHERE k.killTime BETWEEN ${start} AND ${end}
-GROUP BY c.characterGroupId
-ORDER BY totalDamage DESC;
+GROUP BY c.characterGroupId, k.attackerCount
+ORDER BY c.characterGroupId, k.attackerCount;
 ```
 
 ### Heatmap Query

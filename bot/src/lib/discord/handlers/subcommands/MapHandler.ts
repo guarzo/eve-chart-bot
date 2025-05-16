@@ -43,7 +43,7 @@ export class MapHandler extends BaseChartHandler {
       }
 
       // Get the chart generator from the factory
-      const mapGenerator = ChartFactory.createGenerator("map_activity");
+      const mapGenerator = ChartFactory.createGenerator("map");
 
       // Generate chart data
       const chartData = await mapGenerator.generateChart({
@@ -89,14 +89,14 @@ export class MapHandler extends BaseChartHandler {
       },
       scales: {
         x: {
-          stacked: false,
+          stacked: true,
           title: {
             display: true,
             text: "Count",
           },
         },
         y: {
-          stacked: false,
+          stacked: true,
           beginAtZero: true,
           title: {
             display: true,

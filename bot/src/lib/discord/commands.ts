@@ -80,8 +80,24 @@ export const commands = [
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("shiptypes")
-        .setDescription("Show top ship types destroyed (by count)")
+        .setName("shipkill")
+        .setDescription("Show top ship types destroyed by your group(s)")
+        .addStringOption((option) =>
+          option
+            .setName("time")
+            .setDescription("Time period")
+            .setRequired(false)
+            .addChoices(
+              { name: "7 Days", value: "7" },
+              { name: "24 Days", value: "24" },
+              { name: "30 Days", value: "30" }
+            )
+        )
+    )
+    .addSubcommand((subcommand) =>
+      subcommand
+        .setName("shiploss")
+        .setDescription("Show top ship types lost by your group(s)")
         .addStringOption((option) =>
           option
             .setName("time")
@@ -118,8 +134,9 @@ export const commands = [
             .setRequired(false)
             .addChoices(
               { name: "Pie Chart", value: "pie" },
-              { name: "Doughnut Chart", value: "doughnut" },
-              { name: "Bar Chart", value: "bar" }
+              { name: "Bar Chart", value: "bar" },
+              { name: "Box Plot", value: "boxplot" },
+              { name: "Violin Plot", value: "violin" }
             )
         )
     )
@@ -152,33 +169,6 @@ export const commands = [
     )
     .addSubcommand((subcommand) =>
       subcommand
-        .setName("trend")
-        .setDescription("Show line chart of kills over time")
-        .addStringOption((option) =>
-          option
-            .setName("time")
-            .setDescription("Time period")
-            .setRequired(false)
-            .addChoices(
-              { name: "7 Days", value: "7" },
-              { name: "24 Days", value: "24" },
-              { name: "30 Days", value: "30" }
-            )
-        )
-        .addStringOption((option) =>
-          option
-            .setName("view")
-            .setDescription("Chart visualization type")
-            .setRequired(false)
-            .addChoices(
-              { name: "Line Chart", value: "line" },
-              { name: "Area Chart", value: "area" },
-              { name: "Dual-Axis (Kills & Value)", value: "dual" }
-            )
-        )
-    )
-    .addSubcommand((subcommand) =>
-      subcommand
         .setName("heatmap")
         .setDescription("Show heatmap of kill activity by hour and day of week")
         .addStringOption((option) =>
@@ -196,7 +186,7 @@ export const commands = [
     .addSubcommand((subcommand) =>
       subcommand
         .setName("efficiency")
-        .setDescription("Show efficiency metrics with bullet charts")
+        .setDescription("Show efficiency metrics with gauge charts")
         .addStringOption((option) =>
           option
             .setName("time")

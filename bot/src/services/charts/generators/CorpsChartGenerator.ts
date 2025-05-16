@@ -148,12 +148,14 @@ export class CorpsChartGenerator extends BaseChartGenerator {
           ),
         },
       ],
-      displayType: "horizontalBar",
+      displayType: "bar",
+      options: {
+        indexAxis: "y",
+      },
       title: `${CorpsChartConfig.title} - ${format(
         startDate,
         "MMM d"
       )} to ${format(endDate, "MMM d, yyyy")}`,
-      options: CorpsChartConfig.horizontalBarOptions,
       summary: CorpsChartConfig.getDefaultSummary(
         corpsData.length,
         totalKills,

@@ -7,7 +7,7 @@ import { ChartFactory } from "../../../../services/charts";
 
 /**
  * Handler for the /charts efficiency command
- * Shows efficiency metrics with bullet charts
+ * Shows efficiency metrics with gauge charts
  */
 export class EfficiencyHandler extends BaseChartHandler {
   private chartRenderer: ChartRenderer;
@@ -48,7 +48,7 @@ export class EfficiencyHandler extends BaseChartHandler {
         characterGroups: groups,
         startDate,
         endDate,
-        displayType: "bar",
+        displayType: "gauge",
       });
 
       // Render chart to buffer
@@ -71,40 +71,68 @@ export class EfficiencyHandler extends BaseChartHandler {
    * Render chart to buffer using appropriate options
    */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
-    const options: ChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: chartData.title || "Efficiency by Character Group",
-          font: {
-            size: 40,
-            weight: "bold",
-          },
-        },
-        legend: {
-          display: true,
-          position: "top" as const,
-        },
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          suggestedMax: 100,
+    let options: ChartOptions;
+
+    if (chartData.displayType === "gauge") {
+      // Options for a gauge/doughnut chart
+      options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: "Efficiency (%)",
+            text: chartData.title || "Efficiency by Character Group",
+            font: {
+              size: 40,
+              weight: "bold",
+            },
+          },
+          legend: {
+            display: false, // Hide legend for gauge
+            position: "top" as const,
           },
         },
-        y: {
+        rotation: -Math.PI,
+        circumference: Math.PI,
+        cutout: "70%",
+      } as any; // Chart.js options for doughnut
+    } else {
+      // Bar chart options (existing)
+      options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
           title: {
             display: true,
-            text: "Character Group",
+            text: chartData.title || "Efficiency by Character Group",
+            font: {
+              size: 40,
+              weight: "bold",
+            },
+          },
+          legend: {
+            display: true,
+            position: "top" as const,
           },
         },
-      },
-    };
+        scales: {
+          x: {
+            beginAtZero: true,
+            suggestedMax: 100,
+            title: {
+              display: true,
+              text: "Efficiency (%)",
+            },
+          },
+          y: {
+            title: {
+              display: true,
+              text: "Character Group",
+            },
+          },
+        },
+      };
+    }
 
     // Use a wide canvas for better display
     const renderer = new ChartRenderer(3000, 1600);

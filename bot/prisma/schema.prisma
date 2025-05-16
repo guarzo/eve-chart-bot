@@ -67,7 +67,7 @@ model MapActivity {
 }
 
 model KillFact {
-  killmail_id  BigInt   @id
+  killmail_id  BigInt         @id
   character_id BigInt
   kill_time    DateTime
   npc          Boolean
@@ -78,10 +78,8 @@ model KillFact {
   labels       String[]
   total_value  BigInt
   points       Int
-
-  // Define relationships to the new tables
-  attackers KillAttacker[]
-  victims KillVictim[]
+  attackers    KillAttacker[]
+  victims      KillVictim[]
 
   @@index([character_id, kill_time])
   @@map("KillFact")
@@ -101,22 +99,19 @@ model LossFact {
   @@map("LossFact")
 }
 
-// New models for the kill relationship tables
 model KillAttacker {
-  id            Int      @id @default(autoincrement())
-  killmail_id   BigInt
-  character_id  BigInt?
-  corporation_id BigInt?
-  alliance_id   BigInt?
-  damage_done   Int
-  final_blow    Boolean
+  id              Int      @id @default(autoincrement())
+  killmail_id     BigInt
+  character_id    BigInt?
+  corporation_id  BigInt?
+  alliance_id     BigInt?
+  damage_done     Int
+  final_blow      Boolean
   security_status Float?
-  ship_type_id  Int?
-  weapon_type_id Int?
-  created_at    DateTime @default(now())
-  
-  // Define relationship back to kill
-  kill         KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+  ship_type_id    Int?
+  weapon_type_id  Int?
+  created_at      DateTime @default(now())
+  kill            KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
 
   @@index([killmail_id])
   @@index([character_id])
@@ -124,17 +119,15 @@ model KillAttacker {
 }
 
 model KillVictim {
-  id            Int      @id @default(autoincrement())
-  killmail_id   BigInt
-  character_id  BigInt?
+  id             Int      @id @default(autoincrement())
+  killmail_id    BigInt
+  character_id   BigInt?
   corporation_id BigInt?
-  alliance_id   BigInt?
-  ship_type_id  Int
-  damage_taken  Int
-  created_at    DateTime @default(now())
-  
-  // Define relationship back to kill
-  kill         KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+  alliance_id    BigInt?
+  ship_type_id   Int
+  damage_taken   Int
+  created_at     DateTime @default(now())
+  kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
 
   @@index([killmail_id])
   @@index([character_id])
