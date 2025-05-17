@@ -1,6 +1,5 @@
 import { PrismaClient } from "@prisma/client";
 import {
-  ChartConfig,
   ChartConfigInput,
   ChartData,
   ChartDisplayType,
@@ -8,7 +7,6 @@ import {
 } from "../types/chart";
 import { format } from "date-fns";
 import { logger } from "../lib/logger";
-import { KillRepository } from "../data/repositories/KillRepository";
 
 interface KillData {
   killTime: Date;
@@ -26,7 +24,6 @@ interface ActivityData {
 
 export class ChartService {
   private prisma: PrismaClient;
-  private killRepository: KillRepository;
   private colors: string[] = [
     "#3366CC", // deep blue
     "#DC3912", // red
@@ -48,7 +45,6 @@ export class ChartService {
 
   constructor() {
     this.prisma = new PrismaClient();
-    this.killRepository = new KillRepository();
   }
 
   async generateChart(config: ChartConfigInput): Promise<ChartData> {
@@ -732,7 +728,12 @@ export class ChartService {
     endDate: Date;
     displayType: string;
   }): Promise<ChartData> {
-    const { characterGroups, startDate, endDate, displayType } = config;
+    const {
+      characterGroups,
+      startDate,
+      endDate,
+      displayType: _displayType,
+    } = config;
 
     logger.info(
       `Generating grouped kills chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
@@ -964,31 +965,7 @@ export class ChartService {
     }
   }
 
-  // Helper method to adjust color brightness
-  private adjustColorBrightness(hexColor: string, percent: number): string {
-    // Remove # if present
-    hexColor = hexColor.replace("#", "");
 
-    // Convert to RGB
-    const r = parseInt(hexColor.substr(0, 2), 16);
-    const g = parseInt(hexColor.substr(2, 2), 16);
-    const b = parseInt(hexColor.substr(4, 2), 16);
-
-    // Adjust brightness
-    const adjustValue = (value: number): number => {
-      return Math.min(
-        255,
-        Math.max(0, Math.round(value + value * (percent / 100)))
-      );
-    };
-
-    // Convert back to hex
-    const rr = adjustValue(r).toString(16).padStart(2, "0");
-    const gg = adjustValue(g).toString(16).padStart(2, "0");
-    const bb = adjustValue(b).toString(16).padStart(2, "0");
-
-    return `#${rr}${gg}${bb}`;
-  }
 
   /**
    * Generates a grouped map activity chart by character group

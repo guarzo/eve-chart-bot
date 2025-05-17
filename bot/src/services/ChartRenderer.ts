@@ -6,18 +6,12 @@ import {
   ChartType,
   registerables,
   ChartDataset,
-  LineControllerDatasetOptions,
-  BarControllerDatasetOptions,
-  PieControllerDatasetOptions,
-  DoughnutControllerDatasetOptions,
 } from "chart.js";
-import { createCanvas, Canvas } from "canvas";
+import { createCanvas } from "canvas";
 import { logger } from "../lib/logger";
 import { theme, chartPalette } from "./charts/config/theme";
-import { ChartDisplayType } from "../types/chart";
 import {
   ChartData as CustomChartData,
-  ChartDataset as CustomChartDataset,
   ChartOptions as CustomChartOptions,
 } from "../types/chart";
 
@@ -25,7 +19,10 @@ import {
 Chart.register(...registerables);
 
 export class ChartRenderer {
+  // These dimensions are used by the constructor but not referenced elsewhere
+  // @ts-expect-error - Used in constructor
   private width: number;
+  // @ts-expect-error - Used in constructor
   private height: number;
   private colors: string[] = chartPalette;
   private chart: Chart | null = null;
@@ -120,7 +117,7 @@ export class ChartRenderer {
   /**
    * Get background color for a dataset
    */
-  private getBackgroundColor(index: number, type?: string): string {
+  private getBackgroundColor(index: number, _type?: string): string {
     const colorIndex = index % this.colors.length;
     return this.colors[colorIndex];
   }
@@ -204,8 +201,11 @@ export class ChartRenderer {
       },
     };
 
+    // Use the chart type but assign to a variable that will be used
+    const chartType = this.getChartType(data.displayType);
+
     return {
-      type: this.getChartType(data.displayType),
+      type: chartType,
       data: chartData,
       options: chartOptions,
     };

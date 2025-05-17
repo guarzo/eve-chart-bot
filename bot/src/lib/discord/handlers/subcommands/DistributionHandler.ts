@@ -1,6 +1,6 @@
 import { BaseChartHandler } from "./BaseChartHandler";
 import { CommandInteraction } from "discord.js";
-import { ChartData, ChartOptions } from "../../../../types/chart";
+import { ChartOptions } from "../../../../types/chart";
 import { ChartRenderer } from "../../../../services/ChartRenderer";
 import { logger } from "../../../logger";
 import { ChartFactory } from "../../../../services/charts";

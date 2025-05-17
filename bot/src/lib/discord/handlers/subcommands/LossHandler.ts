@@ -9,11 +9,9 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts loss command
  */
 export class LossHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
 
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**

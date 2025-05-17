@@ -10,11 +10,9 @@ import { ChartFactory } from "../../../../services/charts";
  * Shows efficiency metrics with gauge charts
  */
 export class EfficiencyHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
 
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   async handle(interaction: CommandInteraction): Promise<void> {

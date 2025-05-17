@@ -187,8 +187,6 @@ export class TrendChartGenerator extends BaseChartGenerator {
       options: TrendChartConfig.timelineOptions,
       summary: TrendChartConfig.getDefaultSummary(
         overallTotalKills,
-        startDate,
-        endDate,
         averageKillsPerDay,
         trend
       ),
@@ -335,8 +333,6 @@ export class TrendChartGenerator extends BaseChartGenerator {
       options: TrendChartConfig.areaOptions,
       summary: TrendChartConfig.getDefaultSummary(
         overallTotalKills,
-        startDate,
-        endDate,
         averageKillsPerDay,
         trend
       ),
@@ -464,8 +460,6 @@ export class TrendChartGenerator extends BaseChartGenerator {
       summary:
         TrendChartConfig.getDefaultSummary(
           totalKills,
-          startDate,
-          endDate,
           averageKillsPerDay,
           trend
         ) + " with value metrics",

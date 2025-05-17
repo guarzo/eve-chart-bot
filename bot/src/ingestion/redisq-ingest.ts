@@ -3,7 +3,6 @@ import { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
 import axios from "axios";
 import { IngestionService } from "../services/IngestionService";
-import { IngestionConfig } from "../types/ingestion";
 import { fetchESIKillmail } from "../lib/esi";
 
 if (!process.env.REDIS_URL) {
@@ -689,7 +688,7 @@ export async function startIngestion() {
     const ingestionKillmails: number[] = [];
     let lastIngestionSummaryTime = Date.now();
 
-    subscriber.on("message", async (channel: string, message: string) => {
+    subscriber.on("message", async (_channel: string, message: string) => {
       try {
         const killmail = JSON.parse(message) as RedisQKillmail;
 
@@ -715,10 +714,6 @@ export async function startIngestion() {
 
         // Only log detailed information for killmails that are relevant to our tracked characters
         if (isRelevantKillmail(killmail)) {
-          const finalBlowAttackerId =
-            killmail.package.attackers.find((a) => a.final_blow)
-              ?.character_id || "Unknown";
-
           logger.info(
             `Received relevant killmail #${killmail.killID} (${new Date(
               killmail.package.killmail_time
@@ -760,14 +755,6 @@ export async function startIngestion() {
     );
     throw error; // Only throw here if we can't start the service at all
   }
-}
-
-interface RedisQConfig {
-  redisUrl: string;
-  cacheTtl?: number;
-  batchSize?: number;
-  backoffMs?: number;
-  maxRetries?: number;
 }
 
 export class RedisQConsumer {
@@ -818,7 +805,7 @@ export class RedisQConsumer {
       const subscriber = this.redis.duplicate();
       await subscriber.subscribe("killmails");
 
-      subscriber.on("message", async (channel: string, message: string) => {
+      subscriber.on("message", async (_channel: string, message: string) => {
         try {
           const killmail = JSON.parse(message) as RedisQKillmail;
 
@@ -844,10 +831,6 @@ export class RedisQConsumer {
 
           // Only log detailed information for killmails that are relevant to our tracked characters
           if (isRelevantKillmail(killmail)) {
-            const finalBlowAttackerId =
-              killmail.package.attackers.find((a) => a.final_blow)
-                ?.character_id || "Unknown";
-
             logger.info(
               `Received relevant killmail #${killmail.killID} (${new Date(
                 killmail.package.killmail_time
@@ -1037,14 +1020,12 @@ async function pollRedisQ(ingestionService: IngestionService) {
         // The structure appears to be different than we expected
         // Let's properly extract and reformat the data
         const killmailData = redisQResponse.package.killmail || {};
-        const zkbData = redisQResponse.package.zkb || {};
 
         // Log minimal information about the killmail structure
         logger.debug(
           {
             killmailId: redisQResponse.package.killID,
             hasKillmailObject: Boolean(redisQResponse.package.killmail),
-            hasZkbObject: Boolean(redisQResponse.package.zkb),
           },
           "Processing killmail data"
         );

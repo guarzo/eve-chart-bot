@@ -9,11 +9,9 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts corps command
  */
 export class CorpsHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
 
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**

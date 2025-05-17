@@ -5,7 +5,7 @@ import {
   startConsumer,
   refreshTrackedCharacters,
 } from "./ingestion/redisq-ingest";
-import { config } from "dotenv";
+import { config as dotenvConfig } from "dotenv";
 import cors from "cors";
 import bodyParser from "body-parser";
 import rateLimit from "express-rate-limit";
@@ -15,12 +15,10 @@ import { ChartService } from "./services/ChartService";
 import { ChartRenderer } from "./services/ChartRenderer";
 import { ChartOptions } from "./types/chart";
 import { z } from "zod";
-import dotenv from "dotenv";
-import { DatabaseUtils } from "./utils/DatabaseUtils";
 import { ensureDatabaseTablesExist } from "./application/ingestion/DatabaseCheck";
 
 // Load environment variables
-dotenv.config();
+dotenvConfig();
 
 // Create Express app
 const app = express();
@@ -65,12 +63,12 @@ const chartConfigSchema = z.object({
 const appStartTime = Date.now();
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
 // Get available chart types
-app.get("/v1/charts/types", (req, res) => {
+app.get("/v1/charts/types", (_req, res) => {
   res.json({
     types: [
       {
@@ -123,7 +121,10 @@ app.post("/v1/charts/generate", async (req, res) => {
     };
 
     // Render chart to buffer
-    const buffer = await chartRenderer.renderToBuffer(chartData, options);
+    const buffer = await chartRenderer.renderToBuffer(
+      chartConfigWithData.data,
+      options
+    );
 
     res.setHeader("Content-Type", "image/png");
     res.send(buffer);
@@ -185,12 +186,11 @@ async function startServer() {
     );
 
     // Start HTTP server
-    const PORT = process.env.PORT || 3000;
     const serverStartTime = Date.now();
-    app.listen(PORT, () => {
+    app.listen(port, () => {
       const serverReadyTime = Date.now();
       logger.info(
-        `Server listening on port ${PORT} (${
+        `Server listening on port ${port} (${
           (serverReadyTime - serverStartTime) / 1000
         }s)`
       );

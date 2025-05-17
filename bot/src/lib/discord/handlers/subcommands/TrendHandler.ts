@@ -9,11 +9,8 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts trend command
  */
 export class TrendHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
-
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**

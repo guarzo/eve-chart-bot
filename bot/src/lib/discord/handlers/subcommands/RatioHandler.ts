@@ -9,11 +9,8 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts ratio command
  */
 export class RatioHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
-
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**

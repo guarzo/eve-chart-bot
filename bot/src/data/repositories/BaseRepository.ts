@@ -6,7 +6,7 @@ import { DatabaseUtils } from "../../utils/DatabaseUtils";
  * Base repository class that all specific repositories will extend.
  * Provides common functionality and access to the database.
  */
-export abstract class BaseRepository<T> {
+export abstract class BaseRepository {
   protected prisma: PrismaClient;
   protected modelName: string;
   protected dbTableName: string | null;

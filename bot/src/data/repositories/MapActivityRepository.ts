@@ -1,17 +1,13 @@
 import { BaseRepository } from "./BaseRepository";
-import { CharacterRepository } from "./CharacterRepository";
 import { MapActivity } from "@prisma/client";
 import { logger } from "../../lib/logger";
 
 /**
  * Repository for map activity data access
  */
-export class MapActivityRepository extends BaseRepository<MapActivity> {
-  private characterRepository: CharacterRepository;
-
+export class MapActivityRepository extends BaseRepository {
   constructor() {
     super("MapActivity");
-    this.characterRepository = new CharacterRepository();
 
     // Set cache TTL (3 minutes)
     this.setCacheTTL(3 * 60 * 1000);
@@ -22,7 +18,7 @@ export class MapActivityRepository extends BaseRepository<MapActivity> {
     );
 
     // Validate that the table exists
-    this.tableExists().then((exists) => {
+    this.tableExists().then((exists: boolean) => {
       if (!exists) {
         logger.warn(
           "MapActivity table does not exist or is not accessible. This may cause errors."
@@ -124,7 +120,7 @@ export class MapActivityRepository extends BaseRepository<MapActivity> {
       }
 
       // Get character IDs
-      const characterIds = group.characters.map((c) => c.eveId);
+      const characterIds = group.characters.map((c: any) => c.eveId);
 
       // Get activity for all characters
       return this.getActivityForCharacters(characterIds, startDate, endDate);
@@ -212,7 +208,7 @@ export class MapActivityRepository extends BaseRepository<MapActivity> {
       }
 
       // Get character IDs
-      const characterIds = group.characters.map((c) => c.eveId);
+      const characterIds = group.characters.map((c: any) => c.eveId);
       logger.info(
         `Group ${groupId} has ${
           characterIds.length

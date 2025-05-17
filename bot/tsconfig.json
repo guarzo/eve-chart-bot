@@ -1,15 +1,55 @@
+// tsconfig.json
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "strict": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
+    /* Basic Options */
+    "target": "ES2020", // modern JS output
+    "module": "NodeNext", // match moduleResolution
+    "moduleResolution": "NodeNext", // aligns with Node's ESM loader
+    "lib": ["ESNext", "DOM"], // DOM for Vite‐served code; drop if purely back-end
+    "rootDir": "src",
     "outDir": "dist",
-    "rootDir": "src"
+    "allowJs": false, // no .js in src
+
+    /* Strict Type-Checking */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* Additional Safety */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Module Interop */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    /* Source Maps */
+    "sourceMap": true,
+    "inlineSources": true,
+
+    /* Decorators (if you ever need them) */
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+
+    /* Path Aliases */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+
+    /* Ambient Types */
+    "types": ["node"]
   },
-  "include": ["src/**/*"],
+
+  /* Files & Folders */
+  "include": ["src", "vite.config.ts", "env.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

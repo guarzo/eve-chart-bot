@@ -256,13 +256,6 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
   }
 
   /**
-   * Get colors for heatmap values
-   */
-  private getColorForValues(values: number[], maxValue: number): string[] {
-    return values.map((value) => this.getHeatmapColor(value, maxValue));
-  }
-
-  /**
    * Get color for a heatmap cell based on value intensity
    */
   private getHeatmapColor(value: number, maxValue: number): string {

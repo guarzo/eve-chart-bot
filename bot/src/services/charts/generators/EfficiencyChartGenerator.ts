@@ -2,24 +2,7 @@ import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData, ChartDisplayType } from "../../../types/chart";
 import { KillRepository } from "../../../data/repositories/KillRepository";
 import { LossRepository } from "../../../data/repositories/LossRepository";
-import { KillsChartGenerator } from "./KillsChartGenerator";
-import { LossChartGenerator } from "./LossChartGenerator";
-import { EfficiencyChartConfig } from "../config/EfficiencyChartConfig";
-import { EfficiencyGaugeConfig } from "../config/EfficiencyGaugeConfig";
 import { logger } from "../../../lib/logger";
-import { chartPalette } from "../config/theme";
-import { format } from "date-fns";
-
-interface Kill {
-  characterId: bigint;
-  timestamp: Date;
-}
-
-interface Loss {
-  characterId: bigint;
-  timestamp: Date;
-  totalValue: bigint;
-}
 
 /**
  * Generator for efficiency charts
@@ -27,8 +10,6 @@ interface Loss {
 export class EfficiencyChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
   private lossRepository: LossRepository;
-  private killsGenerator = new KillsChartGenerator();
-  private lossGenerator = new LossChartGenerator();
 
   constructor() {
     super();
@@ -47,7 +28,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    const { startDate, endDate, characterGroups, displayType } = options;
+    const { startDate, endDate, characterGroups } = options;
     logger.info("Generating efficiency chart");
 
     // Get all character IDs from all groups

@@ -4,7 +4,7 @@ import { Character, Prisma } from "@prisma/client";
 /**
  * Repository for character-related data access
  */
-export class CharacterRepository extends BaseRepository<Character> {
+export class CharacterRepository extends BaseRepository {
   constructor() {
     super("Character");
   }

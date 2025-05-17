@@ -52,11 +52,10 @@ export class DatabaseUtils {
   /**
    * Get the actual database table name for a Prisma model
    *
-   * @param prisma PrismaClient instance
    * @param modelName Prisma model name
    * @returns The database table name or null if not found
    */
-  static getTableName(prisma: PrismaClient, modelName: string): string | null {
+  static getTableName(modelName: string): string | null {
     return this.getTableNameFromMapping(modelName);
   }
 

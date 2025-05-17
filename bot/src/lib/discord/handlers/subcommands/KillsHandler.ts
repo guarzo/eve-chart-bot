@@ -10,11 +10,8 @@ import { theme } from "../../../../services/charts/config/theme";
  * Handler for the /charts kills command
  */
 export class KillsHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
-
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**

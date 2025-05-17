@@ -1,6 +1,6 @@
 import { BaseRepository } from "./BaseRepository";
 import { logger } from "../../lib/logger";
-import { PrismaClient, LossFact } from "@prisma/client";
+import { LossFact } from "@prisma/client";
 import { CharacterSummary } from "../../types/discord";
 import { SimpleTimeRange } from "../../types/chart";
 
@@ -8,7 +8,7 @@ import { SimpleTimeRange } from "../../types/chart";
  * Repository for accessing ship loss data
  * This is a placeholder implementation that will be fully implemented in Phase 4
  */
-export class LossRepository extends BaseRepository<LossFact> {
+export class LossRepository extends BaseRepository {
   constructor() {
     super("lossFact");
   }

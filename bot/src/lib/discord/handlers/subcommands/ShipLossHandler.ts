@@ -9,11 +9,8 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts shiploss command
  */
 export class ShipLossHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
-
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   async handle(interaction: CommandInteraction): Promise<void> {

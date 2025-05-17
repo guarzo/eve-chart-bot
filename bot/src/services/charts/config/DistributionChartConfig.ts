@@ -173,8 +173,6 @@ export const DistributionChartConfig = {
     soloKills: number,
     smallGroupKills: number,
     mediumGroupKills: number,
-    largeGroupKills: number,
-    blobKills: number
   ): string => {
     const soloPercent =
       totalKills > 0 ? ((soloKills / totalKills) * 100).toFixed(1) : "0";

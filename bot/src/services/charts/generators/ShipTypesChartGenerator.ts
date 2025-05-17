@@ -1,11 +1,6 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { ShipTypesChartConfig } from "../config";
-import { logger } from "../../../lib/logger";
 import { KillRepository } from "../../../data/repositories/KillRepository";
-import { LossRepository } from "../../../data/repositories/LossRepository";
-import { format } from "date-fns";
-import axios from "axios";
 
 interface ShipTypeData {
   shipTypeId: string;
@@ -17,13 +12,10 @@ interface ShipTypeData {
  */
 export class ShipTypesChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
-  private lossRepository: LossRepository;
-  private shipTypeNameCache: Record<string, string> = {};
 
   constructor() {
     super();
     this.killRepository = new KillRepository();
-    this.lossRepository = new LossRepository();
   }
 
   /**
@@ -40,7 +32,7 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    const { startDate, endDate, characterGroups, displayType } = options;
+    const { startDate, endDate, characterGroups } = options;
 
     // Get all character IDs from all groups
     const characterIds = characterGroups.flatMap((group) =>
@@ -91,39 +83,4 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     };
   }
 
-  /**
-   * Get a formatted string describing the time range
-   */
-  private getTimeRangeText(startDate: Date, endDate: Date): string {
-    const diffDays = Math.floor(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (diffDays <= 1) {
-      return "Last 24 hours";
-    } else if (diffDays <= 7) {
-      return "Last 7 days";
-    } else if (diffDays <= 30) {
-      return "Last 30 days";
-    } else {
-      return `${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
-    }
-  }
-
-  /**
-   * Helper to fetch ship type name from ESI and cache it
-   */
-  private async getShipTypeName(typeId: string): Promise<string> {
-    if (this.shipTypeNameCache[typeId]) return this.shipTypeNameCache[typeId];
-    try {
-      const resp = await axios.get(
-        `https://esi.evetech.net/latest/universe/types/${typeId}/?datasource=tranquility`
-      );
-      const name = resp.data.name || typeId;
-      this.shipTypeNameCache[typeId] = name;
-      return name;
-    } catch {
-      return typeId;
-    }
-  }
 }

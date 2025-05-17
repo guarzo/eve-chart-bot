@@ -196,18 +196,8 @@ async function handleLegacyMapCommand(
   });
 }
 
-// Helper functions for getting character data
+// Helper function for getting character data
 async function getTrackedCharacters(): Promise<bigint[]> {
   const characters = await chartService.getTrackedCharacters();
   return characters.map((c) => BigInt(c.eveId));
-}
-
-async function getCharacterGroups(): Promise<
-  Array<{
-    groupId: string;
-    name: string;
-    characters: Array<{ eveId: string; name: string }>;
-  }>
-> {
-  return chartService.getCharacterGroups();
 }

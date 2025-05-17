@@ -1,5 +1,4 @@
 import { ChartData, ChartOptions } from "../../types/chart";
-import { logger } from "../../lib/logger";
 import { chartPalette } from "./config/theme";
 
 /**

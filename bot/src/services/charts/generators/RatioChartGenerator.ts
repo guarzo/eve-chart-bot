@@ -1,6 +1,5 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
-import { RatioChartConfig } from "../config";
 import { logger } from "../../../lib/logger";
 import { KillRepository } from "../../../data/repositories/KillRepository";
 import { LossRepository } from "../../../data/repositories/LossRepository";
@@ -35,23 +34,6 @@ export class RatioChartGenerator extends BaseChartGenerator {
     logger.info("Generating kill-death ratio chart");
 
     const { startDate, endDate, characterGroups } = options;
-
-    // Create display names based on main character or first character in each group
-    const labels = characterGroups.map((group) => {
-      // Use main character name if available
-      if (group.mainCharacterId) {
-        const mainChar = group.characters.find(
-          (c) => c.eveId === group.mainCharacterId
-        );
-        if (mainChar) return mainChar.name;
-      }
-      // Fallback to first character or group name
-      if (group.characters.length > 0) {
-        return group.characters[0].name;
-      } else {
-        return group.name;
-      }
-    });
 
     // Prepare data arrays
     const filteredLabels: string[] = [];

@@ -1,16 +1,12 @@
 import { BaseRepository } from "./BaseRepository";
-import { Character } from "@prisma/client";
-import { CharacterRepository } from "./CharacterRepository";
+import { Prisma } from "@prisma/client";
 
 /**
  * Repository for accessing kill-related data
  */
-export class KillRepository extends BaseRepository<any> {
-  private characterRepository: CharacterRepository;
-
+export class KillRepository extends BaseRepository {
   constructor() {
     super("killFact");
-    this.characterRepository = new CharacterRepository();
 
     // Set a longer cache TTL for kill data (5 minutes)
     this.setCacheTTL(5 * 60 * 1000);
@@ -106,7 +102,7 @@ export class KillRepository extends BaseRepository<any> {
       }
 
       // Get character IDs
-      const characterIds = group.characters.map((c) => c.eveId);
+      const characterIds = group.characters.map((c: any) => c.eveId);
 
       // Get kills for all characters
       return this.getKillsForCharacters(characterIds, startDate, endDate);
@@ -144,7 +140,7 @@ export class KillRepository extends BaseRepository<any> {
 
       // Calculate statistics
       const totalKills = kills.length;
-      const soloKills = kills.filter((k) => k.solo === true).length;
+      const soloKills = kills.filter((k: any) => k.solo === true).length;
       const totalValue = kills.reduce(
         (sum: bigint, kill: any) => sum + kill.total_value,
         BigInt(0)
@@ -188,7 +184,7 @@ export class KillRepository extends BaseRepository<any> {
 
       // Calculate statistics
       const totalKills = kills.length;
-      const soloKills = kills.filter((k) => k.solo === true).length;
+      const soloKills = kills.filter((k: any) => k.solo === true).length;
       const totalValue = kills.reduce(
         (sum: bigint, kill: any) => sum + kill.total_value,
         BigInt(0)
@@ -245,7 +241,7 @@ export class KillRepository extends BaseRepository<any> {
       }
 
       // Convert character IDs to strings for comparison
-      const groupCharacterIds = group.characters.map((c) => c.eveId);
+      const groupCharacterIds = group.characters.map((c: any) => c.eveId);
 
       // Get all kills for this group in this time period
       const kills = await this.getKillsForGroup(groupId, startDate, endDate);
@@ -258,7 +254,7 @@ export class KillRepository extends BaseRepository<any> {
       }
 
       // Create a list of killmail IDs to query
-      const killmailIds = kills.map((k) => k.killmail_id);
+      const killmailIds = kills.map((k: any) => k.killmail_id);
 
       // Find group solo kills where all attackers are from the same group
       let groupSoloKills = 0;
@@ -287,15 +283,12 @@ export class KillRepository extends BaseRepository<any> {
             continue;
           }
 
-          // Check if all attackers with character IDs are from this group
-          const playerAttackers = kill.attackers.filter((a) => a.character_id);
-          if (playerAttackers.length === 0) {
-            continue;
-          }
-
-          // Get all character IDs as strings for comparison
+          // Count attackers from our group vs total
+          const playerAttackers = kill.attackers.filter(
+            (a: any) => a.character_id
+          );
           const attackerCharIds = playerAttackers
-            .map((a) => (a.character_id ? String(a.character_id) : null))
+            .map((a: any) => (a.character_id ? String(a.character_id) : null))
             .filter(Boolean) as string[];
 
           // Check if all attacker character IDs exist in this group
@@ -577,7 +570,7 @@ export class KillRepository extends BaseRepository<any> {
       });
 
       // Transform the data
-      return kills.map((kill) => ({
+      return kills.map((kill: any) => ({
         killmailId: kill.killmail_id.toString(),
         attackerCount: kill.attackers.length,
       }));
@@ -660,26 +653,20 @@ export class KillRepository extends BaseRepository<any> {
     startDate: Date,
     endDate: Date
   ): Promise<number> {
+    const bigIntIds = characterIds.map((id) => BigInt(id));
+
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
+      const result = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(DISTINCT "KillVictim"."corp_id") as count
+        FROM "KillVictim"
+        JOIN "KillFact" ON "KillFact"."killmail_id" = "KillVictim"."killmail_id"
+        WHERE "KillFact"."character_id" IN (${Prisma.join(bigIntIds)})
+        AND "KillFact"."kill_time" BETWEEN ${startDate} AND ${endDate}
+      `;
 
-      // Get count of all kills for the characters in the specified date range
-      const { _count } = await this.prisma.killFact.aggregate({
-        where: {
-          character_id: {
-            in: bigIntIds,
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        _count: true,
-      });
-
-      return _count || 0;
-    }, `total-enemy-corps-kills-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+      // Ensure we return a number
+      return Number(result[0]?.count || 0);
+    }, `total-enemy-corp-kills-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
   }
 
   /**

@@ -9,8 +9,6 @@ interface TrendChartConfigType extends ChartOptions {
   dualAxisOptions: ChartOptions;
   getDefaultSummary: (
     totalKills: number,
-    startDate: Date,
-    endDate: Date,
     averageKillsPerDay: number,
     trend: "increasing" | "stable" | "decreasing"
   ) => string;
@@ -269,8 +267,6 @@ export const TrendChartConfig: TrendChartConfigType = {
   },
   getDefaultSummary: (
     totalKills: number,
-    startDate: Date,
-    endDate: Date,
     averageKillsPerDay: number,
     trend: "increasing" | "stable" | "decreasing"
   ) => {

@@ -9,11 +9,8 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts shiptypes command
  */
 export class ShipTypesHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
-
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   /**
@@ -78,7 +75,6 @@ export class ShipTypesHandler extends BaseChartHandler {
       indexAxis: "y", // Horizontal bar chart by default
       responsive: true,
       maintainAspectRatio: false,
-      aspectRatio: 2.5, // Wider aspect ratio for better horizontal display
       plugins: {
         title: {
           display: true,

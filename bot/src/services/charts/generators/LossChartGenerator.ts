@@ -7,7 +7,6 @@ import {
 import { LossChartConfig } from "../config";
 import { logger } from "../../../lib/logger";
 import { LossRepository } from "../../../data/repositories/LossRepository";
-import { format } from "date-fns";
 
 interface Loss {
   killmail_id: bigint;
@@ -45,7 +44,7 @@ export class LossChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    const { startDate, endDate, characterGroups, displayType } = options;
+    const { startDate, endDate, characterGroups } = options;
 
     // Get all character IDs from all groups
     const characterIds = characterGroups.flatMap((group) =>
@@ -91,12 +90,6 @@ export class LossChartGenerator extends BaseChartGenerator {
     } else {
       logger.info(`[LossChart] No duplicate losses found by killmail_id`);
     }
-
-    // Log unique victim character_ids
-    const uniqueVictims = Array.from(
-      new Set(dedupedLosses.map((loss) => loss.character_id))
-    );
-
 
     // Group losses by character group
     const groupData = characterGroups.map((group) => {
@@ -267,41 +260,4 @@ export class LossChartGenerator extends BaseChartGenerator {
     };
   }
 
-  /**
-   * Get a formatted string describing the time range
-   */
-  private getTimeRangeText(startDate: Date, endDate: Date): string {
-    const diffDays = Math.floor(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    if (diffDays <= 1) {
-      return "Last 24 hours";
-    } else if (diffDays <= 7) {
-      return "Last 7 days";
-    } else if (diffDays <= 30) {
-      return "Last 30 days";
-    } else {
-      return `${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
-    }
-  }
-
-  /**
-   * Format ISK value with K, M, B suffix
-   */
-  private formatIsk(value: bigint): string {
-    const valueNumber = Number(value);
-
-    if (valueNumber >= 1_000_000_000_000) {
-      return `${(valueNumber / 1_000_000_000_000).toFixed(2)}T`;
-    } else if (valueNumber >= 1_000_000_000) {
-      return `${(valueNumber / 1_000_000_000).toFixed(2)}B`;
-    } else if (valueNumber >= 1_000_000) {
-      return `${(valueNumber / 1_000_000).toFixed(2)}M`;
-    } else if (valueNumber >= 1_000) {
-      return `${(valueNumber / 1_000).toFixed(2)}K`;
-    } else {
-      return valueNumber.toString();
-    }
-  }
 }

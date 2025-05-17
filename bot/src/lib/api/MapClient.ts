@@ -48,7 +48,6 @@ export class MapClient {
 
       // Try different API endpoints in case the server is using a different pattern
       let response: any = null;
-      let error: any = null;
       let failures = [];
 
       // List of potential API endpoints
@@ -98,7 +97,6 @@ export class MapClient {
             `Failed to fetch from ${url}: ${endpointError.message}`,
             errorDetails
           );
-          error = endpointError;
           // Continue to the next endpoint
         }
       }
@@ -208,10 +206,6 @@ export class MapClient {
             slug,
           },
         }
-      );
-
-      logger.info(
-        `Raw API response: ${JSON.stringify(response.data, null, 2)}`
       );
 
       const parsedData = UserCharactersResponseSchema.parse(response.data);

@@ -10,11 +10,9 @@ import { ChartFactory } from "../../../../services/charts";
  * Shows kill activity by hour and day of week
  */
 export class HeatmapHandler extends BaseChartHandler {
-  private chartRenderer: ChartRenderer;
 
   constructor() {
     super();
-    this.chartRenderer = new ChartRenderer();
   }
 
   async handle(interaction: CommandInteraction): Promise<void> {
