@@ -1,9 +1,10 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
 import { TrendChartConfig } from "../config";
-import { KillRepository } from "../../../data/repositories";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Generator for trend charts showing kills over time
@@ -11,9 +12,13 @@ import { logger } from "../../../lib/logger";
 export class TrendChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
+  /**
+   * Create a new trend chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
   }
 
   /**

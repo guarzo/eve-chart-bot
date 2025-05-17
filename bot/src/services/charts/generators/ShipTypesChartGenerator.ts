@@ -1,6 +1,9 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { KillRepository } from "../../../data/repositories/KillRepository";
+import { ChartData } from "../../../types/chart";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
+import { ChartLayoutUtils } from "../utils/ChartLayoutUtils";
+import { TimeUtils } from "../utils/TimeUtils";
 
 interface ShipTypeData {
   shipTypeId: string;
@@ -13,9 +16,13 @@ interface ShipTypeData {
 export class ShipTypesChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
+  /**
+   * Create a new ship types chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
   }
 
   /**
@@ -69,18 +76,17 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     // Sort groups by total ships
     groupData.sort((a, b) => b.totalShips - a.totalShips);
 
-    // Create chart data
-    return {
-      labels: groupData.map((data) => this.getGroupDisplayName(data.group)),
-      datasets: [
+    // Create chart data using the layout utility
+    return ChartLayoutUtils.createHorizontalBarLayout(
+      groupData.map((data) => this.getGroupDisplayName(data.group)),
+      [
         {
           label: "Total Ships",
           data: groupData.map((data) => data.totalShips),
           backgroundColor: this.getDatasetColors("shiptypes").primary,
         },
       ],
-      displayType: "horizontalBar" as ChartDisplayType,
-    };
+      `Ship Types Destroyed (${TimeUtils.formatTimeRange(startDate, endDate)})`
+    );
   }
-
 }

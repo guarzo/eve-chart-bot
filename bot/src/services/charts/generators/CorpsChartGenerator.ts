@@ -1,10 +1,11 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
 import { CorpsChartConfig } from "../config";
-import { KillRepository } from "../../../data/repositories";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
 import axios from "axios";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Generator for enemy corporation charts
@@ -14,9 +15,13 @@ export class CorpsChartGenerator extends BaseChartGenerator {
   // Helper to fetch corp ticker from ESI and cache it
   private corpTickerCache: Record<string, string> = {};
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
+  /**
+   * Create a new corps chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
   }
 
   /**

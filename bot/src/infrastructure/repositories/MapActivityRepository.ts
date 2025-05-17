@@ -1,13 +1,15 @@
 import { BaseRepository } from "./BaseRepository";
 import { MapActivity } from "@prisma/client";
 import { logger } from "../../lib/logger";
+import { CacheAdapter } from "../cache/CacheAdapter";
+import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for map activity data access
  */
 export class MapActivityRepository extends BaseRepository {
-  constructor() {
-    super("MapActivity");
+  constructor(cache?: CacheAdapter) {
+    super("MapActivity", cache);
 
     // Set cache TTL (3 minutes)
     this.setCacheTTL(3 * 60 * 1000);
@@ -42,15 +44,17 @@ export class MapActivityRepository extends BaseRepository {
     );
 
     return this.executeQuery(async () => {
-      // Try both BigInt and string versions of the character ID to handle potential type mismatches
-      let activities = await this.prisma.mapActivity.findMany({
-        where: {
-          characterId: BigInt(characterId),
-          timestamp: {
-            gte: startDate,
-            lte: endDate,
-          },
+      // Using buildWhereFilter for consistent query building
+      const where = buildWhereFilter({
+        characterId: BigInt(characterId),
+        timestamp: {
+          gte: startDate,
+          lte: endDate,
         },
+      });
+
+      let activities = await this.prisma.mapActivity.findMany({
+        where,
         orderBy: {
           timestamp: "asc",
         },
@@ -78,16 +82,19 @@ export class MapActivityRepository extends BaseRepository {
     );
 
     return this.executeQuery(async () => {
-      const activities = await this.prisma.mapActivity.findMany({
-        where: {
-          characterId: {
-            in: characterIds.map((id) => BigInt(id)),
-          },
-          timestamp: {
-            gte: startDate,
-            lte: endDate,
-          },
+      // Using buildWhereFilter for consistent query building
+      const where = buildWhereFilter({
+        characterId: {
+          in: characterIds.map((id) => BigInt(id)),
         },
+        timestamp: {
+          gte: startDate,
+          lte: endDate,
+        },
+      });
+
+      const activities = await this.prisma.mapActivity.findMany({
+        where,
         orderBy: {
           timestamp: "asc",
         },

@@ -1,8 +1,9 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
 import { logger } from "../../../lib/logger";
-import { KillRepository } from "../../../data/repositories/KillRepository";
-import { LossRepository } from "../../../data/repositories/LossRepository";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
+import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Generator for kill-death ratio charts
@@ -11,10 +12,14 @@ export class RatioChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
   private lossRepository: LossRepository;
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
-    this.lossRepository = new LossRepository();
+  /**
+   * Create a new ratio chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
+    this.lossRepository = this.repoManager.getLossRepository();
   }
 
   /**

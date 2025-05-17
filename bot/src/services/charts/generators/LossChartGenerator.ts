@@ -6,7 +6,8 @@ import {
 } from "../../../types/chart";
 import { LossChartConfig } from "../config";
 import { logger } from "../../../lib/logger";
-import { LossRepository } from "../../../data/repositories/LossRepository";
+import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 interface Loss {
   killmail_id: bigint;
@@ -25,9 +26,13 @@ interface Loss {
 export class LossChartGenerator extends BaseChartGenerator {
   private lossRepository: LossRepository;
 
-  constructor() {
-    super();
-    this.lossRepository = new LossRepository();
+  /**
+   * Create a new loss chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.lossRepository = this.repoManager.getLossRepository();
   }
 
   /**
@@ -259,5 +264,4 @@ export class LossChartGenerator extends BaseChartGenerator {
       ),
     };
   }
-
 }

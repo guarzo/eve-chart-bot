@@ -1,7 +1,8 @@
 import { CommandInteraction } from "discord.js";
 import { ChartFactory } from "../../../../services/charts";
-import { CharacterRepository } from "../../../../data/repositories";
+import { CharacterRepository } from "../../../../infrastructure/repositories/CharacterRepository";
 import { logger } from "../../../logger";
+import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Base class for all chart command handlers
@@ -9,10 +10,12 @@ import { logger } from "../../../logger";
 export abstract class BaseChartHandler {
   protected chartFactory: ChartFactory;
   protected characterRepository: CharacterRepository;
+  protected repositoryManager: RepositoryManager;
 
   constructor() {
+    this.repositoryManager = new RepositoryManager();
     this.chartFactory = new ChartFactory();
-    this.characterRepository = new CharacterRepository();
+    this.characterRepository = this.repositoryManager.getCharacterRepository();
   }
 
   /**

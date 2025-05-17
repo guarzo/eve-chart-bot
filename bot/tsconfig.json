@@ -45,8 +45,11 @@
       "@/*": ["src/*"]
     },
 
+    /* TypeScript 4.7+ for Jest */
+    "isolatedModules": true,
+
     /* Ambient Types */
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
 
   /* Files & Folders */

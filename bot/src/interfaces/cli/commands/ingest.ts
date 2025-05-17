@@ -1,6 +1,8 @@
 import { Argv } from "yargs";
 import { logger } from "../../../lib/logger";
-import { prisma } from "../../../infrastructure/persistence/client";
+import prisma from "../../../infrastructure/persistence/client";
+import { flags } from "../../../utils/feature-flags";
+import { IngestionService } from "../../../services/IngestionService";
 
 export const command = "ingest";
 export const desc = "Start killmail ingestion";
@@ -53,25 +55,46 @@ export const handler = async (argv: IngestArgs) => {
 
     logger.info(`Starting killmail ingestion in ${argv.mode} mode`);
 
-    if (argv.mode === "backfill") {
-      if (!argv.character) {
-        logger.error("Character ID is required for backfill mode");
-        process.exit(1);
+    if (flags.newIngestionService) {
+      logger.info("Using new IngestionService");
+      const ingestionService = new IngestionService();
+
+      if (argv.mode === "backfill") {
+        if (!argv.character) {
+          logger.error("Character ID is required for backfill mode");
+          process.exit(1);
+        }
+
+        logger.info(
+          `Backfilling killmails for character ${argv.character} for the last ${argv.days} days`
+        );
+
+        await ingestionService.backfillKills(String(argv.character), argv.days);
+      } else {
+        logger.info("Starting real-time killmail ingestion");
+        await ingestionService.startRealTimeIngestion();
       }
-
-      logger.info(
-        `Backfilling killmails for character ${argv.character} for the last ${argv.days} days`
-      );
-
-      // TODO: Replace with unified IngestionService when implemented
-      logger.info("Backfill mode not yet implemented in the new structure");
-      logger.info("Run the legacy backfill script for now");
     } else {
-      logger.info("Starting real-time killmail ingestion");
+      if (argv.mode === "backfill") {
+        if (!argv.character) {
+          logger.error("Character ID is required for backfill mode");
+          process.exit(1);
+        }
 
-      // TODO: Replace with unified IngestionService when implemented
-      logger.info("Realtime mode not yet implemented in the new structure");
-      logger.info("Run the legacy redisq-ingest script for now");
+        logger.info(
+          `Backfilling killmails for character ${argv.character} for the last ${argv.days} days`
+        );
+
+        // TODO: Replace with unified IngestionService when implemented
+        logger.info("Backfill mode not yet implemented in the new structure");
+        logger.info("Run the legacy backfill script for now");
+      } else {
+        logger.info("Starting real-time killmail ingestion");
+
+        // TODO: Replace with unified IngestionService when implemented
+        logger.info("Realtime mode not yet implemented in the new structure");
+        logger.info("Run the legacy redisq-ingest script for now");
+      }
     }
 
     logger.info("Ingestion completed");

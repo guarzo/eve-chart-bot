@@ -1,12 +1,36 @@
 import { ChartData, ChartOptions } from "../../types/chart";
-import { chartPalette } from "./config/theme";
+import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
+import { FormatUtils } from "./utils/FormatUtils";
+import { TimeUtils } from "./utils/TimeUtils";
 
 /**
  * Base class for all chart generators
  * Provides common functionality for generating charts
  */
 export abstract class BaseChartGenerator {
-  protected colors: string[] = chartPalette;
+  protected colors: string[];
+  protected repoManager: RepositoryManager;
+
+  /**
+   * Create a new chart generator with dependencies injected
+   * @param repoManager Repository manager for data access
+   * @param colors Color palette for charts
+   */
+  constructor(repoManager: RepositoryManager, colors?: string[]) {
+    this.repoManager = repoManager;
+    this.colors = colors || [
+      "#3366CC",
+      "#DC3912",
+      "#FF9900",
+      "#109618",
+      "#990099",
+      "#0099C6",
+      "#DD4477",
+      "#66AA00",
+      "#B82E2E",
+      "#316395",
+    ];
+  }
 
   /**
    * Generate chart data based on input options
@@ -60,41 +84,26 @@ export abstract class BaseChartGenerator {
 
   /**
    * Format value for readability (e.g., 1000 -> 1K)
+   * @deprecated Use FormatUtils.formatValue instead
    */
   protected formatValue(value: number): string {
-    if (value >= 1_000_000_000) {
-      return `${(value / 1_000_000_000).toFixed(1)}B`;
-    } else if (value >= 1_000_000) {
-      return `${(value / 1_000_000).toFixed(1)}M`;
-    } else if (value >= 1_000) {
-      return `${(value / 1_000).toFixed(1)}K`;
-    } else {
-      return value.toString();
-    }
+    return FormatUtils.formatValue(value);
   }
 
   /**
    * Format BigInt value for readability
+   * @deprecated Use FormatUtils.formatBigIntValue instead
    */
   protected formatBigIntValue(value: bigint): string {
-    const valueStr = value.toString();
-    const valueNum = Number(valueStr);
-    return this.formatValue(valueNum);
+    return FormatUtils.formatBigIntValue(value);
   }
 
   /**
    * Get format string for a time group (hour, day, week)
+   * @deprecated Use TimeUtils.getGroupByFormat instead
    */
   protected getGroupByFormat(groupBy: "hour" | "day" | "week"): string {
-    switch (groupBy) {
-      case "hour":
-        return "HH:mm";
-      case "week":
-        return "MMM dd";
-      case "day":
-      default:
-        return "MMM dd";
-    }
+    return TimeUtils.getGroupByFormat(groupBy);
   }
 
   /**
@@ -122,58 +131,6 @@ export abstract class BaseChartGenerator {
       color += letters[Math.floor(Math.random() * 16)];
     }
     return color;
-  }
-
-  /**
-   * Create default chart options
-   */
-  protected getDefaultOptions(title: string): ChartOptions {
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: title,
-          font: {
-            size: 16,
-            weight: "bold",
-          },
-        },
-        legend: {
-          display: true,
-          position: "top",
-        },
-        tooltip: {
-          callbacks: {
-            label: function (context: any) {
-              const label = context.dataset.label || "";
-              const value =
-                context.parsed.y !== undefined
-                  ? context.parsed.y
-                  : context.parsed;
-              return `${label}: ${value.toLocaleString()}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: "Time",
-          },
-        },
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: "Value",
-          },
-        },
-      },
-    };
   }
 
   // Add additional utility functions for consistent color handling
@@ -274,5 +231,57 @@ export abstract class BaseChartGenerator {
       }
       return colorSet[i % colorSet.length];
     });
+  }
+
+  /**
+   * Create default chart options
+   */
+  protected getDefaultOptions(title: string): ChartOptions {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        title: {
+          display: true,
+          text: title,
+          font: {
+            size: 16,
+            weight: "bold",
+          },
+        },
+        legend: {
+          display: true,
+          position: "top",
+        },
+        tooltip: {
+          callbacks: {
+            label: function (context: any) {
+              const label = context.dataset.label || "";
+              const value =
+                context.parsed.y !== undefined
+                  ? context.parsed.y
+                  : context.parsed;
+              return `${label}: ${value.toLocaleString()}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: "Time",
+          },
+        },
+        y: {
+          beginAtZero: true,
+          title: {
+            display: true,
+            text: "Value",
+          },
+        },
+      },
+    };
   }
 }

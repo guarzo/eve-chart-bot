@@ -1,8 +1,9 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { KillRepository } from "../../../data/repositories/KillRepository";
-import { LossRepository } from "../../../data/repositories/LossRepository";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
+import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
 import { logger } from "../../../lib/logger";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Generator for efficiency charts
@@ -11,10 +12,14 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
   private lossRepository: LossRepository;
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
-    this.lossRepository = new LossRepository();
+  /**
+   * Create a new efficiency chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
+    this.lossRepository = this.repoManager.getLossRepository();
   }
 
   async generateChart(options: {

@@ -1,30 +1,30 @@
 /**
- * Generic interface for cache implementations
+ * Interface for caching operations
  */
 export interface CacheAdapter {
   /**
-   * Get a value from cache
+   * Get a cached value by key
    * @param key The cache key
    * @returns The cached value or null if not found
    */
   get<T>(key: string): Promise<T | null>;
 
   /**
-   * Set a value in cache with optional TTL
+   * Set a value in the cache
    * @param key The cache key
    * @param value The value to cache
-   * @param ttl Time to live in seconds (optional)
+   * @param ttlSeconds Time to live in seconds
    */
-  set<T>(key: string, value: T, ttl?: number): Promise<void>;
+  set<T>(key: string, value: T, ttlSeconds?: number): Promise<void>;
 
   /**
-   * Delete a key from the cache
-   * @param key The cache key to delete
+   * Remove a key from the cache
+   * @param key The key to remove
    */
   delete(key: string): Promise<void>;
 
   /**
-   * Clear the entire cache (use with caution)
+   * Clear all cache entries
    */
   clear(): Promise<void>;
 }

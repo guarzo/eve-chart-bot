@@ -1,15 +1,14 @@
-import { BaseRepository } from "./BaseRepository";
 import { Prisma } from "@prisma/client";
+import { BaseRepository } from "./BaseRepository";
+import { buildWhereFilter } from "../../utils/query-helper";
+import { CacheAdapter } from "../cache/CacheAdapter";
 
 /**
  * Repository for accessing kill-related data
  */
 export class KillRepository extends BaseRepository {
-  constructor() {
-    super("killFact");
-
-    // Set a longer cache TTL for kill data (5 minutes)
-    this.setCacheTTL(5 * 60 * 1000);
+  constructor(cache?: CacheAdapter) {
+    super("killFact", cache);
   }
 
   /**
@@ -23,12 +22,19 @@ export class KillRepository extends BaseRepository {
     return this.executeQuery(
       () =>
         this.prisma.killFact.findMany({
-          where: {
+          where: buildWhereFilter({
             character_id: BigInt(characterId),
             kill_time: {
               gte: startDate,
               lte: endDate,
             },
+          }),
+          select: {
+            killmail_id: true,
+            character_id: true,
+            kill_time: true,
+            total_value: true,
+            solo: true,
           },
           orderBy: {
             kill_time: "asc",
@@ -52,7 +58,7 @@ export class KillRepository extends BaseRepository {
     return this.executeQuery(
       () =>
         this.prisma.killFact.findMany({
-          where: {
+          where: buildWhereFilter({
             character_id: {
               in: bigIntIds,
             },
@@ -60,7 +66,7 @@ export class KillRepository extends BaseRepository {
               gte: startDate,
               lte: endDate,
             },
-          },
+          }),
           select: {
             killmail_id: true,
             character_id: true,
@@ -391,7 +397,7 @@ export class KillRepository extends BaseRepository {
 
       // Get all kills for the characters in the specified date range
       const kills = await this.prisma.killFact.findMany({
-        where: {
+        where: buildWhereFilter({
           character_id: {
             in: bigIntIds,
           },
@@ -399,7 +405,7 @@ export class KillRepository extends BaseRepository {
             gte: startDate,
             lte: endDate,
           },
-        },
+        }),
         select: {
           killmail_id: true,
           ship_type_id: true,
@@ -592,7 +598,7 @@ export class KillRepository extends BaseRepository {
 
       // Get all kills for the characters in the specified date range, including victims
       const kills = await this.prisma.killFact.findMany({
-        where: {
+        where: buildWhereFilter({
           character_id: {
             in: bigIntIds,
           },
@@ -600,7 +606,7 @@ export class KillRepository extends BaseRepository {
             gte: startDate,
             lte: endDate,
           },
-        },
+        }),
         select: {
           killmail_id: true,
           victims: {

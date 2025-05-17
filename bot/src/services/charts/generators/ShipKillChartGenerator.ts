@@ -1,18 +1,23 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
 import { ShipTypesChartConfig } from "../config";
-import { KillRepository } from "../../../data/repositories";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
 import axios from "axios";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 export class ShipKillChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
   private shipTypeNameCache: Record<string, string> = {};
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
+  /**
+   * Create a new ship kill chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
   }
 
   async generateChart(options: {

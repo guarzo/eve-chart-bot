@@ -5,8 +5,9 @@ import { MapClient } from "../lib/api/MapClient";
 import { RedisCache } from "../lib/cache/RedisCache";
 import { IngestionConfig } from "../types/ingestion";
 import { logger } from "../lib/logger";
-import axios from "axios";
 import { v4 as uuidv4 } from "uuid";
+import { ESIService } from "./ESIService";
+import axios from "axios";
 
 // ——— Prisma client singleton ———
 const prisma = new PrismaClient();
@@ -14,7 +15,7 @@ const prisma = new PrismaClient();
 // Log every SQL query in development
 if (process.env.NODE_ENV === "development") {
   // cast to any so TS accepts the string event name
-  ;(prisma as any).$on("query", (e: Prisma.QueryEvent) => {
+  (prisma as any).$on("query", (e: Prisma.QueryEvent) => {
     logger.debug(`SQL ▶ ${e.query}`);
     logger.debug(`⏱  ${e.duration}ms`);
   });
@@ -25,20 +26,6 @@ if (process.env.NODE_ENV === "development") {
 const toBigInt = (val?: number | string | null): bigint | null =>
   val == null ? null : BigInt(typeof val === "string" ? val : Math.trunc(val));
 
-/** Fetch ESI killmail JSON (untyped) */
-async function fetchEsi(killId: number, hash: string): Promise<any> {
-  try {
-    const url = `https://esi.evetech.net/latest/killmails/${killId}/${hash}/`;
-    const resp = await axios.get(url, {
-      headers: { "User-Agent": "EVE-Chart-Bot/1.0" },
-    });
-    return resp.data;
-  } catch (err: any) {
-    logger.error(`ESI fetch failed ([${killId}]): ${err.message || err}`);
-    return null;
-  }
-}
-
 // ——— Ingestion Service ———
 export class IngestionService {
   /** Exposed for external access (e.g. in server.ts) */
@@ -46,6 +33,7 @@ export class IngestionService {
   private readonly zkill: ZkillClient;
   private readonly map: MapClient;
   private readonly cache: RedisCache;
+  private readonly esiService: ESIService;
   private readonly cfg: {
     zkillApiUrl: string;
     mapApiUrl: string;
@@ -57,22 +45,23 @@ export class IngestionService {
     maxRetries: number;
   };
 
-  constructor(config: IngestionConfig) {
+  constructor(config?: Partial<IngestionConfig>) {
     // Fill in defaults so everything is defined
     this.cfg = {
-      zkillApiUrl: config.zkillApiUrl,
-      mapApiUrl: config.mapApiUrl ?? "",
-      mapApiKey: config.mapApiKey ?? "",
-      redisUrl: config.redisUrl ?? "redis://localhost:6379",
-      cacheTtl: config.cacheTtl ?? 300,
-      batchSize: config.batchSize ?? 100,
-      backoffMs: config.backoffMs ?? 1000,
-      maxRetries: config.maxRetries ?? 3,
+      zkillApiUrl: config?.zkillApiUrl || "https://zkillboard.com/api",
+      mapApiUrl: config?.mapApiUrl || "",
+      mapApiKey: config?.mapApiKey || "",
+      redisUrl: config?.redisUrl || "redis://localhost:6379",
+      cacheTtl: config?.cacheTtl || 300,
+      batchSize: config?.batchSize || 100,
+      backoffMs: config?.backoffMs || 1000,
+      maxRetries: config?.maxRetries || 3,
     };
 
     this.zkill = new ZkillClient(this.cfg.zkillApiUrl);
     this.map = new MapClient(this.cfg.mapApiUrl, this.cfg.mapApiKey);
     this.cache = new RedisCache(this.cfg.redisUrl, this.cfg.cacheTtl);
+    this.esiService = new ESIService();
   }
 
   /**
@@ -106,8 +95,11 @@ export class IngestionService {
         return { success: false, skipped: true };
       }
 
-      // 3) Fetch from ESI
-      const esi = await fetchEsi(zk.killmail_id, zk.zkb.hash);
+      // 3) Fetch from ESI with caching
+      const esi = await this.esiService.getKillmail(
+        zk.killmail_id,
+        zk.zkb.hash
+      );
       if (!esi?.victim) {
         logger.warn(`Invalid ESI data for killmail ${killId}`);
         return { success: false, skipped: true };
@@ -275,7 +267,7 @@ export class IngestionService {
   }
 
   /**
-   * Syncs users’ characters into Character & CharacterGroup tables.
+   * Syncs users' characters into Character & CharacterGroup tables.
    */
   public async syncUserCharacters(slug: string): Promise<void> {
     const cacheKey = `characters:${slug}`;
@@ -521,11 +513,10 @@ export class IngestionService {
           }
 
           if (loss.killmail_time) {
-            const age =
-              Math.floor(
-                (Date.now() - new Date(loss.killmail_time).getTime()) /
-                  (1000 * 60 * 60 * 24)
-              );
+            const age = Math.floor(
+              (Date.now() - new Date(loss.killmail_time).getTime()) /
+                (1000 * 60 * 60 * 24)
+            );
             if (age > maxAgeDays) {
               skipped++;
               continue;
@@ -541,9 +532,7 @@ export class IngestionService {
                 : new Date(),
               ship_type_id: loss.victim?.ship_type_id ?? 0,
               system_id: loss.solar_system_id ?? 0,
-              total_value: BigInt(
-                Math.round(loss.zkb?.totalValue ?? 0)
-              ),
+              total_value: BigInt(Math.round(loss.zkb?.totalValue ?? 0)),
               attacker_count: loss.attackers?.length ?? 0,
               labels: loss.zkb?.labels ?? [],
             },
@@ -569,5 +558,16 @@ export class IngestionService {
   public async close(): Promise<void> {
     await this.cache.close();
     await this.prisma.$disconnect();
+  }
+
+  /**
+   * Start real-time ingestion of killmails
+   * (Placeholder implementation - will be expanded in future)
+   */
+  public async startRealTimeIngestion(): Promise<void> {
+    logger.info("Real-time ingestion started (stub implementation)");
+    logger.warn("This is a placeholder - actual implementation coming soon");
+    // Implementation will come in a future update
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }

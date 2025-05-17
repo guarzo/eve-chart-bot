@@ -1,12 +1,14 @@
 import { BaseRepository } from "./BaseRepository";
 import { Character, Prisma } from "@prisma/client";
+import { CacheAdapter } from "../cache/CacheAdapter";
+import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for character-related data access
  */
 export class CharacterRepository extends BaseRepository {
-  constructor() {
-    super("Character");
+  constructor(cache?: CacheAdapter) {
+    super("Character", cache);
   }
 
   /**
@@ -31,9 +33,7 @@ export class CharacterRepository extends BaseRepository {
     return this.executeQuery(
       () =>
         this.prisma.character.findUnique({
-          where: {
-            eveId,
-          },
+          where: { eveId },
         }),
       `character-${eveId}`
     );
@@ -43,18 +43,15 @@ export class CharacterRepository extends BaseRepository {
    * Get all characters belonging to a main character (alts)
    */
   async getCharacterAlts(mainCharacterId: string): Promise<Character[]> {
-    return this.executeQuery(
-      () =>
-        this.prisma.character.findMany({
-          where: {
-            mainCharacterId,
-          },
-          orderBy: {
-            name: "asc",
-          },
-        }),
-      `alts-${mainCharacterId}`
-    );
+    return this.executeQuery(() => {
+      const where = buildWhereFilter({ mainCharacterId });
+      return this.prisma.character.findMany({
+        where,
+        orderBy: {
+          name: "asc",
+        },
+      });
+    }, `alts-${mainCharacterId}`);
   }
 
   /**
@@ -65,21 +62,25 @@ export class CharacterRepository extends BaseRepository {
   ): Promise<Character[]> {
     return this.executeQuery(async () => {
       // Get all main characters
-      const mainCharacters = await this.prisma.character.findMany({
-        where: {
-          eveId: {
-            in: mainCharacterIds,
-          },
+      const mainWhere = buildWhereFilter({
+        eveId: {
+          in: mainCharacterIds,
         },
       });
 
+      const mainCharacters = await this.prisma.character.findMany({
+        where: mainWhere,
+      });
+
       // Get all alt characters
-      const altCharacters = await this.prisma.character.findMany({
-        where: {
-          mainCharacterId: {
-            in: mainCharacterIds,
-          },
+      const altWhere = buildWhereFilter({
+        mainCharacterId: {
+          in: mainCharacterIds,
         },
+      });
+
+      const altCharacters = await this.prisma.character.findMany({
+        where: altWhere,
       });
 
       // Combine and return unique characters

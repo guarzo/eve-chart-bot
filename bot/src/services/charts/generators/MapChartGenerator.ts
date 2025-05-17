@@ -1,6 +1,7 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { MapActivityRepository } from "../../../data/repositories/MapActivityRepository";
+import { MapActivityRepository } from "../../../infrastructure/repositories/MapActivityRepository";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 interface MapActivity {
   allianceId: number | null;
@@ -18,9 +19,13 @@ interface MapActivity {
 export class MapChartGenerator extends BaseChartGenerator {
   private mapActivityRepository: MapActivityRepository;
 
-  constructor() {
-    super();
-    this.mapActivityRepository = new MapActivityRepository();
+  /**
+   * Create a new map activity chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.mapActivityRepository = this.repoManager.getMapActivityRepository();
   }
 
   /**

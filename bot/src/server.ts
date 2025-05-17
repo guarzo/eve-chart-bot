@@ -20,9 +20,17 @@ import { ensureDatabaseTablesExist } from "./application/ingestion/DatabaseCheck
 // Load environment variables
 dotenvConfig();
 
+// Constants
+const appStartTime = Date.now();
+const port =
+  process.env.NODE_ENV === "test"
+    ? 0
+    : process.env.PORT
+    ? parseInt(process.env.PORT)
+    : 3000;
+
 // Create Express app
 const app = express();
-const port = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
@@ -58,9 +66,6 @@ const chartConfigSchema = z.object({
   period: z.enum(["24h", "7d", "30d", "90d"]),
   groupBy: z.enum(["hour", "day", "week"]).optional(),
 });
-
-// Track application start time
-const appStartTime = Date.now();
 
 // Health check endpoint
 app.get("/health", (_req, res) => {
@@ -135,6 +140,31 @@ app.post("/v1/charts/generate", async (req, res) => {
       console.error("Error generating chart:", error);
       res.status(500).json({ error: "Internal server error" });
     }
+  }
+});
+
+// Add debug endpoint for DB counts
+app.get("/debug/counts", async (_req, res) => {
+  try {
+    const mapActivityCount = await app.locals.prisma.mapActivity.count();
+    const lossCount = await app.locals.prisma.lossFact.count();
+    const killCount = await app.locals.prisma.killFact.count();
+    const charCount = await app.locals.prisma.character.count();
+
+    res.status(200).json({
+      status: "ok",
+      counts: {
+        mapActivity: mapActivityCount,
+        losses: lossCount,
+        kills: killCount,
+        characters: charCount,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: "error",
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 });
 

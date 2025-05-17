@@ -1,18 +1,23 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData } from "../../../types/chart";
 import { ShipTypesChartConfig } from "../config";
-import { LossRepository } from "../../../data/repositories";
+import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
 import { format } from "date-fns";
 import { logger } from "../../../lib/logger";
 import axios from "axios";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 export class ShipLossChartGenerator extends BaseChartGenerator {
   private lossRepository: LossRepository;
   private shipTypeNameCache: Record<string, string> = {};
 
-  constructor() {
-    super();
-    this.lossRepository = new LossRepository();
+  /**
+   * Create a new ship loss chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.lossRepository = this.repoManager.getLossRepository();
   }
 
   async generateChart(options: {

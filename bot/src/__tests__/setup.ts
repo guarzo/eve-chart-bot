@@ -25,21 +25,24 @@ jest.mock("../lib/logger", () => ({
 
 // Mock Chart.js to avoid issues with Node.js canvas
 jest.mock("chart.js", () => {
+  const mockChart = class MockChart {
+    constructor() {}
+    render() {}
+    toBuffer() {
+      // Return a minimal valid PNG buffer header
+      return Buffer.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
+      ]);
+    }
+    destroy() {}
+  };
+
+  // Add static register method to the Chart class
+  mockChart.register = jest.fn();
+
   return {
-    Chart: class MockChart {
-      constructor() {}
-      render() {}
-      toBuffer() {
-        // Return a minimal valid PNG buffer header
-        return Buffer.from([
-          0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00,
-        ]);
-      }
-      destroy() {}
-      static register() {} // Add static register method
-    },
+    Chart: mockChart,
     registerables: [],
-    register: jest.fn(), // Mock the register function
   };
 });
 

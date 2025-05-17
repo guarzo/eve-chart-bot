@@ -1,9 +1,7 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
-import {
-  ChartData,
-  ChartDisplayType,
-} from "../../../types/chart";
-import { KillRepository } from "../../../data/repositories/KillRepository";
+import { ChartData, ChartDisplayType } from "../../../types/chart";
+import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 interface DistributionData {
   killmailId: string;
@@ -16,9 +14,13 @@ interface DistributionData {
 export class DistributionChartGenerator extends BaseChartGenerator {
   private killRepository: KillRepository;
 
-  constructor() {
-    super();
-    this.killRepository = new KillRepository();
+  /**
+   * Create a new distribution chart generator
+   * @param repoManager Repository manager for data access
+   */
+  constructor(repoManager: RepositoryManager) {
+    super(repoManager);
+    this.killRepository = this.repoManager.getKillRepository();
   }
 
   /**
@@ -95,5 +97,4 @@ export class DistributionChartGenerator extends BaseChartGenerator {
       displayType: "horizontalBar" as ChartDisplayType,
     };
   }
-
 }

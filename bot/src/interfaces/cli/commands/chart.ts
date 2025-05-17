@@ -2,9 +2,9 @@ import { Argv } from "yargs";
 import fs from "fs";
 import path from "path";
 import { logger } from "../../../lib/logger";
-import { prisma } from "../../../infrastructure/persistence/client";
-import { ChartService } from "../../../application/chart/ChartService";
-import { ChartRenderer } from "../../../application/chart/ChartRenderer";
+import prisma from "../../../infrastructure/persistence/client";
+import { ChartService } from "../../../usecases/chart/ChartService";
+import { ChartRenderer } from "../../../usecases/chart/ChartRenderer";
 
 export const command = "chart";
 export const desc = "Generate EVE Online charts";

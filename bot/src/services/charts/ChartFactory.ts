@@ -14,14 +14,30 @@ import { ShipKillChartGenerator } from "./generators/ShipKillChartGenerator";
 import { ShipLossChartGenerator } from "./generators/ShipLossChartGenerator";
 import { EfficiencyChartGenerator } from "./generators/EfficiencyChartGenerator";
 import { logger } from "../../lib/logger";
+import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
+import { chartPalette } from "./config/theme";
 
 /**
  * Factory for creating chart generators
  */
 export class ChartFactory {
+  // Default color palette for all charts
+  private static defaultColors = chartPalette;
+
+  // Chart type specific color palettes
+  private static chartTypeColors: Record<string, string[]> = {
+    kills: ["#3366CC", "#7799DD", "#112266"],
+    loss: ["#DC3912", "#FF6644", "#991100"],
+    ratio: ["#FF9900", "#FFBB55", "#CC6600"],
+    heatmap: ["#0099C6", "#5EBBDD", "#006688"],
+  };
+
   private static generators: Map<
     string,
-    new (...args: any[]) => BaseChartGenerator
+    new (
+      repoManager: RepositoryManager,
+      colors?: string[]
+    ) => BaseChartGenerator
   > = new Map();
 
   static {
@@ -41,6 +57,13 @@ export class ChartFactory {
   }
 
   /**
+   * Get colors for a specific chart type, or fall back to default palette
+   */
+  private static getColorsForChartType(type: string): string[] {
+    return this.chartTypeColors[type] || this.defaultColors;
+  }
+
+  /**
    * Get a chart generator based on chart type
    */
   public static createGenerator(type: string): BaseChartGenerator {
@@ -51,7 +74,9 @@ export class ChartFactory {
       throw new Error(`Unknown chart type: ${type}`);
     }
 
-    return new GeneratorClass();
+    const repositoryManager = new RepositoryManager();
+    const colors = this.getColorsForChartType(type);
+    return new GeneratorClass(repositoryManager, colors);
   }
 
   /**

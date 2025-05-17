@@ -3,14 +3,15 @@ import { logger } from "../../lib/logger";
 import { LossFact } from "@prisma/client";
 import { CharacterSummary } from "../../types/discord";
 import { SimpleTimeRange } from "../../types/chart";
+import { CacheAdapter } from "../cache/CacheAdapter";
 
 /**
  * Repository for accessing ship loss data
  * This is a placeholder implementation that will be fully implemented in Phase 4
  */
 export class LossRepository extends BaseRepository {
-  constructor() {
-    super("lossFact");
+  constructor(cache?: CacheAdapter) {
+    super("lossFact", cache);
   }
 
   /**
