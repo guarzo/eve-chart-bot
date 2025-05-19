@@ -5,7 +5,6 @@ import { MapClient } from "../lib/api/MapClient";
 import { RedisCache } from "../lib/cache/RedisCache";
 import { IngestionConfig } from "../types/ingestion";
 import { logger } from "../lib/logger";
-import { v4 as uuidv4 } from "uuid";
 import { ESIService } from "./ESIService";
 
 // ——— Prisma client singleton ———
@@ -470,10 +469,13 @@ export class IngestionService {
       },
     });
 
-    // Create a map of main character IDs to groups
+    // Create maps for efficient group lookup
     const mainCharToGroup = new Map(
-      existingGroups.map((g) => [g.mainCharacterId, g])
+      existingGroups
+        .filter((g) => g.mainCharacterId)
+        .map((g) => [g.mainCharacterId, g])
     );
+    const slugToGroup = new Map(existingGroups.map((g) => [g.slug, g]));
 
     // PHASE 1: Create all characters first without assigning to groups
     for (const user of users) {
@@ -481,7 +483,7 @@ export class IngestionService {
       if (chars.length === 0) continue;
 
       // Find the main character ID (if specified)
-      const mainId = user.main_character_eve_id;
+      const mainId = user.main_character_eve_id?.toString();
 
       logger.info(
         `User ${slug}: main=${mainId ?? "none"}, count=${chars.length}`
@@ -535,10 +537,12 @@ export class IngestionService {
       const mainId = user.main_character_eve_id?.toString();
 
       // Create a unique group slug for this user
-      const grpSlug = `${slug}_${mainId ?? uuidv4()}`;
+      const grpSlug = `${slug}_${mainId ?? chars[0].eve_id}`;
 
-      // Find existing group by main character ID or create new one
-      let group = mainId ? mainCharToGroup.get(mainId) : null;
+      // Find existing group by main character ID or slug
+      let group = mainId
+        ? mainCharToGroup.get(mainId)
+        : slugToGroup.get(grpSlug);
 
       if (!group) {
         logger.info(`Creating new character group with slug ${grpSlug}`);
@@ -553,6 +557,13 @@ export class IngestionService {
         });
         group = newGroup;
         groupsCreated++;
+
+        // Log if this is a group without a main character
+        if (!mainId) {
+          logger.warn(
+            `Group ${grpSlug} created without main character. First character: ${chars[0].name} (${chars[0].eve_id})`
+          );
+        }
       } else {
         // Update existing group if needed
         if (group.slug !== grpSlug || group.mainCharacterId !== mainId) {
@@ -569,6 +580,13 @@ export class IngestionService {
           });
           group = updatedGroup;
           groupsUpdated++;
+
+          // Log if this group is being updated to have no main character
+          if (!mainId) {
+            logger.warn(
+              `Group ${grpSlug} updated to have no main character. First character: ${chars[0].name} (${chars[0].eve_id})`
+            );
+          }
         }
       }
 
@@ -600,6 +618,36 @@ export class IngestionService {
           where: { id: group.id },
         });
         groupsDeleted++;
+      }
+    }
+
+    // Log summary of groups without main characters
+    const groupsWithoutMain = await this.prisma.characterGroup.findMany({
+      where: {
+        mainCharacterId: null,
+        characters: {
+          some: {}, // Has at least one character
+        },
+      },
+      include: {
+        characters: {
+          orderBy: {
+            name: "asc",
+          },
+          take: 1, // Get first character
+        },
+      },
+    });
+
+    if (groupsWithoutMain.length > 0) {
+      logger.warn(
+        `Found ${groupsWithoutMain.length} groups without main characters:`
+      );
+      for (const group of groupsWithoutMain) {
+        const firstChar = group.characters[0];
+        logger.warn(
+          `- Group ${group.slug}: First character ${firstChar.name} (${firstChar.eveId})`
+        );
       }
     }
 
