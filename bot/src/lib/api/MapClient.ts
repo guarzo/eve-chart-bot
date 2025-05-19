@@ -46,148 +46,81 @@ export class MapClient {
       // Respect rate limit
       await this.respectRateLimit();
 
-      // Try different API endpoints in case the server is using a different pattern
-      let response: any = null;
-      let failures = [];
+      // Use only the working endpoint
+      const url = `${this.baseUrl}/api/map/character-activity?slug=${slug}&days=${days}`;
 
-      // List of potential API endpoints
-      const potentialEndpoints = [
-        `${this.baseUrl}/maps/${slug}/activity?days=${days}`,
-        `${this.baseUrl}/api/map/character-activity?slug=${slug}&days=${days}`,
-        `${this.baseUrl}/api/activity/${slug}?days=${days}`,
-      ];
-
-      // Log what we're about to try
-      logger.info(
-        `Attempting to fetch map activity data from multiple possible endpoints`
-      );
+      logger.info(`Calling map API endpoint: ${url}`);
       logger.debug(`API key starting with: ${this.apiKey.substring(0, 5)}...`);
-      logger.debug(`Base URL: ${this.baseUrl}`);
 
-      // Try each endpoint
-      for (const url of potentialEndpoints) {
-        try {
-          logger.debug(`Trying API endpoint: ${url}`);
+      const response = await axios.get(url, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        timeout: 10000, // 10 second timeout
+      });
 
-          response = await axios.get(url, {
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${this.apiKey}`,
-            },
-            timeout: 10000, // 10 second timeout
-          });
+      if (response.data) {
+        // Log sample of the data to help debugging
+        const dataCount = Array.isArray(response.data)
+          ? response.data.length
+          : response.data.data
+          ? response.data.data.length
+          : "unknown";
+        logger.info(`Received ${dataCount} records in response`);
 
-          if (response.data) {
-            logger.info(`Successfully fetched data from ${url}`);
-            break; // Stop trying endpoints if we got a response
-          }
-        } catch (endpointError: any) {
-          const errorDetails = {
-            url,
-            message: endpointError.message,
-            status: endpointError.response?.status,
-            statusText: endpointError.response?.statusText,
-            responseData: endpointError.response?.data
-              ? JSON.stringify(endpointError.response?.data).substring(0, 200)
-              : null,
-          };
-
-          failures.push(errorDetails);
-          logger.debug(
-            `Failed to fetch from ${url}: ${endpointError.message}`,
-            errorDetails
+        // Log date range in the response
+        if (Array.isArray(response.data) && response.data.length > 0) {
+          const dates = response.data.map(
+            (item: any) => new Date(item.timestamp)
           );
-          // Continue to the next endpoint
+          const oldestDate = new Date(
+            Math.min(...dates.map((d: Date) => d.getTime()))
+          );
+          const newestDate = new Date(
+            Math.max(...dates.map((d: Date) => d.getTime()))
+          );
+          logger.info(
+            `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
+          );
+        } else if (response.data.data && response.data.data.length > 0) {
+          const dates = response.data.data.map(
+            (item: any) => new Date(item.timestamp)
+          );
+          const oldestDate = new Date(
+            Math.min(...dates.map((d: Date) => d.getTime()))
+          );
+          const newestDate = new Date(
+            Math.max(...dates.map((d: Date) => d.getTime()))
+          );
+          logger.info(
+            `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
+          );
         }
-      }
 
-      // If we couldn't get data from any endpoint
-      if (!response || !response.data) {
-        logger.warn(`All API endpoints failed. Using fallback test data`);
-        logger.error(`Map API failures: ${JSON.stringify(failures)}`);
-
-        // Generate fake map activity data for testing
-        const testData = this.generateTestMapData();
-        logger.info(`Generated ${testData.data.length} test activity records`);
-
-        // Try to validate against schema
+        // Try to validate the response against our schema
         try {
-          const validated = MapActivityResponseSchema.parse(testData);
+          const validated = MapActivityResponseSchema.parse(response.data);
+          logger.info(
+            `Successfully validated response with ${validated.data.length} activity records`
+          );
           return validated;
         } catch (schemaError) {
-          // Return the test data anyway
-          return testData;
+          logger.error(
+            `Schema validation error for map activity response:`,
+            schemaError
+          );
+          // Return the raw data anyway to see what we're getting
+          return response.data;
         }
       }
 
-      if (Array.isArray(response.data)) {
-        logger.info(`Response is an array with ${response.data.length} items`);
-        // Convert array to expected format
-        const formattedData = { data: response.data };
-        return formattedData;
-      }
-
-      // Try to validate the response against our schema
-      try {
-        const validated = MapActivityResponseSchema.parse(response.data);
-        logger.info(
-          `Successfully validated response with ${validated.data.length} activity records`
-        );
-        return validated;
-      } catch (schemaError) {
-        logger.error(
-          `Schema validation error for map activity response:`,
-          schemaError
-        );
-        // Return the raw data anyway to see what we're getting
-        return response.data;
-      }
+      logger.warn(`No data received from map API`);
+      return { data: [] };
     } catch (error) {
       logger.error(`Error fetching character activity from Map API:`, error);
       throw error;
     }
-  }
-
-  /**
-   * Generate test map activity data for development/testing
-   */
-  private generateTestMapData() {
-    logger.info(`Generating test map activity data`);
-
-    const now = new Date();
-    const characters = [
-      {
-        eve_id: "123456789",
-        name: "Test Character 1",
-        alliance_id: 111,
-        corporation_id: 222,
-      },
-      {
-        eve_id: "987654321",
-        name: "Test Character 2",
-        alliance_id: 333,
-        corporation_id: 444,
-      },
-    ];
-
-    // Generate 10 records per character
-    const testData = [];
-
-    for (const character of characters) {
-      for (let i = 0; i < 10; i++) {
-        const timestamp = new Date(now.getTime() - i * 24 * 60 * 60 * 1000); // One day back each time
-
-        testData.push({
-          timestamp: timestamp.toISOString(),
-          character: character,
-          signatures: Math.floor(Math.random() * 20),
-          connections: Math.floor(Math.random() * 5),
-          passages: Math.floor(Math.random() * 10),
-        });
-      }
-    }
-
-    return { data: testData };
   }
 
   async getUserCharacters(slug: string) {

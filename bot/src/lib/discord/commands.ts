@@ -23,7 +23,7 @@ export const commands = [
             .setRequired(false)
             .addChoices(
               { name: "7 Days", value: "7" },
-              { name: "24 Days", value: "24" },
+              { name: "14 Days", value: "14" },
               { name: "30 Days", value: "30" }
             )
         )

@@ -27,10 +27,31 @@ export class KillsHandler extends BaseChartHandler {
       const time = interaction.options.getString("time") ?? "7";
       const { startDate, endDate } = this.getTimeRange(time);
 
-      logger.info(`Generating kills chart for ${time} days`);
+      logger.info(
+        `Generating kills chart for ${time} days - Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
 
       // Get character groups
       const groups = await this.getCharacterGroups();
+
+      logger.info(
+        `Found ${groups.length} character groups for chart generation`
+      );
+      logger.info(
+        `First few groups: ${groups
+          .slice(0, 3)
+          .map((g) => g.name)
+          .join(", ")}${groups.length > 3 ? "..." : ""}`
+      );
+
+      // Log total character count across all groups
+      const totalCharacters = groups.reduce(
+        (sum, group) => sum + group.characters.length,
+        0
+      );
+      logger.info(
+        `Total character count across all groups: ${totalCharacters}`
+      );
 
       if (groups.length === 0) {
         await interaction.editReply({
@@ -44,12 +65,23 @@ export class KillsHandler extends BaseChartHandler {
       const generator = ChartFactory.createGenerator("kills");
 
       // Generate chart data
+      logger.info(`Generating chart data with ${groups.length} groups...`);
       const chartData = await generator.generateChart({
         characterGroups: groups,
         startDate,
         endDate,
         displayType: "horizontalBar",
       });
+
+      // Log chart results
+      logger.info(
+        `Chart data generated with ${chartData.labels?.length || 0} labels`
+      );
+      if (chartData.datasets?.length > 0) {
+        logger.info(
+          `First dataset (${chartData.datasets[0].label}) has ${chartData.datasets[0].data.length} data points`
+        );
+      }
 
       // Render chart to buffer
       logger.info("Rendering kills chart");

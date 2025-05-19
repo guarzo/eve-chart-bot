@@ -1,28 +1,25 @@
 import { BaseRepository } from "./BaseRepository";
 import { Character, Prisma } from "@prisma/client";
-import { CacheAdapter } from "../cache/CacheAdapter";
 import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for character-related data access
  */
 export class CharacterRepository extends BaseRepository {
-  constructor(cache?: CacheAdapter) {
-    super("Character", cache);
+  constructor() {
+    super("Character");
   }
 
   /**
    * Get all tracked characters
    */
   async getTrackedCharacters(): Promise<Character[]> {
-    return this.executeQuery(
-      () =>
-        this.prisma.character.findMany({
-          orderBy: {
-            name: "asc",
-          },
-        }),
-      "tracked-characters"
+    return this.executeQuery(() =>
+      this.prisma.character.findMany({
+        orderBy: {
+          name: "asc",
+        },
+      })
     );
   }
 
@@ -30,12 +27,10 @@ export class CharacterRepository extends BaseRepository {
    * Get character by EVE ID
    */
   async getCharacterById(eveId: string): Promise<Character | null> {
-    return this.executeQuery(
-      () =>
-        this.prisma.character.findUnique({
-          where: { eveId },
-        }),
-      `character-${eveId}`
+    return this.executeQuery(() =>
+      this.prisma.character.findUnique({
+        where: { eveId },
+      })
     );
   }
 
@@ -51,7 +46,7 @@ export class CharacterRepository extends BaseRepository {
           name: "asc",
         },
       });
-    }, `alts-${mainCharacterId}`);
+    });
   }
 
   /**
@@ -85,7 +80,52 @@ export class CharacterRepository extends BaseRepository {
 
       // Combine and return unique characters
       return [...mainCharacters, ...altCharacters];
-    }, `expanded-characters-${mainCharacterIds.join("-")}`);
+    });
+  }
+
+  /**
+   * Get a single character group with its characters
+   * @param groupId ID of the character group to retrieve
+   * @returns The group and its characters, or null if not found
+   */
+  async getGroupWithCharacters(groupId: string): Promise<{
+    groupId: string;
+    name: string;
+    characters: Array<{ eveId: string; name: string }>;
+    mainCharacterId?: string;
+  } | null> {
+    return this.executeQuery(async () => {
+      // Get the character group
+      const group = await this.prisma.characterGroup.findUnique({
+        where: { id: groupId },
+        select: {
+          id: true,
+          slug: true,
+          mainCharacterId: true,
+          characters: {
+            select: {
+              eveId: true,
+              name: true,
+            },
+          },
+        },
+      });
+
+      if (!group) return null;
+
+      // Format the response
+      return {
+        groupId: group.id,
+        name: group.slug,
+        mainCharacterId: group.mainCharacterId || undefined,
+        characters: group.characters.map(
+          (char: { eveId: string; name: string }) => ({
+            eveId: char.eveId,
+            name: char.name,
+          })
+        ),
+      };
+    });
   }
 
   /**
@@ -130,6 +170,6 @@ export class CharacterRepository extends BaseRepository {
           })
         ),
       }));
-    }, "character-groups");
+    });
   }
 }

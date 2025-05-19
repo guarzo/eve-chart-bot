@@ -4,17 +4,17 @@ import { z } from "zod";
 export const ZkillResponseSchema = z.object({
   killmail_id: z.number(),
   zkb: z.object({
-    locationID: z.number(),
+    locationID: z.number().optional(),
     hash: z.string(),
-    fittedValue: z.number(),
-    droppedValue: z.number(),
-    destroyedValue: z.number(),
+    fittedValue: z.number().optional().default(0),
+    droppedValue: z.number().optional().default(0),
+    destroyedValue: z.number().optional().default(0),
     totalValue: z.number(),
-    points: z.number(),
-    npc: z.boolean(),
-    solo: z.boolean(),
-    awox: z.boolean(),
-    labels: z.array(z.string()),
+    points: z.number().optional().default(0),
+    npc: z.boolean().optional().default(false),
+    solo: z.boolean().optional().default(false),
+    awox: z.boolean().optional().default(false),
+    labels: z.array(z.string()).optional().default([]),
   }),
 });
 
@@ -79,12 +79,10 @@ export interface Character {
   allianceTicker: string | null;
   corporationId: number;
   corporationTicker: string;
-  isMain: boolean;
   createdAt: Date;
   updatedAt: Date;
   lastBackfillAt?: Date | null;
   characterGroupId?: string | null;
-  mainCharacterId?: string | null;
 }
 
 export interface CharacterGroup {

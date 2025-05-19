@@ -173,8 +173,8 @@ export class CharacterGroup {
       } else {
         character.setAsAltOf(this.mainCharacterId);
       }
-    } else if (this._characters.length === 1 || character.isMain) {
-      // If this is the only character or it's marked as main, make it the main character
+    } else if (this._characters.length === 1) {
+      // If this is the only character, make it the main character
       this.setMainCharacter(character.eveId);
     }
 

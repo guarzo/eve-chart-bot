@@ -31,9 +31,16 @@ async function cleanup() {
 async function simulateMapActivity() {
   try {
     // Get a test character
-    const character = await prisma.character.findFirst({
-      where: { isMain: true },
+    const group = await prisma.characterGroup.findFirst({
+      where: {
+        mainCharacterId: { not: null },
+      },
+      include: {
+        mainCharacter: true,
+      },
     });
+
+    const character = group?.mainCharacter;
 
     if (!character) {
       throw new Error("No test character found");

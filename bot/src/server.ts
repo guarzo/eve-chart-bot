@@ -1,4 +1,4 @@
-import express from "express";
+import express, { RequestHandler } from "express";
 import { logger } from "./lib/logger";
 import { IngestionService } from "./services/IngestionService";
 import {
@@ -114,9 +114,9 @@ app.post("/v1/charts/generate", async (req, res) => {
       plugins: {
         title: {
           display: true,
-          text: `${config.type === "kills" ? "Kills" : "Map Activity"} - Last ${
-            config.period
-          }`,
+          text: `${
+            config.type === "kills" ? "Kills" : "Map Activity"
+          } - 7 Days Rolling Data`,
         },
         legend: {
           display: true,
@@ -170,6 +170,252 @@ app.get("/debug/counts", async (_req, res) => {
 
 // Initialize Discord bot
 const discordClient = new DiscordClient();
+
+// Add diagnostic routes
+app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
+  try {
+    const characters = await app.locals.prisma.character.findMany({
+      include: {
+        group: true,
+      },
+    });
+
+    // Format the response
+    const formattedCharacters = characters.map((char: any) => ({
+      id: char.eveId,
+      name: char.name,
+      group: char.group?.name || "No Group",
+      groupId: char.group?.groupId,
+      lastBackfill: char.lastBackfillAt,
+    }));
+
+    res.json({
+      total: characters.length,
+      characters: formattedCharacters,
+    });
+  } catch (error) {
+    logger.error(`Error getting tracked characters: ${error}`);
+    res.status(500).json({ error: "Failed to get tracked characters" });
+  }
+});
+
+// Add an endpoint to trigger a backfill for character kills
+interface BackfillKillsParams {
+  characterId: string;
+}
+
+const backfillKillsHandler: RequestHandler<BackfillKillsParams> = async (
+  req,
+  res
+) => {
+  try {
+    const characterId = parseInt(req.params.characterId);
+    if (isNaN(characterId)) {
+      res.status(400).json({ error: "Invalid character ID" });
+      return;
+    }
+
+    logger.info(
+      `Manually triggering kill backfill for character ${characterId}`
+    );
+    await ingestionService.backfillKills(characterId, 7);
+
+    res.json({
+      success: true,
+      message: `Backfill triggered for character ${characterId}`,
+    });
+  } catch (error) {
+    logger.error(`Error triggering backfill: ${error}`);
+    res.status(500).json({ error: "Failed to trigger backfill" });
+  }
+};
+
+app.get("/api/diagnostics/backfill-kills/:characterId", backfillKillsHandler);
+
+// Also add an endpoint to refresh tracked characters
+const refreshCharactersHandler: RequestHandler = async (_req, res) => {
+  try {
+    logger.info("Manually refreshing character tracking");
+    await refreshTrackedCharacters();
+
+    res.json({ success: true, message: "Character tracking refreshed" });
+  } catch (error) {
+    logger.error(`Error refreshing character tracking: ${error}`);
+    res.status(500).json({ error: "Failed to refresh character tracking" });
+  }
+};
+
+app.get(
+  "/api/diagnostics/refresh-character-tracking",
+  refreshCharactersHandler
+);
+
+// Add an endpoint to backfill all characters in a specific group
+interface BackfillGroupParams {
+  groupId: string;
+}
+
+const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
+  req,
+  res
+) => {
+  try {
+    const groupId = req.params.groupId;
+    if (!groupId) {
+      res.status(400).json({ error: "Invalid group ID" });
+      return;
+    }
+
+    logger.info(
+      `Manually triggering kill backfill for all characters in group ${groupId}`
+    );
+
+    // Find all characters in the group
+    const characters = await app.locals.prisma.character.findMany({
+      where: {
+        groupId: groupId,
+      },
+    });
+
+    if (characters.length === 0) {
+      res
+        .status(404)
+        .json({ error: `No characters found for group ${groupId}` });
+      return;
+    }
+
+    logger.info(`Found ${characters.length} characters in group ${groupId}`);
+
+    // Send response first to avoid timeout
+    res.json({
+      success: true,
+      message: `Backfill started for ${characters.length} characters in group ${groupId}`,
+      characters: characters.map((c: any) => ({ id: c.eveId, name: c.name })),
+    });
+
+    // Then process asynchronously (after response is sent)
+    // No need to await here since we've already responded
+    processCharacterBackfills(characters).catch((error) => {
+      logger.error(`Error in background processing: ${error}`);
+    });
+  } catch (error) {
+    logger.error(`Error triggering group backfill: ${error}`);
+    res.status(500).json({ error: "Failed to trigger group backfill" });
+  }
+};
+
+app.get("/api/diagnostics/backfill-group/:groupId", backfillGroupHandler);
+
+// Helper function to process character backfills asynchronously
+async function processCharacterBackfills(characters: any[]): Promise<void> {
+  for (const character of characters) {
+    try {
+      logger.info(
+        `Backfilling kills for character ${character.name} (${character.eveId})`
+      );
+      await ingestionService.backfillKills(parseInt(character.eveId), 30);
+    } catch (error) {
+      logger.error(
+        `Error backfilling kills for character ${character.name}: ${error}`
+      );
+    }
+  }
+  logger.info("Character backfill processing completed");
+}
+
+// Add an endpoint to clean up and rebalance kill/loss data
+const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
+  try {
+    logger.info("Starting kill/loss data cleanup and rebalance");
+
+    // First, get current counts
+    const initialLossCount = await app.locals.prisma.lossFact.count();
+    const initialKillCount = await app.locals.prisma.killFact.count();
+
+    logger.info(
+      `Initial counts - Losses: ${initialLossCount}, Kills: ${initialKillCount}`
+    );
+
+    // Step 1: Remove all loss records to start fresh
+    logger.info("Removing all existing loss records");
+    const deletedLosses = await app.locals.prisma.lossFact.deleteMany({});
+    logger.info(`Deleted ${deletedLosses.count} loss records`);
+
+    // Step 2: Reset all ingestion checkpoints for losses
+    logger.info("Resetting ingestion checkpoints for losses");
+    const deletedCheckpoints =
+      await app.locals.prisma.ingestionCheckpoint.deleteMany({
+        where: {
+          streamName: {
+            startsWith: "losses:",
+          },
+        },
+      });
+    logger.info(`Deleted ${deletedCheckpoints.count} loss checkpoints`);
+
+    // Step 3: Backfill losses for all characters (but limit to 5 in dev mode)
+    const characters = await app.locals.prisma.character.findMany();
+    logger.info(`Found ${characters.length} characters to backfill losses for`);
+
+    // Process fewer characters in development to avoid overwhelming
+    const charactersToProcess =
+      process.env.NODE_ENV === "development"
+        ? characters.slice(0, 5) // Only process first 5 characters in dev
+        : characters;
+
+    logger.info(
+      `Will process ${charactersToProcess.length} characters for loss backfill`
+    );
+
+    // Begin the response to avoid timeout
+    res.json({
+      success: true,
+      message: "Kill/loss data cleanup and rebalance started",
+      initialCounts: {
+        losses: initialLossCount,
+        kills: initialKillCount,
+      },
+      charactersToProcess: charactersToProcess.length,
+    });
+
+    // Continue processing after sending response
+    processLossBackfill(charactersToProcess).catch((error) => {
+      logger.error(`Error in loss backfill processing: ${error}`);
+    });
+  } catch (error) {
+    logger.error(`Error fixing kill/loss balance: ${error}`);
+    res.status(500).json({ error: "Failed to fix kill/loss balance" });
+  }
+};
+
+app.get("/api/diagnostics/fix-kill-loss-balance", fixKillLossBalanceHandler);
+
+// Helper function to process loss backfill asynchronously
+async function processLossBackfill(characters: any[]): Promise<void> {
+  for (let i = 0; i < characters.length; i++) {
+    const character = characters[i];
+    try {
+      logger.info(
+        `Backfilling losses for character: ${character.name} (${
+          character.eveId
+        }) - ${i + 1}/${characters.length}`
+      );
+      await ingestionService.backfillLosses(parseInt(character.eveId), 30);
+    } catch (error) {
+      logger.error(
+        `Error backfilling losses for character ${character.name}: ${error}`
+      );
+    }
+  }
+
+  // Get final counts
+  const finalLossCount = await app.locals.prisma.lossFact.count();
+  const finalKillCount = await app.locals.prisma.killFact.count();
+
+  logger.info(
+    `Fix kill/loss balance complete - Final counts - Losses: ${finalLossCount}, Kills: ${finalKillCount}`
+  );
+}
 
 // Start server
 async function startServer() {
@@ -257,7 +503,8 @@ async function startServer() {
     if (mapName) {
       logger.info(`Syncing map activity data from map: ${mapName}`);
       try {
-        await ingestionService.ingestMapActivity(mapName, 30); // Get 30 days of activity data
+        // Use the new refresh method which handles duplicates
+        await ingestionService.refreshMapActivityData(mapName, 7); // Get 7 days of activity data instead of 30
 
         // Check if we got any data
         const mapActivityCount =
@@ -278,16 +525,19 @@ async function startServer() {
     // Schedule map activity sync every hour
     setInterval(async () => {
       try {
-        logger.info("Running scheduled map activity sync...");
-        await ingestionService.ingestMapActivity(process.env.MAP_NAME!, 1); // Last 24 hours
+        logger.info("Running scheduled map activity refresh...");
 
+        // Use the simpler approach - completely refresh map activity data every hour
+        await ingestionService.refreshMapActivityData(process.env.MAP_NAME!, 7);
+
+        // Log current count for monitoring
         const mapActivityCount =
           await ingestionService.prisma.mapActivity.count();
         logger.info(
-          `Map activity count after scheduled sync: ${mapActivityCount}`
+          `Map activity count after scheduled refresh: ${mapActivityCount}`
         );
       } catch (error) {
-        logger.error("Scheduled map activity sync failed:", error);
+        logger.error("Scheduled map activity refresh failed:", error);
       }
     }, 60 * 60 * 1000); // Every hour
 

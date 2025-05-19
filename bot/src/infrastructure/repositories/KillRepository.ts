@@ -1,14 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { BaseRepository } from "./BaseRepository";
 import { buildWhereFilter } from "../../utils/query-helper";
-import { CacheAdapter } from "../cache/CacheAdapter";
+import { logger } from "../../lib/logger";
 
 /**
  * Repository for accessing kill-related data
  */
 export class KillRepository extends BaseRepository {
-  constructor(cache?: CacheAdapter) {
-    super("killFact", cache);
+  constructor() {
+    super("killFact");
   }
 
   /**
@@ -19,28 +19,26 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<any[]> {
-    return this.executeQuery(
-      () =>
-        this.prisma.killFact.findMany({
-          where: buildWhereFilter({
-            character_id: BigInt(characterId),
-            kill_time: {
-              gte: startDate,
-              lte: endDate,
-            },
-          }),
-          select: {
-            killmail_id: true,
-            character_id: true,
-            kill_time: true,
-            total_value: true,
-            solo: true,
-          },
-          orderBy: {
-            kill_time: "asc",
+    return this.executeQuery(() =>
+      this.prisma.killFact.findMany({
+        where: buildWhereFilter({
+          character_id: BigInt(characterId),
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
           },
         }),
-      `kills-${characterId}-${startDate.toISOString()}-${endDate.toISOString()}`
+        select: {
+          killmail_id: true,
+          character_id: true,
+          kill_time: true,
+          total_value: true,
+          solo: true,
+        },
+        orderBy: {
+          kill_time: "asc",
+        },
+      })
     );
   }
 
@@ -55,36 +53,32 @@ export class KillRepository extends BaseRepository {
     // Convert strings to BigInts for query
     const bigIntIds = characterIds.map((id) => BigInt(id));
 
-    return this.executeQuery(
-      () =>
-        this.prisma.killFact.findMany({
-          where: buildWhereFilter({
-            character_id: {
-              in: bigIntIds,
-            },
-            kill_time: {
-              gte: startDate,
-              lte: endDate,
-            },
-          }),
-          select: {
-            killmail_id: true,
-            character_id: true,
-            kill_time: true,
-            solo: true,
-            attackers: {
-              select: {
-                character_id: true,
-              },
-            },
+    return this.executeQuery(() =>
+      this.prisma.killFact.findMany({
+        where: buildWhereFilter({
+          character_id: {
+            in: bigIntIds,
           },
-          orderBy: {
-            kill_time: "asc",
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
           },
         }),
-      `kills-multiple-${characterIds.join(
-        "-"
-      )}-${startDate.toISOString()}-${endDate.toISOString()}`
+        select: {
+          killmail_id: true,
+          character_id: true,
+          kill_time: true,
+          solo: true,
+          attackers: {
+            select: {
+              character_id: true,
+            },
+          },
+        },
+        orderBy: {
+          kill_time: "asc",
+        },
+      })
     );
   }
 
@@ -112,7 +106,7 @@ export class KillRepository extends BaseRepository {
 
       // Get kills for all characters
       return this.getKillsForCharacters(characterIds, startDate, endDate);
-    }, `kills-group-${groupId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -160,7 +154,7 @@ export class KillRepository extends BaseRepository {
         totalValue,
         averageValue,
       };
-    }, `kill-stats-${characterId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -204,7 +198,7 @@ export class KillRepository extends BaseRepository {
         totalValue,
         averageValue,
       };
-    }, `group-kill-stats-${groupId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -314,7 +308,7 @@ export class KillRepository extends BaseRepository {
         ...basicStats,
         groupSoloKills,
       };
-    }, `group-kill-stats-enhanced-${groupId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -379,7 +373,7 @@ export class KillRepository extends BaseRepository {
           b: { timestamp: Date; kills: number; value: bigint }
         ) => a.timestamp.getTime() - b.timestamp.getTime()
       );
-    }, `kills-grouped-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}-${groupBy}`);
+    });
   }
 
   /**
@@ -437,7 +431,7 @@ export class KillRepository extends BaseRepository {
         .slice(0, limit);
 
       return result;
-    }, `top-ship-types-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -539,7 +533,7 @@ export class KillRepository extends BaseRepository {
       }
 
       return resultByDate;
-    }, `ship-types-over-time-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -580,7 +574,7 @@ export class KillRepository extends BaseRepository {
         killmailId: kill.killmail_id.toString(),
         attackerCount: kill.attackers.length,
       }));
-    }, `kills-with-attacker-count-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -648,7 +642,7 @@ export class KillRepository extends BaseRepository {
         .slice(0, limit);
 
       return result;
-    }, `top-enemy-corps-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -672,7 +666,7 @@ export class KillRepository extends BaseRepository {
 
       // Ensure we return a number
       return Number(result[0]?.count || 0);
-    }, `total-enemy-corp-kills-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -743,7 +737,7 @@ export class KillRepository extends BaseRepository {
       }
 
       return result;
-    }, `kill-activity-heatmap-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -780,6 +774,172 @@ export class KillRepository extends BaseRepository {
         killmailId: kill.killmail_id.toString(),
         attackerCount: kill.solo ? 1 : 2, // If not solo, assume at least 2 attackers
       }));
-    }, `distribution-data-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
+  }
+
+  /**
+   * Get the top ship types used by characters within a date range
+   */
+  async getTopShipTypesUsed(
+    characterIds: string[],
+    startDate: Date,
+    endDate: Date,
+    limit: number = 10
+  ): Promise<Array<{ shipTypeId: string; count: number }>> {
+    return this.executeQuery(async () => {
+      // Convert strings to BigInts for query
+      const bigIntIds = characterIds.map((id) => BigInt(id));
+
+      // Get all kills where these characters were attackers
+      // First, get kills within the time range
+      const kills = await this.prisma.killFact.findMany({
+        where: buildWhereFilter({
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
+        select: {
+          killmail_id: true,
+          attackers: {
+            where: {
+              character_id: {
+                in: bigIntIds,
+              },
+            },
+            select: {
+              ship_type_id: true,
+            },
+          },
+        },
+      });
+
+      // Extract all attackers and their ship types
+      const shipTypeCounts = new Map<string, { id: string; count: number }>();
+
+      for (const kill of kills) {
+        for (const attacker of kill.attackers) {
+          if (attacker.ship_type_id === null) continue;
+
+          const shipTypeId = attacker.ship_type_id.toString();
+          if (shipTypeCounts.has(shipTypeId)) {
+            shipTypeCounts.get(shipTypeId)!.count++;
+          } else {
+            shipTypeCounts.set(shipTypeId, {
+              id: shipTypeId,
+              count: 1,
+            });
+          }
+        }
+      }
+
+      // Convert to array and sort by count
+      const result = Array.from(shipTypeCounts.values())
+        .map((item) => ({
+          shipTypeId: item.id,
+          count: item.count,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, limit);
+
+      return result;
+    });
+  }
+
+  /**
+   * Get all kills where a character participated (either as the main killer or as an attacker)
+   * This ensures we don't miss kills where the character participated but wasn't the main character
+   */
+  async getAllKillsForCharacters(
+    characterIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<any[]> {
+    try {
+      // Convert strings to BigInts for query
+      const bigIntIds = characterIds.map((id) => BigInt(id));
+
+      // First get kills where the character is the main killer
+      const directKills = await this.prisma.killFact.findMany({
+        where: buildWhereFilter({
+          character_id: {
+            in: bigIntIds,
+          },
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
+        select: {
+          killmail_id: true,
+          character_id: true,
+          kill_time: true,
+          solo: true,
+          attackers: {
+            select: {
+              character_id: true,
+            },
+          },
+        },
+        orderBy: {
+          kill_time: "asc",
+        },
+      });
+
+      // Then find kills via the KillFact relation to find where they're in the attackers list
+      const killsAsAttacker = await this.prisma.killFact.findMany({
+        where: {
+          attackers: {
+            some: {
+              character_id: {
+                in: bigIntIds,
+              },
+            },
+          },
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        select: {
+          killmail_id: true,
+          character_id: true,
+          kill_time: true,
+          solo: true,
+          attackers: {
+            select: {
+              character_id: true,
+            },
+          },
+        },
+        orderBy: {
+          kill_time: "asc",
+        },
+      });
+
+      // Combine, making sure to remove duplicates by killmail_id
+      const allKills = [...directKills];
+      const seen = new Set(directKills.map((k) => k.killmail_id.toString()));
+
+      for (const kill of killsAsAttacker) {
+        if (!seen.has(kill.killmail_id.toString())) {
+          allKills.push(kill);
+          seen.add(kill.killmail_id.toString());
+        }
+      }
+
+      // Sort by time
+      return allKills.sort(
+        (a, b) =>
+          (a.kill_time as Date).getTime() - (b.kill_time as Date).getTime()
+      );
+    } catch (error) {
+      logger.error(
+        `Error in getAllKillsForCharacters: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      throw error;
+    }
   }
 }

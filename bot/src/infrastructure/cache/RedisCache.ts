@@ -38,7 +38,13 @@ export class RedisCache implements CacheAdapter {
         return null;
       }
 
-      return JSON.parse(data) as T;
+      return JSON.parse(data, (_key, value) => {
+        // Check if value looks like a serialized BigInt
+        if (typeof value === "string" && value.match(/^BIGINT:(\d+)$/)) {
+          return BigInt(value.substring(7));
+        }
+        return value;
+      }) as T;
     } catch (error) {
       logger.error(
         `Redis cache get error for key ${key}: ${
@@ -56,7 +62,15 @@ export class RedisCache implements CacheAdapter {
     try {
       const fullKey = this.getFullKey(key);
       const ttl = ttlSeconds || this.defaultTtl;
-      const serializedValue = JSON.stringify(value);
+
+      // Use a custom replacer function to handle BigInt values
+      const serializedValue = JSON.stringify(value, (_key, value) => {
+        // If the value is a BigInt, convert it to a string with a prefix
+        if (typeof value === "bigint") {
+          return `BIGINT:${value.toString()}`;
+        }
+        return value;
+      });
 
       await redis.set(fullKey, serializedValue, "EX", ttl);
     } catch (error) {

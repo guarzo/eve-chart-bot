@@ -3,15 +3,15 @@ import { logger } from "../../lib/logger";
 import { LossFact } from "@prisma/client";
 import { CharacterSummary } from "../../types/discord";
 import { SimpleTimeRange } from "../../types/chart";
-import { CacheAdapter } from "../cache/CacheAdapter";
+import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for accessing ship loss data
  * This is a placeholder implementation that will be fully implemented in Phase 4
  */
 export class LossRepository extends BaseRepository {
-  constructor(cache?: CacheAdapter) {
-    super("lossFact", cache);
+  constructor() {
+    super("lossFact");
   }
 
   /**
@@ -25,25 +25,23 @@ export class LossRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<number> {
-    const cacheKey = `losses:${characterId}:${startDate.toISOString()}:${endDate.toISOString()}`;
-
     return this.executeQuery(async () => {
       logger.debug(
         `Fetching losses for character ${characterId} from ${startDate} to ${endDate}`
       );
 
-      const result = await this.prisma.lossFact.count({
-        where: {
-          character_id: characterId,
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
+      const where = buildWhereFilter({
+        character_id: characterId,
+        kill_time: {
+          gte: startDate,
+          lte: endDate,
         },
       });
 
+      const result = await this.prisma.lossFact.count({ where });
+
       return result;
-    }, cacheKey);
+    });
   }
 
   /**
@@ -59,28 +57,26 @@ export class LossRepository extends BaseRepository {
     endDate: Date,
     valueThreshold: bigint = BigInt(100000000) // 100M ISK default threshold
   ): Promise<number> {
-    const cacheKey = `high_value_losses:${characterId}:${startDate.toISOString()}:${endDate.toISOString()}:${valueThreshold}`;
-
     return this.executeQuery(async () => {
       logger.debug(
         `Fetching high value losses for character ${characterId} from ${startDate} to ${endDate}`
       );
 
-      const result = await this.prisma.lossFact.count({
-        where: {
-          character_id: characterId,
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-          total_value: {
-            gte: valueThreshold,
-          },
+      const where = buildWhereFilter({
+        character_id: characterId,
+        kill_time: {
+          gte: startDate,
+          lte: endDate,
+        },
+        total_value: {
+          gte: valueThreshold,
         },
       });
 
+      const result = await this.prisma.lossFact.count({ where });
+
       return result;
-    }, cacheKey);
+    });
   }
 
   /**
@@ -94,21 +90,21 @@ export class LossRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<bigint> {
-    const cacheKey = `total_value_lost:${characterId}:${startDate.toISOString()}:${endDate.toISOString()}`;
-
     return this.executeQuery(async () => {
       logger.debug(
         `Fetching total value lost for character ${characterId} from ${startDate} to ${endDate}`
       );
 
-      const results = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: characterId,
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
+      const where = buildWhereFilter({
+        character_id: characterId,
+        kill_time: {
+          gte: startDate,
+          lte: endDate,
         },
+      });
+
+      const results = await this.prisma.lossFact.findMany({
+        where,
         select: {
           total_value: true,
         },
@@ -119,7 +115,7 @@ export class LossRepository extends BaseRepository {
         (sum, result) => sum + result.total_value,
         BigInt(0)
       );
-    }, cacheKey);
+    });
   }
 
   /**
@@ -137,27 +133,23 @@ export class LossRepository extends BaseRepository {
     highValueLosses: number;
     totalValueLost: bigint;
   }> {
-    const cacheKey = `losses_summary:${characterIds.join(
-      ","
-    )}:${startDate.toISOString()}:${endDate.toISOString()}`;
-
     return this.executeQuery(async () => {
       logger.debug(
         `Fetching losses summary for ${characterIds.length} characters from ${startDate} to ${endDate}`
       );
 
       // Get all losses for these characters
-      const losses = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: {
-            in: characterIds,
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
+      const where = buildWhereFilter({
+        character_id: {
+          in: characterIds,
+        },
+        kill_time: {
+          gte: startDate,
+          lte: endDate,
         },
       });
+
+      const losses = await this.prisma.lossFact.findMany({ where });
 
       // Calculate summary
       const totalLosses = losses.length;
@@ -174,7 +166,7 @@ export class LossRepository extends BaseRepository {
         highValueLosses,
         totalValueLost,
       };
-    }, cacheKey);
+    });
   }
 
   async countByTimeRange(
@@ -185,20 +177,20 @@ export class LossRepository extends BaseRepository {
       // Convert string character IDs to BigInt for comparison
       const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
 
-      const result = await this.prisma.lossFact.count({
-        where: {
-          character_id: {
-            in: bigIntCharacterIds,
-          },
-          kill_time: {
-            gte: timeRange.start,
-            lte: timeRange.end,
-          },
+      const where = buildWhereFilter({
+        character_id: {
+          in: bigIntCharacterIds,
+        },
+        kill_time: {
+          gte: timeRange.start,
+          lte: timeRange.end,
         },
       });
 
+      const result = await this.prisma.lossFact.count({ where });
+
       return result;
-    }, "count-by-time-range");
+    });
   }
 
   async countByShipType(
@@ -209,17 +201,19 @@ export class LossRepository extends BaseRepository {
       // Convert string character IDs to BigInt for comparison
       const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
 
+      const where = buildWhereFilter({
+        character_id: {
+          in: bigIntCharacterIds,
+        },
+        kill_time: {
+          gte: timeRange.start,
+          lte: timeRange.end,
+        },
+      });
+
       const result = await this.prisma.lossFact.groupBy({
         by: ["ship_type_id"],
-        where: {
-          character_id: {
-            in: bigIntCharacterIds,
-          },
-          kill_time: {
-            gte: timeRange.start,
-            lte: timeRange.end,
-          },
-        },
+        where,
         _count: true,
       });
 
@@ -232,7 +226,7 @@ export class LossRepository extends BaseRepository {
       }
 
       return shipTypeCounts;
-    }, "count-by-ship-type");
+    });
   }
 
   async getLossesByTimeRange(
@@ -243,23 +237,25 @@ export class LossRepository extends BaseRepository {
       // Convert string character IDs to BigInt for comparison
       const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
 
-      const results = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: {
-            in: bigIntCharacterIds,
-          },
-          kill_time: {
-            gte: timeRange.start,
-            lte: timeRange.end,
-          },
+      const where = buildWhereFilter({
+        character_id: {
+          in: bigIntCharacterIds,
         },
+        kill_time: {
+          gte: timeRange.start,
+          lte: timeRange.end,
+        },
+      });
+
+      const results = await this.prisma.lossFact.findMany({
+        where,
         orderBy: {
           kill_time: "desc",
         },
       });
 
       return results;
-    }, "get-by-time-range");
+    });
   }
 
   async getLossesByTimeRangeGrouped(
@@ -271,16 +267,18 @@ export class LossRepository extends BaseRepository {
       // Convert character IDs to BigInt for comparison
       const characterIds = characters.map((c) => BigInt(c.eveId));
 
-      const losses = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: {
-            in: characterIds,
-          },
-          kill_time: {
-            gte: timeRange.start,
-            lte: timeRange.end,
-          },
+      const where = buildWhereFilter({
+        character_id: {
+          in: characterIds,
         },
+        kill_time: {
+          gte: timeRange.start,
+          lte: timeRange.end,
+        },
+      });
+
+      const losses = await this.prisma.lossFact.findMany({
+        where,
         select: {
           kill_time: true,
         },
@@ -315,25 +313,22 @@ export class LossRepository extends BaseRepository {
         groupedLosses.set(timeKey, (groupedLosses.get(timeKey) || 0) + 1);
       }
 
-      // Convert to array for return
-      const result = Array.from(groupedLosses.entries()).map(
-        ([timeKey, count]) => {
-          // Parse the time key back to a Date
-          let date: Date;
-          if (timeGrouping === "month") {
-            date = new Date(`${timeKey}-01`);
-          } else {
-            date = new Date(timeKey);
-          }
-          return { time: date, losses: count };
+      // Convert to array for chart data
+      const result: { time: Date; losses: number }[] = [];
+
+      for (const [timeKey, count] of groupedLosses.entries()) {
+        let time: Date;
+        if (timeGrouping === "month") {
+          time = new Date(`${timeKey}-01T00:00:00Z`);
+        } else {
+          time = new Date(`${timeKey}T00:00:00Z`);
         }
-      );
+        result.push({ time, losses: count });
+      }
 
-      // Sort by time
-      result.sort((a, b) => a.time.getTime() - b.time.getTime());
-
-      return result;
-    }, "get-by-time-range-grouped");
+      // Sort by timestamp
+      return result.sort((a, b) => a.time.getTime() - b.time.getTime());
+    });
   }
 
   /**
@@ -349,17 +344,19 @@ export class LossRepository extends BaseRepository {
       // Convert strings to BigInts for query
       const bigIntIds = characterIds.map((id) => BigInt(id));
 
+      const where = buildWhereFilter({
+        character_id: {
+          in: bigIntIds,
+        },
+        kill_time: {
+          gte: startDate,
+          lte: endDate,
+        },
+      });
+
       // Get all losses for the characters in the specified date range
       const losses = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: {
-            in: bigIntIds,
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
+        where,
         select: {
           killmail_id: true,
           ship_type_id: true,
@@ -391,6 +388,6 @@ export class LossRepository extends BaseRepository {
         .slice(0, limit);
 
       return result;
-    }, `top-ship-types-lost-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 }

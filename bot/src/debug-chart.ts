@@ -32,9 +32,20 @@ async function debugCharts() {
     console.log("Character details:", matchingCharacters);
 
     // 5. Get all main characters
-    const mainCharacters = await prisma.character.findMany({
-      where: { isMain: true },
+    const groups = await prisma.characterGroup.findMany({
+      where: {
+        mainCharacterId: { not: null },
+      },
+      include: {
+        mainCharacter: true,
+      },
     });
+
+    // Extract all main characters from the groups
+    const mainCharacters = groups
+      .map((group) => group.mainCharacter)
+      .filter((char): char is NonNullable<typeof char> => char !== null);
+
     console.log(`Found ${mainCharacters.length} main characters`);
     console.log(
       "Main character IDs:",

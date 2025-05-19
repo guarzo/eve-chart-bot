@@ -25,11 +25,20 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
 
     // Get all tracked characters
     logger.info("Fetching all tracked characters");
-    const characters = await prisma.character.findMany({
+    const groups = await prisma.characterGroup.findMany({
       where: {
-        isMain: true,
+        mainCharacterId: { not: null },
+      },
+      include: {
+        mainCharacter: true,
       },
     });
+
+    // Extract main characters from groups
+    const characters = groups
+      .map((group) => group.mainCharacter)
+      .filter((char): char is NonNullable<typeof char> => char !== null);
+
     logger.info("Found tracked characters:", {
       characterCount: characters.length,
       characters: characters.map((c) => ({ id: c.eveId, name: c.name })),
@@ -137,11 +146,20 @@ export async function handleMapCommand(interaction: CommandInteraction) {
 
     // Get all tracked characters
     logger.info("Fetching all tracked characters");
-    const characters = await prisma.character.findMany({
+    const groups = await prisma.characterGroup.findMany({
       where: {
-        isMain: true,
+        mainCharacterId: { not: null },
+      },
+      include: {
+        mainCharacter: true,
       },
     });
+
+    // Extract main characters from groups
+    const characters = groups
+      .map((group) => group.mainCharacter)
+      .filter((char): char is NonNullable<typeof char> => char !== null);
+
     logger.info("Found tracked characters:", {
       characterCount: characters.length,
       characters: characters.map((c) => ({ id: c.eveId, name: c.name })),

@@ -21,9 +21,6 @@ export class Character {
   /** Corporation ticker */
   corporationTicker: string;
 
-  /** Whether this character is designated as a "main" character */
-  isMain: boolean;
-
   /** Optional link to character group ID */
   characterGroupId: string | null;
 
@@ -45,7 +42,6 @@ export class Character {
     corporationTicker: string;
     allianceId?: number | null;
     allianceTicker?: string | null;
-    isMain?: boolean;
     characterGroupId?: string | null;
     mainCharacterId?: string | null;
     lastBackfillAt?: Date | null;
@@ -59,7 +55,6 @@ export class Character {
     // Optional properties with defaults
     this.allianceId = props.allianceId || null;
     this.allianceTicker = props.allianceTicker || null;
-    this.isMain = props.isMain ?? false;
     this.characterGroupId = props.characterGroupId || null;
     this.mainCharacterId = props.mainCharacterId || null;
     this.lastBackfillAt = props.lastBackfillAt || null;
@@ -96,25 +91,25 @@ export class Character {
   }
 
   /**
-   * Set this character as the main character
+   * Set this character as the main character of its group
+   * This is now handled at the CharacterGroup level only
+   * @deprecated Use CharacterGroup.setMainCharacter instead
    */
   setAsMain(): void {
-    this.isMain = true;
-    this.mainCharacterId = null; // A main character cannot have a main character
+    this.mainCharacterId = null;
+    // Note: isMain is now determined by checking if character.eveId === characterGroup.mainCharacterId
   }
 
   /**
    * Set this character as an alt of another character
-   *
+   * This is now handled at the CharacterGroup level
+   * @deprecated Use CharacterGroup.setMainCharacter instead
    * @param mainCharacterId The EVE ID of the main character
-   * @throws Error if trying to set character as alt of itself
    */
   setAsAltOf(mainCharacterId: string): void {
     if (this.eveId === mainCharacterId) {
       throw new Error("Character cannot be an alt of itself");
     }
-
-    this.isMain = false;
     this.mainCharacterId = mainCharacterId;
   }
 
@@ -175,7 +170,6 @@ export class Character {
       allianceTicker: this.allianceTicker,
       corporationId: this.corporationId,
       corporationTicker: this.corporationTicker,
-      isMain: this.isMain,
       characterGroupId: this.characterGroupId,
       mainCharacterId: this.mainCharacterId,
       lastBackfillAt: this.lastBackfillAt,
@@ -196,7 +190,6 @@ export class Character {
       allianceTicker: model.allianceTicker,
       corporationId: model.corporationId,
       corporationTicker: model.corporationTicker,
-      isMain: model.isMain,
       characterGroupId: model.characterGroupId,
       mainCharacterId: model.mainCharacterId,
       lastBackfillAt: model.lastBackfillAt,

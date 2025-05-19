@@ -1,8 +1,6 @@
-import prisma from "../../infrastructure/persistence/client";
 import { logger } from "../../lib/logger";
-import { CacheAdapter } from "../../infrastructure/cache/CacheAdapter";
-import { RedisCache } from "../../infrastructure/cache/RedisCache";
 import { flags } from "../../utils/feature-flags";
+import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Chart rendering options
@@ -42,19 +40,24 @@ export interface ChartData {
 }
 
 /**
+ * Ship data entry format
+ */
+interface ShipDataEntry {
+  shipName: string;
+  count: number;
+}
+
+/**
  * Main service for chart generation and rendering
  */
 export class ChartService {
-  private cache: CacheAdapter;
+  private repositoryManager: RepositoryManager;
 
   /**
    * Create a new ChartService
-   * @param cache Optional cache adapter to use for chart data
    */
-  constructor(cache?: CacheAdapter) {
-    this.cache =
-      cache ||
-      new RedisCache(process.env.REDIS_URL || "redis://localhost:6379");
+  constructor() {
+    this.repositoryManager = new RepositoryManager();
   }
 
   /**
@@ -75,17 +78,6 @@ export class ChartService {
         return null;
       }
 
-      // Try to get from cache first
-      const cacheKey = `ship-usage-${
-        characterId || `group-${groupId}`
-      }-${days}`;
-      const cachedData = await this.cache.get<ChartData>(cacheKey);
-
-      if (cachedData) {
-        logger.debug(`Retrieved ship usage chart from cache: ${cacheKey}`);
-        return cachedData;
-      }
-
       logger.info(
         `Generating ship usage chart for ${
           characterId ? "character " + characterId : "group " + groupId
@@ -98,7 +90,7 @@ export class ChartService {
       startDate.setDate(startDate.getDate() - days);
 
       // Use feature flag to conditionally use real database queries or mock data
-      let shipData;
+      let shipData: ShipDataEntry[];
 
       if (flags.newChartRendering) {
         // Implement actual data retrieval when feature flag is enabled
@@ -107,36 +99,41 @@ export class ChartService {
         );
 
         try {
-          // This would be the actual implementation
-          /*
-          const result = await prisma.killFact.groupBy({
-            by: ['ship_type_id'],
-            where: {
-              ...(characterId ? { character_id: BigInt(characterId) } : {}),
-              kill_time: {
-                gte: startDate,
-                lte: endDate
-              }
-            },
-            _count: true,
-            orderBy: {
-              _count: 'desc'
-            },
-            take: 10
-          });
-          
-          shipData = result.map(r => ({
-            shipName: shipTypeNames[r.ship_type_id] || `Type ID: ${r.ship_type_id}`,
-            count: r._count
-          }));
-          */
+          // Get repositories
+          const killRepository = this.repositoryManager.getKillRepository();
 
-          // Temporary placeholder
-          shipData = [
-            { shipName: "Rifter (DB)", count: 15 },
-            { shipName: "Punisher (DB)", count: 8 },
-            { shipName: "Merlin (DB)", count: 12 },
-          ];
+          let characterIds: string[] = [];
+
+          if (characterId) {
+            // Single character
+            characterIds = [characterId];
+          } else if (groupId) {
+            // Get characters from the group
+            const characterRepository =
+              this.repositoryManager.getCharacterRepository();
+            const group = await characterRepository.getGroupWithCharacters(
+              groupId
+            );
+
+            if (group && group.characters) {
+              characterIds = group.characters.map((char) => char.eveId);
+            }
+          }
+
+          // Get top ship types used for kills
+          const topShips = await killRepository.getTopShipTypesUsed(
+            characterIds,
+            startDate,
+            endDate,
+            10 // Limit to top 10 ships
+          );
+
+          shipData = topShips.map((ship) => ({
+            shipName: ship.shipTypeId, // In a real implementation, this would be mapped to ship names from ESI
+            count: ship.count,
+          }));
+
+          logger.info(`Found ${shipData.length} ship types for chart`);
         } catch (error) {
           logger.error(
             "Error in ship data retrieval, falling back to mock data",
@@ -179,9 +176,6 @@ export class ChartService {
           },
         ],
       };
-
-      // Cache the result
-      await this.cache.set(cacheKey, chartData, 60 * 60); // Cache for 1 hour
 
       return chartData;
     } catch (error) {

@@ -44,6 +44,18 @@ interface RedisQKillmail {
       ship_type_id: number;
       weapon_type_id: number;
     }>;
+    zkb?: {
+      locationID: number;
+      hash: string;
+      fittedValue: number;
+      droppedValue: number;
+      destroyedValue: number;
+      totalValue: number;
+      points: number;
+      npc: boolean;
+      solo: boolean;
+      awox: boolean;
+    };
   };
 }
 
@@ -381,32 +393,52 @@ async function processAsKill(killmail: RedisQKillmail) {
     try {
       await prisma.$transaction(async (tx) => {
         try {
-          // Determine if it's a solo kill - single attacker with a character_id
+          // Determine if it's a solo kill - single player attacker
           const playerAttackers = killmail.package.attackers.filter(
             (a) => a.character_id
           );
-          const isSolo =
-            playerAttackers.length === 1 && playerAttackers[0].character_id
-              ? true
-              : false;
+          const isSolo = playerAttackers.length === 1;
 
-          // Create the kill fact first
-          const kill = await (tx as any).killFact.create({
-            data: {
+          // Use upsert instead of create to handle duplicates
+          const kill = await (tx as any).killFact.upsert({
+            where: {
+              killmail_id: BigInt(killmail.killID),
+            },
+            update: {
+              kill_time: new Date(killmail.package.killmail_time),
+              system_id: killmail.package.solar_system_id,
+              total_value: BigInt(totalValue),
+              points: killmail.package.zkb?.points || 0,
+              character_id: BigInt(killmail.package.victim.character_id || 0),
+              npc: false,
+              solo: isSolo, // Set solo flag based on player attacker count
+              awox: false,
+              ship_type_id: killmail.package.victim.ship_type_id,
+              labels: [],
+            },
+            create: {
               killmail_id: BigInt(killmail.killID),
               kill_time: new Date(killmail.package.killmail_time),
               system_id: killmail.package.solar_system_id,
               total_value: BigInt(totalValue),
-              points: 0, // TODO: Calculate points
+              points: killmail.package.zkb?.points || 0,
               character_id: BigInt(killmail.package.victim.character_id || 0),
               npc: false,
-              solo: isSolo, // Set solo flag based on attacker count
+              solo: isSolo, // Set solo flag based on player attacker count
               awox: false,
               ship_type_id: killmail.package.victim.ship_type_id,
               labels: [],
             },
           });
-          logger.debug("Created kill fact", { kill });
+          logger.debug("Created/Updated kill fact", { kill });
+
+          // Delete existing attackers and victims before creating new ones
+          await (tx as any).killAttacker.deleteMany({
+            where: { killmail_id: BigInt(killmail.killID) },
+          });
+          await (tx as any).killVictim.deleteMany({
+            where: { killmail_id: BigInt(killmail.killID) },
+          });
 
           // Create victim
           if (victim.characterId) {

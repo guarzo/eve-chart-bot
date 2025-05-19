@@ -18,11 +18,20 @@ export class ListHandler extends BaseChartHandler {
     try {
       logger.info("Handling list subcommand");
 
-      // Dynamically get all available chart types from the registry
-      // Use the registry from the ChartsCommandHandler
-      const { ChartCommandRegistry } = await import("../registry");
-      const registry = new ChartCommandRegistry();
-      const subcommands = registry.getAvailableSubcommands();
+      // Define available subcommands directly to avoid circular dependency
+      const subcommands = [
+        "list",
+        "kills",
+        "map",
+        "loss",
+        "ratio",
+        "shipkill",
+        "shiploss",
+        "distribution",
+        "corps",
+        "heatmap",
+        "efficiency",
+      ];
 
       // Map subcommands to friendly names/descriptions
       const chartDescriptions: Record<string, { name: string; value: string }> =

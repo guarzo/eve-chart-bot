@@ -15,11 +15,9 @@ CREATE TABLE "characters" (
     "alliance_ticker" TEXT,
     "corporation_id" INTEGER NOT NULL,
     "corporation_ticker" TEXT NOT NULL,
-    "is_main" BOOLEAN NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
     "character_group_id" TEXT,
-    "main_character_id" TEXT,
     "last_backfill_at" TIMESTAMP(3),
 
     CONSTRAINT "characters_pkey" PRIMARY KEY ("eve_id")
@@ -47,9 +45,6 @@ CREATE UNIQUE INDEX "character_groups_main_character_id_key" ON "character_group
 
 -- AddForeignKey
 ALTER TABLE "characters" ADD CONSTRAINT "characters_character_group_id_fkey" FOREIGN KEY ("character_group_id") REFERENCES "character_groups"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "characters" ADD CONSTRAINT "characters_main_character_id_fkey" FOREIGN KEY ("main_character_id") REFERENCES "characters"("eve_id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "character_groups" ADD CONSTRAINT "character_groups_main_character_id_fkey" FOREIGN KEY ("main_character_id") REFERENCES "characters"("eve_id") ON DELETE SET NULL ON UPDATE CASCADE; 

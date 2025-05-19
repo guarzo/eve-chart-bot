@@ -1,18 +1,14 @@
 import { BaseRepository } from "./BaseRepository";
 import { MapActivity } from "@prisma/client";
 import { logger } from "../../lib/logger";
-import { CacheAdapter } from "../cache/CacheAdapter";
 import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for map activity data access
  */
 export class MapActivityRepository extends BaseRepository {
-  constructor(cache?: CacheAdapter) {
-    super("MapActivity", cache);
-
-    // Set cache TTL (3 minutes)
-    this.setCacheTTL(3 * 60 * 1000);
+  constructor() {
+    super("MapActivity");
 
     // Log the actual table name for debugging
     logger.info(
@@ -64,47 +60,33 @@ export class MapActivityRepository extends BaseRepository {
         `Found ${activities.length} map activities for character ${characterId}`
       );
       return activities;
-    }, `activity-${characterId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
-   * Get map activity for multiple characters within a date range
+   * Get map activity for all characters within a date range
    */
   async getActivityForCharacters(
     characterIds: string[],
     startDate: Date,
     endDate: Date
   ): Promise<MapActivity[]> {
-    logger.info(
-      `Getting map activity for ${
-        characterIds.length
-      } characters from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
-
-    return this.executeQuery(async () => {
-      // Using buildWhereFilter for consistent query building
-      const where = buildWhereFilter({
-        characterId: {
-          in: characterIds.map((id) => BigInt(id)),
-        },
-        timestamp: {
-          gte: startDate,
-          lte: endDate,
-        },
-      });
-
-      const activities = await this.prisma.mapActivity.findMany({
-        where,
+    return this.executeQuery(() =>
+      this.prisma.mapActivity.findMany({
+        where: buildWhereFilter({
+          characterId: {
+            in: characterIds.map((id) => BigInt(id)),
+          },
+          timestamp: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
         orderBy: {
           timestamp: "asc",
         },
-      });
-
-      logger.info(
-        `Found ${activities.length} total map activities for ${characterIds.length} characters`
-      );
-      return activities;
-    }, `activity-multiple-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}`);
+      })
+    );
   }
 
   /**
@@ -131,7 +113,7 @@ export class MapActivityRepository extends BaseRepository {
 
       // Get activity for all characters
       return this.getActivityForCharacters(characterIds, startDate, endDate);
-    }, `activity-group-${groupId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -179,7 +161,7 @@ export class MapActivityRepository extends BaseRepository {
         totalSignatures,
         averageSignaturesPerSystem,
       };
-    }, `activity-stats-${characterId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -272,7 +254,7 @@ export class MapActivityRepository extends BaseRepository {
         totalSignatures,
         averageSignaturesPerSystem,
       };
-    }, `group-activity-stats-${groupId}-${startDate.toISOString()}-${endDate.toISOString()}`);
+    });
   }
 
   /**
@@ -345,6 +327,6 @@ export class MapActivityRepository extends BaseRepository {
           systems: item.systems.size,
         }))
         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
-    }, `activity-grouped-${characterIds.join("-")}-${startDate.toISOString()}-${endDate.toISOString()}-${groupBy}`);
+    });
   }
 }

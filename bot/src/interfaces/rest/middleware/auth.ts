@@ -103,7 +103,14 @@ export async function requireMainCharacter(
     return res.status(401).json({ error: "Authentication required" });
   }
 
-  if (!req.character.isMain) {
+  // Check if this character is a main character in any group
+  const isMainCharacter = await prisma.characterGroup.findFirst({
+    where: {
+      mainCharacterId: req.character.eveId,
+    },
+  });
+
+  if (!isMainCharacter) {
     return res.status(403).json({ error: "Main character required" });
   }
 

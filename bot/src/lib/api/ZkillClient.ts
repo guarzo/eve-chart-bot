@@ -15,15 +15,18 @@ export class ZkillClient {
         "User-Agent": "EVE-Chart-Bot/1.0",
       },
     });
+    logger.info(`ZkillClient initialized with base URL: ${baseUrl}`);
   }
 
+  /**
+   * Pause between requests to respect rate limit
+   */
   private async rateLimit() {
     const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-    if (timeSinceLastRequest < this.rateLimitMs) {
-      await new Promise((resolve) =>
-        setTimeout(resolve, this.rateLimitMs - timeSinceLastRequest)
-      );
+    const elapsed = now - this.lastRequestTime;
+    if (elapsed < this.rateLimitMs) {
+      const delay = this.rateLimitMs - elapsed;
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
     this.lastRequestTime = Date.now();
   }
@@ -31,11 +34,14 @@ export class ZkillClient {
   async getKillmail(killId: number) {
     try {
       await this.rateLimit();
+      logger.info(`Fetching killmail ${killId} from zKillboard API...`);
+
       const response = await this.client.get(`/killID/${killId}/`);
 
       // The response is an array with a single item
       const kill = response.data[0];
       if (!kill) {
+        logger.warn(`No killmail found for ID ${killId}`);
         throw new Error(`No killmail found for ID ${killId}`);
       }
 
@@ -56,10 +62,12 @@ export class ZkillClient {
           killId,
           errorMessage: error?.message,
           errorStack: error?.stack,
+          status: error?.response?.status,
+          url: `/killID/${killId}/`,
         },
         "Failed to fetch killmail from zKillboard"
       );
-      throw error;
+      return null;
     }
   }
 
@@ -69,7 +77,9 @@ export class ZkillClient {
         `Fetching kills for character ${characterId}, page ${page} from zKillboard API...`
       );
       await this.rateLimit();
-      const url = `/characterID/${characterId}/page/${page}/`;
+
+      // Use the endpoint that we've found to work in diagnostics
+      const url = `/kills/characterID/${characterId}/page/${page}/`;
       logger.debug(`Making zKillboard request to: ${url}`);
 
       const response = await this.client.get(url);
@@ -93,13 +103,13 @@ export class ZkillClient {
           page,
           errorMessage: error?.message,
           errorStack: error?.stack,
-          url: `/characterID/${characterId}/page/${page}/`,
+          url: `/kills/characterID/${characterId}/page/${page}/`,
           statusCode: error?.response?.status,
           statusText: error?.response?.statusText,
         },
         "Failed to fetch character kills from zKillboard"
       );
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 
@@ -144,7 +154,7 @@ export class ZkillClient {
         },
         "Failed to fetch character losses from zKillboard"
       );
-      throw error;
+      return []; // Return empty array instead of throwing
     }
   }
 }
