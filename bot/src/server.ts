@@ -355,16 +355,12 @@ const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
 
     // Step 3: Backfill losses for all characters (but limit to 5 in dev mode)
     const characters = await app.locals.prisma.character.findMany();
-    logger.info(`Found ${characters.length} characters to backfill losses for`);
+    const totalCharacters = characters.length;
+    logger.info(`Found ${totalCharacters} characters to backfill losses for`);
 
-    // Process fewer characters in development to avoid overwhelming
-    const charactersToProcess =
-      process.env.NODE_ENV === "development"
-        ? characters.slice(0, 5) // Only process first 5 characters in dev
-        : characters;
-
+    // Process all characters
     logger.info(
-      `Will process ${charactersToProcess.length} characters for loss backfill`
+      `Will process all ${characters.length} characters for loss backfill`
     );
 
     // Begin the response to avoid timeout
@@ -375,11 +371,11 @@ const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
         losses: initialLossCount,
         kills: initialKillCount,
       },
-      charactersToProcess: charactersToProcess.length,
+      charactersToProcess: totalCharacters,
     });
 
     // Continue processing after sending response
-    processLossBackfill(charactersToProcess).catch((error) => {
+    processLossBackfill(characters).catch((error) => {
       logger.error(`Error in loss backfill processing: ${error}`);
     });
   } catch (error) {
@@ -643,23 +639,18 @@ async function backfillCharacters() {
     // Keep track of errors for reporting
     const backfillErrors = [];
 
-    // Process fewer characters in development to avoid overwhelming
-    const charactersToProcess =
-      process.env.NODE_ENV === "development"
-        ? characters.slice(0, 5) // Only process first 5 characters in dev
-        : characters;
-
+    // Process all characters
     logger.info(
-      `Will process ${charactersToProcess.length} characters for backfill`
+      `Will process all ${characters.length} characters for backfill`
     );
 
-    for (let i = 0; i < charactersToProcess.length; i++) {
-      const character = charactersToProcess[i];
+    for (let i = 0; i < characters.length; i++) {
+      const character = characters[i];
       logger.info(
         `Backfilling kills for character: ${character.name} (${
           character.eveId
-        }) - ${i + 1}/${charactersToProcess.length} (${Math.round(
-          ((i + 1) / charactersToProcess.length) * 100
+        }) - ${i + 1}/${characters.length} (${Math.round(
+          ((i + 1) / characters.length) * 100
         )}%)`
       );
 

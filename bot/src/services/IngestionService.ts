@@ -62,6 +62,58 @@ export class IngestionService {
     this.esiService = new ESIService();
   }
 
+  private async retryOperation<T>(
+    operation: () => Promise<T>,
+    operationName: string,
+    maxRetries = 3,
+    retryDelay = 5000,
+    timeout = 30000 // 30 second default timeout
+  ): Promise<T | undefined> {
+    let retryCount = 0;
+    while (retryCount < maxRetries) {
+      try {
+        logger.info(
+          `${operationName} (attempt ${retryCount + 1}/${maxRetries})`
+        );
+        // Create a promise that rejects after timeout
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(
+            () => reject(new Error(`Operation timed out after ${timeout}ms`)),
+            timeout
+          );
+        });
+
+        // Race the operation against the timeout
+        const result = await Promise.race([operation(), timeoutPromise]);
+        return result;
+      } catch (e: any) {
+        retryCount++;
+
+        // Format a simple human-readable error message
+        const status = e.response?.status;
+        const url = e.config?.url;
+        const errorMsg = e.message || "Unknown error";
+
+        if (retryCount >= maxRetries) {
+          logger.error(
+            `${operationName} failed after ${maxRetries} attempts: ${errorMsg}${
+              status ? ` (${status})` : ""
+            }${url ? ` - ${url}` : ""}`
+          );
+          return undefined;
+        }
+
+        logger.warn(
+          `${operationName} failed (attempt ${retryCount}/${maxRetries}): ${errorMsg}${
+            status ? ` (${status})` : ""
+          }${url ? ` - ${url}` : ""}. Retrying in ${retryDelay / 1000}s...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      }
+    }
+    return undefined;
+  }
+
   /**
    * Ingests a single killmail:
    * - Skips if already processed
@@ -77,7 +129,7 @@ export class IngestionService {
     error?: string;
   }> {
     try {
-      // 1) Skip if already in DB
+      // 1) Skip if already in DB - killmails are immutable
       const exists = await this.prisma.killFact.findUnique({
         where: { killmail_id: toBigInt(killId)! },
       });
@@ -86,17 +138,26 @@ export class IngestionService {
         return { success: false, existing: true, skipped: true };
       }
 
-      // 2) Fetch from zKillboard
-      const zk = await this.zkill.getKillmail(killId);
+      // 2) Fetch from zKillboard with retry (15s timeout for zKill)
+      const zk = await this.retryOperation(
+        () => this.zkill.getKillmail(killId),
+        `Fetching zKill data for killmail ${killId}`,
+        3, // maxRetries
+        5000, // retryDelay
+        15000 // timeout
+      );
       if (!zk) {
         logger.warn(`No zKill data for killmail ${killId}`);
         return { success: false, skipped: true };
       }
 
-      // 3) Fetch from ESI with caching
-      const esi = await this.esiService.getKillmail(
-        zk.killmail_id,
-        zk.zkb.hash
+      // 3) Fetch from ESI with caching and retry (30s timeout for ESI)
+      const esi = await this.retryOperation(
+        () => this.esiService.getKillmail(zk.killmail_id, zk.zkb.hash),
+        `Fetching ESI data for killmail ${killId}`,
+        3, // maxRetries
+        5000, // retryDelay
+        30000 // timeout
       );
       if (!esi?.victim) {
         logger.warn(`Invalid ESI data for killmail ${killId}`);
@@ -151,23 +212,8 @@ export class IngestionService {
           victim.character_id ??
           BigInt(0);
 
-        await tx.killFact.upsert({
-          where: {
-            killmail_id: BigInt(killId),
-          },
-          update: {
-            kill_time: new Date(esi.killmail_time),
-            system_id: esi.solar_system_id,
-            total_value: BigInt(Math.round(zk.zkb.totalValue)),
-            points: zk.zkb.points,
-            character_id: mainChar,
-            npc: false,
-            solo: attackers.length === 1,
-            awox: false,
-            ship_type_id: esi.victim.ship_type_id,
-            labels: zk.zkb.labels ?? [],
-          },
-          create: {
+        await tx.killFact.create({
+          data: {
             killmail_id: BigInt(killId),
             kill_time: new Date(esi.killmail_time),
             system_id: esi.solar_system_id,
@@ -195,31 +241,6 @@ export class IngestionService {
             })
           )
         );
-
-        // IMPORTANT: Commented out loss creation to avoid double-counting
-        // Losses should be handled exclusively through the backfillLosses method
-        /*
-        // d) LossFact if victim tracked
-        if (
-          victim.character_id != null &&
-          trackedSet.has(victim.character_id.toString())
-        ) {
-          await tx.lossFact.upsert({
-            where: { killmail_id: BigInt(killId) },
-            update: {},
-            create: {
-              killmail_id: BigInt(killId),
-              character_id: victim.character_id,
-              kill_time: new Date(esi.killmail_time),
-              ship_type_id: victim.ship_type_id,
-              system_id: esi.solar_system_id,
-              total_value: BigInt(Math.round(zk.zkb.totalValue)),
-              attacker_count: attackers.length,
-              labels: zk.zkb.labels ?? [],
-            },
-          });
-        }
-        */
       });
 
       const timestamp = esi.killmail_time;
@@ -546,23 +567,36 @@ export class IngestionService {
 
       if (!group) {
         logger.info(`Creating new character group with slug ${grpSlug}`);
-        const newGroup = await this.prisma.characterGroup.create({
-          data: {
-            slug: grpSlug,
-            mainCharacterId: mainId,
-          },
-          include: {
-            characters: true,
-          },
-        });
-        group = newGroup;
-        groupsCreated++;
+        try {
+          const newGroup = await this.prisma.characterGroup.upsert({
+            where: { slug: grpSlug },
+            update: {
+              mainCharacterId: mainId,
+            },
+            create: {
+              slug: grpSlug,
+              mainCharacterId: mainId,
+            },
+            include: {
+              characters: true,
+            },
+          });
+          group = newGroup;
+          groupsCreated++;
 
-        // Log if this is a group without a main character
-        if (!mainId) {
-          logger.warn(
-            `Group ${grpSlug} created without main character. First character: ${chars[0].name} (${chars[0].eve_id})`
+          // Log if this is a group without a main character
+          if (!mainId) {
+            logger.warn(
+              `Group ${grpSlug} created without main character. First character: ${chars[0].name} (${chars[0].eve_id})`
+            );
+          }
+        } catch (e: any) {
+          logger.error(
+            { error: e.message || e },
+            `Failed to create/update group with slug ${grpSlug}`
           );
+          // Skip this group and continue with the next one
+          continue;
         }
       } else {
         // Update existing group if needed
@@ -660,18 +694,29 @@ export class IngestionService {
     );
   }
 
-  /**
-   * Backfills kills page-by-page for a character.
-   */
-  public async backfillKills(
+  /** Safely parse a date string, returning null if invalid */
+  private safeParseDate(dateStr: string | undefined | null): Date | null {
+    if (!dateStr) return null;
+    try {
+      const date = new Date(dateStr);
+      return isNaN(date.getTime()) ? null : date;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  private async backfillRecords(
     characterId: number,
+    type: "kills" | "losses",
     maxAgeInDays = 30
   ): Promise<void> {
     const char = await this.prisma.character.findUnique({
       where: { eveId: characterId.toString() },
     });
     if (!char) {
-      logger.warn(`Character ${characterId} not in DB, skipping backfill.`);
+      logger.warn(
+        `Character ${characterId} not in DB, skipping ${type} backfill.`
+      );
       return;
     }
 
@@ -691,37 +736,44 @@ export class IngestionService {
     cutoff.setDate(cutoff.getDate() - maxAgeInDays);
 
     logger.info(
-      `Backfilling kills for ${
+      `Backfilling ${type} for ${
         char.name
       } (${characterId}) since ${cutoff.toISOString()}`
     );
 
-    // Get current kill count for this character
-    const currentKillCount = await this.prisma.killFact.count({
-      where: {
-        OR: [
-          { character_id: BigInt(characterId) },
-          {
-            attackers: {
-              some: {
-                character_id: BigInt(characterId),
-              },
+    // Get current count for this character
+    const currentCount =
+      type === "kills"
+        ? await this.prisma.killFact.count({
+            where: {
+              OR: [
+                { character_id: BigInt(characterId) },
+                {
+                  attackers: {
+                    some: {
+                      character_id: BigInt(characterId),
+                    },
+                  },
+                },
+              ],
             },
-          },
-        ],
-      },
-    });
+          })
+        : await this.prisma.lossFact.count({
+            where: {
+              character_id: BigInt(characterId),
+            },
+          });
 
     logger.info(
-      `Character ${char.name} has ${currentKillCount} kills in database before backfill`
+      `Character ${char.name} has ${currentCount} ${type} in database before backfill`
     );
 
     // Get or create checkpoint
     const checkpoint = await this.prisma.ingestionCheckpoint.upsert({
-      where: { streamName: `kills:${characterId}` },
+      where: { streamName: `${type}:${characterId}` },
       update: {},
       create: {
-        streamName: `kills:${characterId}`,
+        streamName: `${type}:${characterId}`,
         lastSeenId: BigInt(0),
         lastSeenTime: new Date(),
       },
@@ -733,18 +785,39 @@ export class IngestionService {
     let skippedCount = 0;
     let tooOldCount = 0;
     let consecutiveEmptyPages = 0;
-    const MAX_CONSECUTIVE_EMPTY = 3;
+    let totalPagesProcessed = 0;
+    const MAX_CONSECUTIVE_EMPTY = 5; // Increased from 3 to 5
+    const MAX_PAGES = 20; // Increased from 5 to 20
+    const MAX_RECORDS = 500; // Increased from 100 to 500
+
+    // Track the oldest record we've seen to ensure we're not missing anything
+    let oldestRecordTime: Date | null = null;
+    let newestRecordTime: Date | null = null;
 
     while (hasMore) {
       try {
-        logger.info(`Fetching kills for ${char.name}, page ${page}`);
-        const kills = await this.zkill.getCharacterKills(characterId, page);
+        logger.info(`Fetching ${type} for ${char.name}, page ${page}`);
 
-        if (!kills.length) {
+        // Fetch records based on type
+        const records = await this.retryOperation(
+          () =>
+            type === "kills"
+              ? this.zkill.getCharacterKills(characterId, page)
+              : this.zkill.getCharacterLosses(characterId, page),
+          `Fetching ${type} for character ${characterId} at page ${page}`,
+          3, // maxRetries
+          5000, // retryDelay
+          type === "kills" ? 15000 : 20000 // timeout
+        );
+
+        if (!records.length) {
           consecutiveEmptyPages++;
+          logger.info(
+            `Empty page ${page} received (consecutive: ${consecutiveEmptyPages}/${MAX_CONSECUTIVE_EMPTY})`
+          );
           if (consecutiveEmptyPages >= MAX_CONSECUTIVE_EMPTY) {
             logger.info(
-              `No kills found for ${char.name} after ${consecutiveEmptyPages} empty pages, stopping`
+              `No ${type} found for ${char.name} after ${consecutiveEmptyPages} empty pages, stopping`
             );
             hasMore = false;
             break;
@@ -753,79 +826,164 @@ export class IngestionService {
           continue;
         }
         consecutiveEmptyPages = 0;
+        totalPagesProcessed++;
 
-        logger.info(`Processing ${kills.length} kills for ${char.name}`);
+        // Update time range tracking
+        const pageTimes = records
+          .map((r: { killmail_time: string }) =>
+            this.safeParseDate(r.killmail_time)
+          )
+          .filter((d: Date | null): d is Date => d !== null);
+
+        if (pageTimes.length === 0) {
+          logger.warn(
+            `No valid timestamps found in page ${page}, skipping time range calculation`
+          );
+          continue;
+        }
+
+        const pageOldest = new Date(
+          Math.min(...pageTimes.map((d: Date) => d.getTime()))
+        );
+        const pageNewest = new Date(
+          Math.max(...pageTimes.map((d: Date) => d.getTime()))
+        );
+
+        if (!oldestRecordTime || pageOldest < oldestRecordTime) {
+          oldestRecordTime = pageOldest;
+        }
+        if (!newestRecordTime || pageNewest > newestRecordTime) {
+          newestRecordTime = pageNewest;
+        }
+
+        logger.info(
+          `Processing ${records.length} ${type} for ${char.name} (page ${page}) - ` +
+            `Time range: ${pageOldest.toISOString()} to ${pageNewest.toISOString()}`
+        );
 
         let foundTooOld = false;
         let lastProcessedId = checkpoint.lastSeenId;
+        let pageProcessedCount = 0;
+        let pageSkippedCount = 0;
 
-        // Process each kill
-        for (const kill of kills) {
+        // Process each record
+        for (const record of records) {
           try {
-            const killTime = new Date(kill.killmail_time);
-            const killId = BigInt(kill.killmail_id);
+            const recordTime = this.safeParseDate(record.killmail_time);
+            if (!recordTime) {
+              logger.warn(
+                `Invalid timestamp for ${type} ${record.killmail_id}, skipping`
+              );
+              pageSkippedCount++;
+              skippedCount++;
+              continue;
+            }
 
-            // Skip if we've already processed this kill
-            if (killId <= checkpoint.lastSeenId) {
+            const recordId = BigInt(record.killmail_id);
+
+            // Skip if we've already processed this record
+            if (recordId <= checkpoint.lastSeenId) {
+              pageSkippedCount++;
               skippedCount++;
               continue;
             }
 
             // Skip if it's too old
-            if (killTime < cutoff) {
+            if (recordTime < cutoff) {
               tooOldCount++;
               foundTooOld = true;
               continue;
             }
 
-            // Ingest the kill
-            const result = await this.ingestKillmail(kill.killmail_id);
-            if (result.success) {
-              successfulIngestCount++;
-              lastProcessedId = killId;
+            // Process based on type
+            if (type === "kills") {
+              const result = await this.ingestKillmail(record.killmail_id);
+              if (result.success) {
+                successfulIngestCount++;
+                pageProcessedCount++;
+                lastProcessedId = recordId;
+              } else {
+                pageSkippedCount++;
+                skippedCount++;
+              }
             } else {
-              skippedCount++;
+              // Check if loss already exists
+              const existing = await this.prisma.lossFact.findUnique({
+                where: { killmail_id: recordId },
+              });
+              if (existing) {
+                logger.debug(`Skipping loss ${recordId}, already processed`);
+                pageSkippedCount++;
+                skippedCount++;
+                continue;
+              }
+
+              // Create the loss record
+              await this.prisma.lossFact.create({
+                data: {
+                  killmail_id: recordId,
+                  character_id: BigInt(characterId),
+                  kill_time: recordTime,
+                  ship_type_id: record.victim?.ship_type_id ?? 0,
+                  system_id: record.solar_system_id ?? 0,
+                  total_value: BigInt(Math.round(record.zkb?.totalValue ?? 0)),
+                  attacker_count: record.attackers?.length ?? 0,
+                  labels: record.zkb?.labels ?? [],
+                },
+              });
+
+              successfulIngestCount++;
+              pageProcessedCount++;
+              lastProcessedId = recordId;
             }
           } catch (error) {
             logger.error(
-              `Error processing kill ${kill.killmail_id} for ${char.name}:`,
+              `Error processing ${type} ${record.killmail_id} for ${char.name}:`,
               error
             );
+            skippedCount++;
           }
         }
+
+        logger.info(
+          `Page ${page} complete - Processed: ${pageProcessedCount}, Skipped: ${pageSkippedCount}, ` +
+            `Total processed: ${successfulIngestCount}, Total skipped: ${skippedCount}`
+        );
 
         // Update checkpoint with the last processed ID
         if (lastProcessedId > checkpoint.lastSeenId) {
           await this.prisma.ingestionCheckpoint.update({
-            where: { streamName: `kills:${characterId}` },
+            where: { streamName: `${type}:${characterId}` },
             data: {
               lastSeenId: lastProcessedId,
               lastSeenTime: new Date(),
             },
           });
+          logger.info(`Updated checkpoint to ID ${lastProcessedId}`);
         }
 
-        // If we found a kill that's too old, stop after this page
+        // If we found a record that's too old, stop after this page
         if (foundTooOld) {
-          logger.info(`Found kills older than cutoff date, stopping backfill`);
+          logger.info(
+            `Found ${type} older than cutoff date (${cutoff.toISOString()}), stopping backfill`
+          );
           hasMore = false;
         } else {
           // Move to next page
           page++;
         }
 
-        // If we've reached page 5 or processed more than 100 kills, stop to avoid overloading
-        if (page > 5 || successfulIngestCount > 100) {
+        // If we've reached max pages or records, stop to avoid overloading
+        if (page > MAX_PAGES || successfulIngestCount > MAX_RECORDS) {
           logger.info(
-            `Stopping backfill for ${char.name} after ${
-              page - 1
-            } pages (${successfulIngestCount} new kills)`
+            `Stopping backfill for ${char.name} after ${totalPagesProcessed} pages ` +
+              `(${successfulIngestCount} new ${type}, max ${MAX_RECORDS} records)`
           );
           hasMore = false;
         }
       } catch (error) {
         logger.error(
-          `Error fetching kills for ${char.name} at page ${page}:`,
+          `Error fetching ${type} for ${char.name} at page ${page}:`,
           error
         );
         hasMore = false;
@@ -838,224 +996,61 @@ export class IngestionService {
       data: { lastBackfillAt: new Date() },
     });
 
-    // Get the new kill count
-    const newKillCount = await this.prisma.killFact.count({
-      where: {
-        OR: [
-          { character_id: BigInt(characterId) },
-          {
-            attackers: {
-              some: {
-                character_id: BigInt(characterId),
-              },
+    // Get the new count
+    const newCount =
+      type === "kills"
+        ? await this.prisma.killFact.count({
+            where: {
+              OR: [
+                { character_id: BigInt(characterId) },
+                {
+                  attackers: {
+                    some: {
+                      character_id: BigInt(characterId),
+                    },
+                  },
+                },
+              ],
             },
-          },
-        ],
-      },
-    });
+          })
+        : await this.prisma.lossFact.count({
+            where: {
+              character_id: BigInt(characterId),
+            },
+          });
 
+    // Log detailed summary
     logger.info(
-      `Backfill for ${char.name} complete: ${successfulIngestCount} new kills ingested, ${skippedCount} skipped, ${tooOldCount} too old`
-    );
-    logger.info(
-      `Character ${char.name} now has ${newKillCount} kills in database (${
-        newKillCount - currentKillCount
-      } new)`
+      `Backfill for ${char.name} complete:\n` +
+        `- Total pages processed: ${totalPagesProcessed}\n` +
+        `- New ${type} ingested: ${successfulIngestCount}\n` +
+        `- Skipped: ${skippedCount}\n` +
+        `- Too old: ${tooOldCount}\n` +
+        `- Time range: ${oldestRecordTime?.toISOString() ?? "N/A"} to ${
+          newestRecordTime?.toISOString() ?? "N/A"
+        }\n` +
+        `- Database count: ${newCount} (${newCount - currentCount} new)`
     );
   }
 
   /**
+   * Backfills kills page-by-page for a character.
+   */
+  public async backfillKills(
+    characterId: number,
+    maxAgeInDays = 30
+  ): Promise<void> {
+    await this.backfillRecords(characterId, "kills", maxAgeInDays);
+  }
+
+  /**
    * Backfills losses via zKillboard API + Prisma upserts.
-   * Now using pagination to be consistent with backfillKills.
    */
   public async backfillLosses(
     characterId: number,
     maxAgeDays = 30
   ): Promise<void> {
-    try {
-      const char = await this.prisma.character.findUnique({
-        where: { eveId: characterId.toString() },
-      });
-      if (!char) {
-        logger.warn(
-          `Character ${characterId} not in DB, skipping loss backfill.`
-        );
-        return;
-      }
-
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - maxAgeDays);
-
-      logger.info(
-        `Backfilling losses for ${characterId} since ${cutoff.toISOString()}`
-      );
-
-      // Get current loss count for this character
-      const currentLossCount = await this.prisma.lossFact.count({
-        where: {
-          character_id: BigInt(characterId),
-        },
-      });
-
-      logger.info(
-        `Character ${characterId} has ${currentLossCount} losses in database before backfill`
-      );
-
-      // Get or create checkpoint
-      const checkpoint = await this.prisma.ingestionCheckpoint.upsert({
-        where: { streamName: `losses:${characterId}` },
-        update: {},
-        create: {
-          streamName: `losses:${characterId}`,
-          lastSeenId: BigInt(0),
-          lastSeenTime: new Date(),
-        },
-      });
-
-      let page = 1;
-      let hasMore = true;
-      let successfulIngestCount = 0;
-      let skippedCount = 0;
-      let tooOldCount = 0;
-      let consecutiveEmptyPages = 0;
-      const MAX_CONSECUTIVE_EMPTY = 3;
-
-      while (hasMore) {
-        let losses: any[];
-        try {
-          logger.info(
-            `Fetching loss page ${page} for character ${characterId}`
-          );
-          losses = await this.zkill.getCharacterLosses(characterId, page);
-          logger.info(`Received ${losses.length} losses from page ${page}`);
-        } catch (e: any) {
-          logger.error(
-            `Failed to fetch losses page ${page}: ${e.message || e}`
-          );
-          break;
-        }
-
-        if (losses.length === 0) {
-          consecutiveEmptyPages++;
-          if (consecutiveEmptyPages >= MAX_CONSECUTIVE_EMPTY) {
-            logger.info(
-              `No losses found after ${consecutiveEmptyPages} empty pages, stopping`
-            );
-            break;
-          }
-          page++;
-          continue;
-        }
-        consecutiveEmptyPages = 0;
-
-        let foundTooOld = false;
-        let lastProcessedId = checkpoint.lastSeenId;
-
-        for (const loss of losses) {
-          const id = loss.killmail_id;
-          if (id == null) {
-            logger.warn(
-              `Loss without ID found, skipping: ${JSON.stringify(
-                loss
-              ).substring(0, 100)}...`
-            );
-            skippedCount++;
-            continue;
-          }
-
-          try {
-            const killId = BigInt(id);
-
-            // Skip if we've already processed this loss
-            if (killId <= checkpoint.lastSeenId) {
-              skippedCount++;
-              continue;
-            }
-
-            // Check age cutoff, but only after page 1
-            if (page > 1 && loss.killmail_time) {
-              const killDate = new Date(loss.killmail_time);
-              if (killDate < cutoff) {
-                logger.info(
-                  `Loss ${id} from ${killDate.toISOString()} is older than cutoff (${cutoff.toISOString()}), will stop after this page`
-                );
-                tooOldCount++;
-                foundTooOld = true;
-                // Don't break immediately, continue processing this page
-              }
-            }
-
-            // Create the loss record
-            await this.prisma.lossFact.create({
-              data: {
-                killmail_id: killId,
-                character_id: BigInt(characterId),
-                kill_time: loss.killmail_time
-                  ? new Date(loss.killmail_time)
-                  : new Date(),
-                ship_type_id: loss.victim?.ship_type_id ?? 0,
-                system_id: loss.solar_system_id ?? 0,
-                total_value: BigInt(Math.round(loss.zkb?.totalValue ?? 0)),
-                attacker_count: loss.attackers?.length ?? 0,
-                labels: loss.zkb?.labels ?? [],
-              },
-            });
-
-            successfulIngestCount++;
-            lastProcessedId = killId;
-            logger.debug(`Loss ${id} was successfully ingested`);
-          } catch (error) {
-            logger.error(`Error ingesting loss ${id}: ${error}`);
-            skippedCount++;
-          }
-        }
-
-        // Update checkpoint with the last processed ID
-        if (lastProcessedId > checkpoint.lastSeenId) {
-          await this.prisma.ingestionCheckpoint.update({
-            where: { streamName: `losses:${characterId}` },
-            data: {
-              lastSeenId: lastProcessedId,
-              lastSeenTime: new Date(),
-            },
-          });
-        }
-
-        // If we found a loss that's too old, stop after this page
-        if (foundTooOld) {
-          hasMore = false;
-        } else if (hasMore) {
-          page++;
-          await new Promise((r) => setTimeout(r, this.cfg.backoffMs));
-        }
-      }
-
-      await this.prisma.character.update({
-        where: { eveId: characterId.toString() },
-        data: { lastBackfillAt: new Date() },
-      });
-
-      // Get final loss count
-      const finalLossCount = await this.prisma.lossFact.count({
-        where: {
-          character_id: BigInt(characterId),
-        },
-      });
-
-      const newLossesAdded = finalLossCount - currentLossCount;
-
-      logger.info(
-        `Completed backfillLosses for ${characterId}: ` +
-          `Added ${newLossesAdded} new losses, ` +
-          `Successful: ${successfulIngestCount}, ` +
-          `Skipped: ${skippedCount}, ` +
-          `Too old: ${tooOldCount}, ` +
-          `Initial count: ${currentLossCount}, ` +
-          `Final count: ${finalLossCount}`
-      );
-    } catch (e: any) {
-      logger.error(`backfillLosses failed: ${e.message || e}`);
-    }
+    await this.backfillRecords(characterId, "losses", maxAgeDays);
   }
 
   /** Cleanly close cache & Prisma */

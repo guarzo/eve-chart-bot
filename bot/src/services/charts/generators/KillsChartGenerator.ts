@@ -174,16 +174,23 @@ export class KillsChartGenerator extends BaseChartGenerator {
         );
         if (playerAttackers.length === 0) continue;
 
-        // Check if all player attackers are from this group
+        // Count as solo if either:
+        // 1. It's a true solo kill (only one player attacker)
+        // 2. All player attackers are from this group
+        const isTrueSolo = playerAttackers.length === 1;
         const allFromGroup = playerAttackers.every((attacker: Attacker) => {
           if (!attacker.character_id) return false;
           return groupCharacterIds.includes(BigInt(attacker.character_id));
         });
 
-        if (allFromGroup) {
+        if (isTrueSolo || allFromGroup) {
           soloKills++;
           logger.info(
-            `Found group solo kill for group ${groupName}: Kill ID ${kill.killmail_id} - ${playerAttackers.length} player attackers, all from same group`
+            `Found ${
+              isTrueSolo ? "true" : "group"
+            } solo kill for group ${groupName}: Kill ID ${kill.killmail_id} - ${
+              playerAttackers.length
+            } player attackers`
           );
         }
       }
