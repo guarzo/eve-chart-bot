@@ -1,7 +1,6 @@
 -- CreateTable
 CREATE TABLE "KillFact" (
     "killmail_id" BIGINT NOT NULL,
-    "character_id" BIGINT NOT NULL,
     "kill_time" TIMESTAMP(3) NOT NULL,
     "npc" BOOLEAN NOT NULL,
     "solo" BOOLEAN NOT NULL,
@@ -60,8 +59,17 @@ CREATE TABLE "KillVictim" (
     CONSTRAINT "KillVictim_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "KillCharacter" (
+    "killmail_id" BIGINT NOT NULL,
+    "character_id" TEXT NOT NULL,
+    "role" TEXT NOT NULL,
+
+    CONSTRAINT "KillCharacter_pkey" PRIMARY KEY ("killmail_id", "character_id")
+);
+
 -- CreateIndex
-CREATE INDEX "KillFact_character_id_kill_time_idx" ON "KillFact"("character_id", "kill_time");
+CREATE INDEX "KillFact_kill_time_idx" ON "KillFact"("kill_time");
 
 -- CreateIndex
 CREATE INDEX "LossFact_character_id_kill_time_idx" ON "LossFact"("character_id", "kill_time");
@@ -78,8 +86,17 @@ CREATE INDEX "KillVictim_killmail_id_idx" ON "KillVictim"("killmail_id");
 -- CreateIndex
 CREATE INDEX "KillVictim_character_id_idx" ON "KillVictim"("character_id");
 
+-- CreateIndex
+CREATE INDEX "KillCharacter_character_id_idx" ON "KillCharacter"("character_id");
+
 -- AddForeignKey
 ALTER TABLE "KillAttacker" ADD CONSTRAINT "KillAttacker_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "KillVictim" ADD CONSTRAINT "KillVictim_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE; 
+ALTER TABLE "KillVictim" ADD CONSTRAINT "KillVictim_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KillCharacter" ADD CONSTRAINT "KillCharacter_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "KillCharacter" ADD CONSTRAINT "KillCharacter_character_id_fkey" FOREIGN KEY ("character_id") REFERENCES "characters"("eve_id") ON DELETE CASCADE ON UPDATE CASCADE; 

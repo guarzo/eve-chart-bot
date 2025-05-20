@@ -318,7 +318,7 @@ export class MapActivityRepository extends BaseRepository {
    * Create or update a map activity record
    */
   async upsertMapActivity(
-    characterId: bigint,
+    characterId: string,
     timestamp: Date,
     signatures: number,
     connections: number,

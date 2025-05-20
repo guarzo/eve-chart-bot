@@ -2,116 +2,122 @@ import { Command } from "commander";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../../lib/logger";
 
+const prisma = new PrismaClient();
+
 export function registerKillmailCommands(program: Command) {
-  const killmailProgram = program
+  const killProgram = program
     .command("killmail")
-    .description("Killmail management commands");
+    .description("Manage killmails");
 
   // List killmails command
-  killmailProgram
+  killProgram
     .command("list")
-    .description("List recent killmails")
+    .description("List all killmails")
     .option("-c, --character <id>", "Filter by character ID")
-    .option("-g, --group <name>", "Filter by group name")
-    .option("-l, --limit <number>", "Limit number of results", "10")
+    .option("-s, --system <id>", "Filter by system ID")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
-
         const where = {
           ...(options.character && {
             characters: {
               some: {
-                id: parseInt(options.character),
+                characterId: options.character,
               },
             },
           }),
-          ...(options.group && {
-            characters: {
-              some: {
-                groups: {
-                  some: {
-                    name: options.group,
-                  },
-                },
-              },
-            },
+          ...(options.system && {
+            systemId: parseInt(options.system),
           }),
         };
 
-        const killmails = await prisma.killmail.findMany({
+        const killmails = await prisma.killFact.findMany({
           where,
           include: {
             characters: {
               include: {
-                groups: true,
+                character: true,
               },
             },
+            victims: true,
+            attackers: true,
           },
-          orderBy: {
-            killTime: "desc",
-          },
-          take: parseInt(options.limit),
         });
 
-        if (killmails.length === 0) {
-          logger.info("No killmails found");
-          return;
-        }
-
-        logger.info("Recent killmails:");
-        killmails.forEach((kill) => {
-          logger.info(`- Killmail ${kill.id} (${kill.killTime})`);
+        logger.info(`Found ${killmails.length} killmails:`);
+        for (const kill of killmails) {
+          logger.info(`- Killmail ID: ${kill.killmail_id}`);
+          logger.info(`  Time: ${kill.kill_time}`);
+          logger.info(`  System: ${kill.system_id}`);
           logger.info(
-            `  Characters: ${kill.characters.map((c) => c.name).join(", ")}`
+            `  Characters: ${kill.characters
+              .map((c) => c.character.name)
+              .join(", ")}`
           );
-        });
-
-        await prisma.$disconnect();
+        }
       } catch (error) {
         logger.error("Error listing killmails:", error);
         process.exit(1);
+      } finally {
+        await prisma.$disconnect();
       }
     });
 
-  // Check killmail ingestion command
-  killmailProgram
-    .command("check-ingestion")
-    .description("Check killmail ingestion status")
-    .option("-d, --days <number>", "Number of days to check", "7")
-    .action(async (options) => {
+  // Get killmail command
+  killProgram
+    .command("get <id>")
+    .description("Get killmail details")
+    .action(async (id) => {
       try {
-        const prisma = new PrismaClient();
-        const days = parseInt(options.days);
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - days);
-
-        logger.info(`Checking killmail ingestion for the last ${days} days...`);
-
-        const killmails = await prisma.killmail.findMany({
-          where: {
-            killTime: {
-              gte: startDate,
+        const killmail = await prisma.killFact.findUnique({
+          where: { killmail_id: BigInt(id) },
+          include: {
+            characters: {
+              include: {
+                character: true,
+              },
             },
-          },
-          orderBy: {
-            killTime: "desc",
+            victims: true,
+            attackers: true,
           },
         });
 
-        const totalKills = killmails.length;
-        const uniqueCharacters = new Set(
-          killmails.flatMap((k) => k.characters.map((c) => c.id))
-        ).size;
+        if (!killmail) {
+          logger.error(`Killmail with ID ${id} not found`);
+          process.exit(1);
+        }
 
-        logger.info(`Total killmails: ${totalKills}`);
-        logger.info(`Unique characters involved: ${uniqueCharacters}`);
-        logger.info(`Average kills per day: ${(totalKills / days).toFixed(1)}`);
+        logger.info("Killmail details:");
+        logger.info(`- ID: ${killmail.killmail_id}`);
+        logger.info(`- Time: ${killmail.kill_time}`);
+        logger.info(`- System: ${killmail.system_id}`);
+        logger.info(`- Value: ${killmail.total_value}`);
+        logger.info(`- Points: ${killmail.points}`);
+        logger.info(`- NPC: ${killmail.npc}`);
+        logger.info(`- Solo: ${killmail.solo}`);
+        logger.info(`- AWOX: ${killmail.awox}`);
 
-        await prisma.$disconnect();
+        logger.info("\nCharacters involved:");
+        for (const char of killmail.characters) {
+          logger.info(`- ${char.character.name} (${char.role})`);
+        }
+
+        logger.info("\nVictim:");
+        for (const victim of killmail.victims) {
+          logger.info(`- Ship: ${victim.ship_type_id}`);
+          logger.info(`  Damage taken: ${victim.damage_taken}`);
+        }
+
+        logger.info("\nAttackers:");
+        for (const attacker of killmail.attackers) {
+          logger.info(`- Ship: ${attacker.ship_type_id}`);
+          logger.info(`  Damage done: ${attacker.damage_done}`);
+          logger.info(`  Final blow: ${attacker.final_blow}`);
+        }
       } catch (error) {
-        logger.error("Error checking killmail ingestion:", error);
+        logger.error("Error getting killmail:", error);
         process.exit(1);
+      } finally {
+        await prisma.$disconnect();
       }
     });
 }

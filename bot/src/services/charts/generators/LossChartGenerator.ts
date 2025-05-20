@@ -83,7 +83,10 @@ export class LossChartGenerator extends BaseChartGenerator {
     for (const loss of losses) {
       if (!seenKillmails.has(loss.killmail_id)) {
         seenKillmails.add(loss.killmail_id);
-        dedupedLosses.push(loss);
+        dedupedLosses.push({
+          ...loss,
+          character_id: BigInt(loss.character_id),
+        });
       } else {
         duplicateCount++;
       }

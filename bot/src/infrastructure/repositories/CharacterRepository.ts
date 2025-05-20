@@ -43,30 +43,47 @@ export class CharacterRepository extends BaseRepository {
    * Create or update a character
    */
   async saveCharacter(character: Character): Promise<Character> {
-    const data = character.toJSON();
-    const saved = await this.prisma.character.upsert({
-      where: { eveId: character.eveId },
-      update: {
-        name: data.name,
-        allianceId: data.allianceId,
-        allianceTicker: data.allianceTicker,
-        corporationId: data.corporationId,
-        corporationTicker: data.corporationTicker,
-        characterGroupId: data.characterGroupId,
-        lastBackfillAt: data.lastBackfillAt,
-      },
-      create: {
-        eveId: data.eveId,
-        name: data.name,
-        allianceId: data.allianceId,
-        allianceTicker: data.allianceTicker,
-        corporationId: data.corporationId,
-        corporationTicker: data.corporationTicker,
-        characterGroupId: data.characterGroupId,
-        lastBackfillAt: data.lastBackfillAt,
-      },
+    return this.executeQuery(async () => {
+      const createData = {
+        eveId: character.eveId,
+        name: character.name,
+        corporationId: character.corporationId,
+        corporationTicker: character.corporationTicker,
+        ...(character.allianceId && { allianceId: character.allianceId }),
+        ...(character.allianceTicker && {
+          allianceTicker: character.allianceTicker,
+        }),
+        ...(character.characterGroupId && {
+          characterGroupId: character.characterGroupId,
+        }),
+        ...(character.lastBackfillAt && {
+          lastBackfillAt: character.lastBackfillAt,
+        }),
+      };
+
+      const saved = await this.prisma.character.upsert({
+        where: {
+          eveId: character.eveId,
+        },
+        create: createData,
+        update: {
+          name: character.name,
+          corporationId: character.corporationId,
+          corporationTicker: character.corporationTicker,
+          ...(character.allianceId && { allianceId: character.allianceId }),
+          ...(character.allianceTicker && {
+            allianceTicker: character.allianceTicker,
+          }),
+          ...(character.characterGroupId && {
+            characterGroupId: character.characterGroupId,
+          }),
+          ...(character.lastBackfillAt && {
+            lastBackfillAt: character.lastBackfillAt,
+          }),
+        },
+      });
+      return PrismaMapper.map(saved, Character);
     });
-    return PrismaMapper.map(saved, Character);
   }
 
   /**
@@ -160,10 +177,17 @@ export class CharacterRepository extends BaseRepository {
    * Get characters by their EVE IDs
    */
   async getCharactersByEveIds(eveIds: string[]): Promise<Character[]> {
-    const characters = await this.prisma.character.findMany({
-      where: { eveId: { in: eveIds } },
+    return this.executeQuery(async () => {
+      const characters = await this.prisma.character.findMany({
+        where: {
+          eveId: {
+            in: eveIds.map((id) => id.toString()),
+          },
+        },
+      });
+
+      return PrismaMapper.mapArray(characters, Character);
     });
-    return characters.map((char: any) => PrismaMapper.map(char, Character));
   }
 
   /**
@@ -214,7 +238,7 @@ export class CharacterRepository extends BaseRepository {
     await this.prisma.mapActivity.upsert({
       where: {
         characterId_timestamp: {
-          characterId,
+          characterId: characterId.toString(),
           timestamp,
         },
       },
@@ -226,7 +250,7 @@ export class CharacterRepository extends BaseRepository {
         corporationId,
       },
       create: {
-        characterId,
+        characterId: characterId.toString(),
         timestamp,
         signatures,
         connections,
@@ -268,7 +292,7 @@ export class CharacterRepository extends BaseRepository {
     lastSeenId: bigint
   ): Promise<void> {
     await this.prisma.ingestionCheckpoint.update({
-      where: { streamName: `${type}:${characterId}` },
+      where: { streamName: `${type}:${characterId.toString()}` },
       data: {
         lastSeenId,
         lastSeenTime: new Date(),
@@ -316,5 +340,21 @@ export class CharacterRepository extends BaseRepository {
 
   public async count(): Promise<number> {
     return this.prisma.character.count();
+  }
+
+  async getCharacterByEveId(eveId: string): Promise<Character | null> {
+    return this.executeQuery(async () => {
+      const character = await this.prisma.character.findUnique({
+        where: {
+          eveId: eveId.toString(),
+        },
+      });
+
+      if (!character) {
+        return null;
+      }
+
+      return PrismaMapper.map(character, Character);
+    });
   }
 }

@@ -134,10 +134,6 @@ export class Killmail {
   readonly killmailId!: bigint;
 
   @Expose()
-  @Transform(({ value }) => value.toString())
-  readonly characterId!: bigint;
-
-  @Expose()
   @Transform(({ value }) => value.toISOString())
   readonly killTime!: Date;
 
@@ -182,7 +178,6 @@ export class Killmail {
   static fromPrisma(model: any): Killmail {
     return new Killmail({
       killmailId: model.killmailId,
-      characterId: model.characterId,
       killTime: model.killTime,
       npc: model.npc,
       solo: model.solo,
@@ -207,7 +202,6 @@ export class Killmail {
   toJSON(): Record<string, any> {
     return {
       killmailId: this.killmailId.toString(),
-      characterId: this.characterId.toString(),
       killTime: this.killTime.toISOString(),
       npc: this.npc,
       solo: this.solo,

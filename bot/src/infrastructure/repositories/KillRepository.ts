@@ -139,20 +139,19 @@ export class KillRepository extends BaseRepository {
     return this.executeQuery(async () => {
       const saved = await this.prisma.killFact.upsert({
         where: {
-          killmail_id: BigInt(killmail.killmailId),
+          killmail_id: BigInt(killmail.killmailId || "0"),
         },
         create: {
-          killmail_id: BigInt(killmail.killmailId),
-          character_id: BigInt(killmail.characterId),
-          kill_time: killmail.killTime,
-          npc: killmail.npc,
-          solo: killmail.solo,
-          awox: killmail.awox,
-          ship_type_id: killmail.shipTypeId,
-          system_id: killmail.systemId,
-          labels: killmail.labels,
-          total_value: BigInt(killmail.totalValue),
-          points: killmail.points,
+          killmail_id: BigInt(killmail.killmailId || "0"),
+          kill_time: killmail.killTime || new Date(),
+          npc: killmail.npc || false,
+          solo: killmail.solo || false,
+          awox: killmail.awox || false,
+          ship_type_id: killmail.shipTypeId || 0,
+          system_id: killmail.systemId || 0,
+          labels: killmail.labels || [],
+          total_value: BigInt(killmail.totalValue || 0),
+          points: killmail.points || 0,
           attackers: {
             create:
               killmail.attackers?.map((a) => ({
@@ -161,11 +160,11 @@ export class KillRepository extends BaseRepository {
                   ? BigInt(a.corporationId)
                   : null,
                 alliance_id: a.allianceId ? BigInt(a.allianceId) : null,
-                damage_done: a.damageDone,
-                final_blow: a.finalBlow,
-                security_status: a.securityStatus,
-                ship_type_id: a.shipTypeId,
-                weapon_type_id: a.weaponTypeId,
+                damage_done: a.damageDone || 0,
+                final_blow: a.finalBlow || false,
+                security_status: a.securityStatus || 0,
+                ship_type_id: a.shipTypeId || 0,
+                weapon_type_id: a.weaponTypeId || 0,
               })) || [],
           },
           victims: killmail.victim
@@ -180,23 +179,40 @@ export class KillRepository extends BaseRepository {
                   alliance_id: killmail.victim.allianceId
                     ? BigInt(killmail.victim.allianceId)
                     : null,
-                  ship_type_id: killmail.victim.shipTypeId,
-                  damage_taken: killmail.victim.damageTaken,
+                  ship_type_id: killmail.victim.shipTypeId || 0,
+                  damage_taken: killmail.victim.damageTaken || 0,
                 },
               }
             : undefined,
+          characters: {
+            create: [
+              // Add victim if present
+              ...(killmail.victim?.characterId
+                ? [
+                    {
+                      character_id: killmail.victim.characterId.toString(),
+                      role: "victim",
+                    },
+                  ]
+                : []),
+              // Add all attackers
+              ...(killmail.attackers?.map((a) => ({
+                character_id: a.characterId?.toString() || "",
+                role: "attacker",
+              })) || []),
+            ],
+          },
         },
         update: {
-          character_id: BigInt(killmail.characterId),
-          kill_time: killmail.killTime,
-          npc: killmail.npc,
-          solo: killmail.solo,
-          awox: killmail.awox,
-          ship_type_id: killmail.shipTypeId,
-          system_id: killmail.systemId,
-          labels: killmail.labels,
-          total_value: BigInt(killmail.totalValue),
-          points: killmail.points,
+          kill_time: killmail.killTime || new Date(),
+          npc: killmail.npc || false,
+          solo: killmail.solo || false,
+          awox: killmail.awox || false,
+          ship_type_id: killmail.shipTypeId || 0,
+          system_id: killmail.systemId || 0,
+          labels: killmail.labels || [],
+          total_value: BigInt(killmail.totalValue || 0),
+          points: killmail.points || 0,
           attackers: {
             deleteMany: {},
             create:
@@ -206,11 +222,11 @@ export class KillRepository extends BaseRepository {
                   ? BigInt(a.corporationId)
                   : null,
                 alliance_id: a.allianceId ? BigInt(a.allianceId) : null,
-                damage_done: a.damageDone,
-                final_blow: a.finalBlow,
-                security_status: a.securityStatus,
-                ship_type_id: a.shipTypeId,
-                weapon_type_id: a.weaponTypeId,
+                damage_done: a.damageDone || 0,
+                final_blow: a.finalBlow || false,
+                security_status: a.securityStatus || 0,
+                ship_type_id: a.shipTypeId || 0,
+                weapon_type_id: a.weaponTypeId || 0,
               })) || [],
           },
           victims: killmail.victim
@@ -226,11 +242,30 @@ export class KillRepository extends BaseRepository {
                   alliance_id: killmail.victim.allianceId
                     ? BigInt(killmail.victim.allianceId)
                     : null,
-                  ship_type_id: killmail.victim.shipTypeId,
-                  damage_taken: killmail.victim.damageTaken,
+                  ship_type_id: killmail.victim.shipTypeId || 0,
+                  damage_taken: killmail.victim.damageTaken || 0,
                 },
               }
             : undefined,
+          characters: {
+            deleteMany: {},
+            create: [
+              // Add victim if present
+              ...(killmail.victim?.characterId
+                ? [
+                    {
+                      character_id: killmail.victim.characterId.toString(),
+                      role: "victim",
+                    },
+                  ]
+                : []),
+              // Add all attackers
+              ...(killmail.attackers?.map((a) => ({
+                character_id: a.characterId?.toString() || "",
+                role: "attacker",
+              })) || []),
+            ],
+          },
         },
       });
       return PrismaMapper.map(saved, Killmail);
@@ -340,7 +375,11 @@ export class KillRepository extends BaseRepository {
     return this.executeQuery(() =>
       this.prisma.killFact.findMany({
         where: buildWhereFilter({
-          character_id: BigInt(characterId),
+          characters: {
+            some: {
+              character_id: characterId,
+            },
+          },
           kill_time: {
             gte: startDate,
             lte: endDate,
@@ -348,7 +387,6 @@ export class KillRepository extends BaseRepository {
         }),
         select: {
           killmail_id: true,
-          character_id: true,
           kill_time: true,
           total_value: true,
           solo: true,
@@ -368,14 +406,15 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<any[]> {
-    // Convert strings to BigInts for query
-    const bigIntIds = characterIds.map((id) => BigInt(id));
-
     return this.executeQuery(() =>
       this.prisma.killFact.findMany({
         where: buildWhereFilter({
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -384,7 +423,6 @@ export class KillRepository extends BaseRepository {
         }),
         select: {
           killmail_id: true,
-          character_id: true,
           kill_time: true,
           solo: true,
           attackers: {
@@ -704,20 +742,20 @@ export class KillRepository extends BaseRepository {
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills for the characters in the specified date range
       const kills = await this.prisma.killFact.findMany({
-        where: buildWhereFilter({
-          character_id: {
-            in: bigIntIds,
+        where: {
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
             lte: endDate,
           },
-        }),
+        },
         select: {
           killmail_id: true,
           ship_type_id: true,
@@ -762,14 +800,14 @@ export class KillRepository extends BaseRepository {
     limit: number = 5
   ): Promise<Record<string, Record<string, { count: number }>>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills for the characters in the specified date range
       const kills = await this.prisma.killFact.findMany({
         where: {
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -863,14 +901,14 @@ export class KillRepository extends BaseRepository {
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills for the characters in the specified date range, including attackers
       const kills = await this.prisma.killFact.findMany({
         where: {
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -996,14 +1034,14 @@ export class KillRepository extends BaseRepository {
     endDate: Date
   ): Promise<Array<{ dayOfWeek: number; hourOfDay: number; kills: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills for the characters in the specified date range
       const kills = await this.prisma.killFact.findMany({
         where: {
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -1067,14 +1105,14 @@ export class KillRepository extends BaseRepository {
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills for the characters in the specified date range
       const kills = await this.prisma.killFact.findMany({
         where: {
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -1174,14 +1212,15 @@ export class KillRepository extends BaseRepository {
     endDate: Date
   ): Promise<any[]> {
     try {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // First get kills where the character is the main killer
+      // First get kills where the character is involved
       const directKills = await this.prisma.killFact.findMany({
         where: buildWhereFilter({
-          character_id: {
-            in: bigIntIds,
+          characters: {
+            some: {
+              character_id: {
+                in: characterIds,
+              },
+            },
           },
           kill_time: {
             gte: startDate,
@@ -1190,7 +1229,6 @@ export class KillRepository extends BaseRepository {
         }),
         select: {
           killmail_id: true,
-          character_id: true,
           kill_time: true,
           solo: true,
           attackers: {
@@ -1210,7 +1248,7 @@ export class KillRepository extends BaseRepository {
           attackers: {
             some: {
               character_id: {
-                in: bigIntIds,
+                in: characterIds.map((id) => BigInt(id)),
               },
             },
           },
@@ -1221,7 +1259,6 @@ export class KillRepository extends BaseRepository {
         },
         select: {
           killmail_id: true,
-          character_id: true,
           kill_time: true,
           solo: true,
           attackers: {
@@ -1305,7 +1342,7 @@ export class KillRepository extends BaseRepository {
         total_value: BigInt(Math.round(totalValue)),
         attacker_count: attackerCount,
         labels,
-        character_id: characterId,
+        character_id: characterId.toString(),
         ship_type_id: shipTypeId,
       },
     });

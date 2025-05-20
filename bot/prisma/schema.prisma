@@ -24,10 +24,7 @@ model Character {
   allianceTicker     String?         @map("alliance_ticker")
   corporationId      Int             @map("corporation_id")
   corporationTicker  String          @map("corporation_ticker")
-  isMain             Boolean
   characterGroupId   String?         @map("character_group_id")
-  mainCharacterId    String?         @map("main_character_id")
-  lastSyncedAt       DateTime?       @map("last_synced_at")
   lastBackfillAt     DateTime?       @map("last_backfill_at")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
@@ -35,9 +32,9 @@ model Character {
   characterGroup     CharacterGroup? @relation("GroupCharacters", fields: [characterGroupId], references: [id])
 
   // Relationships
-  kills             KillCharacter[]
   losses            LossFact[]
   mapActivity       MapActivity[]
+  killCharacters    KillCharacter[]
 
   @@index([characterGroupId])
   @@index([corporationId])
@@ -58,13 +55,14 @@ model CharacterGroup {
 }
 
 model MapActivity {
-  characterId   BigInt   @map("character_id")
+  characterId   String   @map("character_id")
   timestamp     DateTime
   signatures    Int
   connections   Int
   passages      Int
   allianceId    Int?     @map("alliance_id")
   corporationId Int      @map("corporation_id")
+  character     Character @relation(fields: [characterId], references: [eveId])
 
   @@id([characterId, timestamp])
   @@index([characterId, timestamp])
@@ -74,7 +72,6 @@ model MapActivity {
 
 model KillFact {
   killmail_id  BigInt         @id
-  character_id BigInt
   kill_time    DateTime
   npc          Boolean
   solo         Boolean
@@ -86,20 +83,21 @@ model KillFact {
   points       Int
   attackers    KillAttacker[]
   victims      KillVictim[]
+  characters   KillCharacter[]
 
-  @@index([character_id, kill_time])
   @@map("KillFact")
 }
 
 model LossFact {
   killmail_id    BigInt   @id
-  character_id   BigInt
+  character_id   String
   kill_time      DateTime
   ship_type_id   Int
   system_id      Int
   total_value    BigInt
   attacker_count Int
   labels         String[]
+  character      Character @relation(fields: [character_id], references: [eveId])
 
   @@index([character_id, kill_time])
   @@map("LossFact")
@@ -138,4 +136,18 @@ model KillVictim {
   @@index([killmail_id])
   @@index([character_id])
   @@map("KillVictim")
+}
+
+model KillCharacter {
+  killmail_id    BigInt
+  character_id   String
+  role           String   // "attacker" or "victim"
+
+  // Relationships
+  kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+  character      Character @relation(fields: [character_id], references: [eveId], onDelete: Cascade)
+
+  @@id([killmail_id, character_id])
+  @@index([character_id])
+  @@map("kill_characters")
 }

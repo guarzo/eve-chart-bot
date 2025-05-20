@@ -24,30 +24,36 @@ export function registerDiagnosticCommands(program: Command) {
           `Checking kills for character ${options.character} in the last ${days} days...`
         );
 
-        const killmails = await prisma.killmail.findMany({
+        const killmails = await prisma.killFact.findMany({
           where: {
-            killTime: {
+            kill_time: {
               gte: startDate,
             },
             characters: {
               some: {
-                id: parseInt(options.character),
+                character_id: options.character,
               },
             },
           },
           include: {
-            characters: true,
+            characters: {
+              include: {
+                character: true,
+              },
+            },
           },
           orderBy: {
-            killTime: "desc",
+            kill_time: "desc",
           },
         });
 
         logger.info(`Found ${killmails.length} killmails:`);
         killmails.forEach((kill) => {
-          logger.info(`- Killmail ${kill.id} (${kill.killTime})`);
+          logger.info(`- Killmail ${kill.killmail_id} (${kill.kill_time})`);
           logger.info(
-            `  Characters: ${kill.characters.map((c) => c.name).join(", ")}`
+            `  Characters: ${kill.characters
+              .map((c) => c.character.name)
+              .join(", ")}`
           );
         });
 
@@ -75,26 +81,26 @@ export function registerDiagnosticCommands(program: Command) {
           `Checking kills chart data for character ${options.character} in the last ${days} days...`
         );
 
-        const killmails = await prisma.killmail.findMany({
+        const killmails = await prisma.killFact.findMany({
           where: {
-            killTime: {
+            kill_time: {
               gte: startDate,
             },
             characters: {
               some: {
-                id: parseInt(options.character),
+                character_id: options.character,
               },
             },
           },
           orderBy: {
-            killTime: "asc",
+            kill_time: "asc",
           },
         });
 
         // Group kills by day
         const killsByDay = new Map<string, number>();
         killmails.forEach((kill) => {
-          const date = kill.killTime.toISOString().split("T")[0];
+          const date = kill.kill_time.toISOString().split("T")[0];
           killsByDay.set(date, (killsByDay.get(date) || 0) + 1);
         });
 
@@ -124,20 +130,23 @@ export function registerDiagnosticCommands(program: Command) {
 
         logger.info(`Checking killmail ingestion for the last ${days} days...`);
 
-        const killmails = await prisma.killmail.findMany({
+        const killmails = await prisma.killFact.findMany({
           where: {
-            killTime: {
+            kill_time: {
               gte: startDate,
             },
           },
+          include: {
+            characters: true,
+          },
           orderBy: {
-            killTime: "desc",
+            kill_time: "desc",
           },
         });
 
         const totalKills = killmails.length;
         const uniqueCharacters = new Set(
-          killmails.flatMap((k) => k.characters.map((c) => c.id))
+          killmails.flatMap((k) => k.characters.map((c) => c.character_id))
         ).size;
 
         logger.info(`Total killmails: ${totalKills}`);
@@ -146,7 +155,7 @@ export function registerDiagnosticCommands(program: Command) {
 
         // Check for any gaps in ingestion
         const daysWithKills = new Set(
-          killmails.map((k) => k.killTime.toISOString().split("T")[0])
+          killmails.map((k) => k.kill_time.toISOString().split("T")[0])
         );
         const missingDays = [];
         for (let i = 0; i < days; i++) {

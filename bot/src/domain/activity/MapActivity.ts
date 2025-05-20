@@ -4,7 +4,7 @@
  */
 export class MapActivity {
   /** Character's EVE ID */
-  readonly characterId: bigint;
+  readonly characterId: string;
 
   /** Timestamp of the activity */
   readonly timestamp: Date;
@@ -30,7 +30,7 @@ export class MapActivity {
    * @param props MapActivity properties
    */
   constructor(props: {
-    characterId: bigint | string;
+    characterId: string;
     timestamp: Date;
     signatures: number;
     connections: number;
@@ -38,12 +38,7 @@ export class MapActivity {
     corporationId: number;
     allianceId?: number | null;
   }) {
-    // Convert string character ID to bigint if needed
-    this.characterId =
-      typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
-
+    this.characterId = props.characterId;
     this.timestamp = props.timestamp;
     this.signatures = props.signatures;
     this.connections = props.connections;

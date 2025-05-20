@@ -8,7 +8,7 @@ import {
   KillmailAttacker,
   KillmailVictim,
 } from "../../domain/killmail/Killmail";
-import { Character } from "../../domain/character/Character";
+
 import { ZkillClient } from "../../lib/api/ZkillClient";
 
 // ——— Helpers ———
@@ -123,25 +123,14 @@ export class KillmailIngestionService {
         logger.debug(`No tracked characters in killmail ${killId}`);
         return { success: false, skipped: true };
       }
-      const trackedSet = new Set(tracked.map((c: Character) => c.eveId));
-
-      // 6) Create and save killmail
-      const mainChar =
-        attackers.find(
-          (a) =>
-            a.characterId != null && trackedSet.has(a.characterId.toString())
-        )?.characterId ??
-        victim.characterId ??
-        BigInt(0);
 
       const killmail = new Killmail({
         killmailId: BigInt(killId),
-        characterId: mainChar,
         killTime: new Date(esi.killmail_time),
         systemId: esi.solar_system_id,
         totalValue: BigInt(Math.round(zk.zkb.totalValue)),
         points: zk.zkb.points,
-        npc: false,
+        npc: attackers.every((a) => !a.characterId), // NPC kill if no player attackers
         solo: attackers.length === 1,
         awox: false,
         shipTypeId: esi.victim.ship_type_id,

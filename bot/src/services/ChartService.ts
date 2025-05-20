@@ -14,6 +14,8 @@ import {
   ChartMetric,
 } from "../types/chart";
 import { format } from "date-fns";
+import { BaseRepository } from "../infrastructure/repositories/BaseRepository";
+import { PrismaClient } from "@prisma/client";
 
 interface KillData {
   killTime: Date;
@@ -29,7 +31,7 @@ interface ActivityData {
   characterId: bigint;
 }
 
-export class ChartService {
+export class ChartService extends BaseRepository {
   private readonly characterRepository: CharacterRepository;
   private readonly killRepository: KillRepository;
   private readonly mapActivityRepository: MapActivityRepository;
@@ -51,12 +53,15 @@ export class ChartService {
     "#E67300", // amber
     "#8B0707", // maroon
   ];
+  protected prisma: PrismaClient;
 
   constructor() {
+    super("Chart");
     const repositoryManager = new RepositoryManager();
     this.characterRepository = repositoryManager.getCharacterRepository();
     this.killRepository = repositoryManager.getKillRepository();
     this.mapActivityRepository = repositoryManager.getMapActivityRepository();
+    this.prisma = new PrismaClient();
   }
 
   async generateChart(config: ChartConfigInput): Promise<ChartData> {
@@ -549,7 +554,7 @@ export class ChartService {
       const activities: ActivityData[] = rawActivities.map((activity) => ({
         timestamp: activity.timestamp,
         signatures: activity.signatures,
-        characterId: activity.characterId,
+        characterId: BigInt(activity.characterId),
       }));
 
       // Group activities by time period
@@ -1516,5 +1521,45 @@ export class ChartService {
       ...stats,
       averageValue: Number(stats.averageValue),
     };
+  }
+
+  async getActivityData(
+    characterIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<ActivityData[]> {
+    return this.executeQuery(async () => {
+      const activity = await this.prisma.mapActivity.findMany({
+        where: {
+          characterId: {
+            in: characterIds,
+          },
+          timestamp: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
+        select: {
+          timestamp: true,
+          signatures: true,
+          characterId: true,
+        },
+        orderBy: {
+          timestamp: "asc",
+        },
+      });
+
+      return activity.map(
+        (item: {
+          timestamp: Date;
+          signatures: number;
+          characterId: string;
+        }): ActivityData => ({
+          timestamp: item.timestamp,
+          signatures: item.signatures,
+          characterId: BigInt(item.characterId),
+        })
+      );
+    });
   }
 }

@@ -2,121 +2,127 @@ import { Command } from "commander";
 import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../../lib/logger";
 
+const prisma = new PrismaClient();
+
 export function registerCharacterCommands(program: Command) {
   const charProgram = program
     .command("character")
-    .description("Character management commands");
+    .description("Manage characters");
 
   // List characters command
   charProgram
     .command("list")
     .description("List all characters")
-    .option("-g, --group <group>", "Filter by group name")
+    .option("-g, --group <name>", "Filter by group name")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
-
         const where = options.group
           ? {
-              groups: {
-                some: {
-                  name: options.group,
-                },
+              characterGroup: {
+                slug: options.group,
               },
             }
-          : {};
+          : undefined;
 
         const characters = await prisma.character.findMany({
           where,
           include: {
-            groups: true,
+            characterGroup: true,
           },
         });
 
-        if (characters.length === 0) {
-          logger.info("No characters found");
-          return;
-        }
-
-        logger.info("Characters:");
-        characters.forEach((char) => {
-          logger.info(`- ${char.name} (ID: ${char.id})`);
-          if (char.groups.length > 0) {
-            logger.info(
-              `  Groups: ${char.groups.map((g) => g.name).join(", ")}`
-            );
+        logger.info(`Found ${characters.length} characters:`);
+        for (const char of characters) {
+          logger.info(`- ${char.name} (ID: ${char.eveId})`);
+          if (char.characterGroup) {
+            logger.info(`  Group: ${char.characterGroup.slug}`);
           }
-        });
-
-        await prisma.$disconnect();
+        }
       } catch (error) {
         logger.error("Error listing characters:", error);
         process.exit(1);
+      } finally {
+        await prisma.$disconnect();
       }
     });
 
-  // Remove character command
+  // Get character command
   charProgram
-    .command("remove <id>")
-    .description("Remove a character by ID")
-    .option("-f, --force", "Force removal without confirmation")
-    .action(async (id: string, options) => {
+    .command("get <id>")
+    .description("Get character details")
+    .action(async (id) => {
       try {
-        const prisma = new PrismaClient();
+        const character = await prisma.character.findUnique({
+          where: { eveId: id },
+          include: {
+            characterGroup: true,
+          },
+        });
 
-        if (!options.force) {
-          logger.warn(
-            "This will remove the character and all associated data. Use --force to proceed."
-          );
+        if (!character) {
+          logger.error(`Character with ID ${id} not found`);
           process.exit(1);
         }
 
-        logger.info(`Removing character ${id}...`);
-        await prisma.character.delete({
-          where: { id: parseInt(id) },
-        });
-
-        logger.info("Character removed successfully");
-        await prisma.$disconnect();
+        logger.info("Character details:");
+        logger.info(`- Name: ${character.name}`);
+        logger.info(`- ID: ${character.eveId}`);
+        logger.info(`- Corporation: ${character.corporationTicker}`);
+        if (character.allianceTicker) {
+          logger.info(`- Alliance: ${character.allianceTicker}`);
+        }
+        if (character.characterGroup) {
+          logger.info(`- Group: ${character.characterGroup.slug}`);
+        }
       } catch (error) {
-        logger.error("Error removing character:", error);
+        logger.error("Error getting character:", error);
         process.exit(1);
+      } finally {
+        await prisma.$disconnect();
       }
     });
 
-  // Check main characters command
+  // List groups command
   charProgram
-    .command("check-main")
-    .description("Check main character assignments")
+    .command("groups")
+    .description("List all character groups")
     .action(async () => {
       try {
-        const prisma = new PrismaClient();
-        logger.info("Checking main character assignments...");
-
         const groups = await prisma.characterGroup.findMany({
           include: {
             characters: true,
           },
         });
 
+        logger.info(`Found ${groups.length} character groups:`);
         for (const group of groups) {
-          const mainChars = group.characters.filter((c) => c.isMain);
+          const mainChars = group.characters.filter(
+            (c) => c.eveId === group.mainCharacterId
+          );
+
           if (mainChars.length === 0) {
-            logger.warn(`Group ${group.name} has no main character assigned`);
+            logger.warn(`Group ${group.slug} has no main character assigned`);
           } else if (mainChars.length > 1) {
             logger.warn(
-              `Group ${group.name} has multiple main characters: ${mainChars
+              `Group ${group.slug} has multiple main characters: ${mainChars
                 .map((c) => c.name)
                 .join(", ")}`
             );
           }
-        }
 
-        logger.info("Main character check complete");
-        await prisma.$disconnect();
+          logger.info(
+            `- ${group.slug} (${group.characters.length} characters)`
+          );
+          for (const char of group.characters) {
+            const isMain = char.eveId === group.mainCharacterId;
+            logger.info(`  ${char.name}${isMain ? " (main)" : ""}`);
+          }
+        }
       } catch (error) {
-        logger.error("Error checking main characters:", error);
+        logger.error("Error listing groups:", error);
         process.exit(1);
+      } finally {
+        await prisma.$disconnect();
       }
     });
 }

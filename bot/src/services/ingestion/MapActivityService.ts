@@ -106,7 +106,7 @@ export class MapActivityService {
       // Process each activity record
       for (const activity of validatedData.data) {
         const mapActivity = new MapActivity({
-          characterId: activity.character.eve_id,
+          characterId: activity.character.eve_id.toString(),
           timestamp: new Date(activity.timestamp),
           signatures: activity.signatures || 0,
           connections: activity.connections || 0,

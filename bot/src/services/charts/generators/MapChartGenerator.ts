@@ -3,16 +3,6 @@ import { ChartData, ChartDisplayType } from "../../../types/chart";
 import { MapActivityRepository } from "../../../infrastructure/repositories/MapActivityRepository";
 import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
-interface MapActivity {
-  allianceId: number | null;
-  corporationId: number;
-  timestamp: Date;
-  characterId: bigint;
-  signatures: number;
-  connections: number;
-  passages: number;
-}
-
 /**
  * Generator for map activity charts
  */
@@ -46,35 +36,35 @@ export class MapChartGenerator extends BaseChartGenerator {
 
     // Get all character IDs from all groups
     const characterIds = characterGroups.flatMap((group) =>
-      group.characters.map((c) => BigInt(c.eveId))
+      group.characters.map((c) => c.eveId)
     );
 
     // Get map activity for all characters
     const activities =
       await this.mapActivityRepository.getActivityForCharacters(
-        characterIds.map((id) => id.toString()),
+        characterIds,
         startDate,
         endDate
       );
 
     // Group activities by character group
     const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
-      const groupActivities = activities.filter((activity: MapActivity) =>
+      const groupCharacterIds = group.characters.map((c) => c.eveId);
+      const groupActivities = activities.filter((activity) =>
         groupCharacterIds.includes(activity.characterId)
       );
 
       // Calculate totals for each metric
       const totalSignatures = groupActivities.reduce(
-        (sum: number, activity: MapActivity) => sum + activity.signatures,
+        (sum, activity) => sum + activity.signatures,
         0
       );
       const totalConnections = groupActivities.reduce(
-        (sum: number, activity: MapActivity) => sum + activity.connections,
+        (sum, activity) => sum + activity.connections,
         0
       );
       const totalPassages = groupActivities.reduce(
-        (sum: number, activity: MapActivity) => sum + activity.passages,
+        (sum, activity) => sum + activity.passages,
         0
       );
 
