@@ -9,42 +9,42 @@ export class MapActivity {
   /** Timestamp of the activity */
   readonly timestamp: Date;
 
-  /** Number of signatures scanned */
-  signatures: number;
+  /** Number of signatures found */
+  readonly signatures: number;
 
-  /** Number of wormhole connections */
-  connections: number;
+  /** Number of connections made */
+  readonly connections: number;
 
-  /** Number of wormhole passages */
-  passages: number;
+  /** Number of passages through systems */
+  readonly passages: number;
 
-  /** Optional alliance ID */
-  allianceId: number | null;
+  /** Alliance ID if character is in an alliance */
+  readonly allianceId: number | null;
 
   /** Corporation ID */
-  corporationId: number;
+  readonly corporationId: number;
 
   /**
    * Create a new MapActivity instance
    *
-   * @param props MapActivity properties
+   * @param data MapActivity properties
    */
-  constructor(props: {
+  constructor(data: {
     characterId: bigint;
     timestamp: Date;
     signatures: number;
     connections: number;
     passages: number;
-    corporationId: number;
     allianceId?: number | null;
+    corporationId: number;
   }) {
-    this.characterId = props.characterId;
-    this.timestamp = props.timestamp;
-    this.signatures = props.signatures;
-    this.connections = props.connections;
-    this.passages = props.passages;
-    this.corporationId = props.corporationId;
-    this.allianceId = props.allianceId ?? null;
+    this.characterId = data.characterId;
+    this.timestamp = data.timestamp;
+    this.signatures = data.signatures;
+    this.connections = data.connections;
+    this.passages = data.passages;
+    this.allianceId = data.allianceId ?? null;
+    this.corporationId = data.corporationId;
 
     this.validate();
   }
@@ -138,23 +138,5 @@ export class MapActivity {
       allianceId: this.allianceId,
       corporationId: this.corporationId,
     };
-  }
-
-  /**
-   * Create a MapActivity domain entity from a database model
-   *
-   * @param model Database model object
-   * @returns MapActivity domain entity
-   */
-  static fromModel(model: any): MapActivity {
-    return new MapActivity({
-      characterId: BigInt(model.characterId),
-      timestamp: model.timestamp,
-      signatures: model.signatures,
-      connections: model.connections,
-      passages: model.passages,
-      allianceId: model.allianceId,
-      corporationId: model.corporationId,
-    });
   }
 }

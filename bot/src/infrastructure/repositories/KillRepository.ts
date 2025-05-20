@@ -8,7 +8,7 @@ import { BaseRepository } from "./BaseRepository";
  */
 export class KillRepository extends BaseRepository {
   constructor() {
-    super("Kill");
+    super("KillFact");
   }
 
   /**
@@ -17,7 +17,10 @@ export class KillRepository extends BaseRepository {
   async getKillmail(killmailId: string | bigint): Promise<Killmail | null> {
     return this.executeQuery(async () => {
       const killmail = await this.prisma.killFact.findUnique({
-        where: { killmail_id: BigInt(killmailId) },
+        where: {
+          killmail_id:
+            typeof killmailId === "string" ? BigInt(killmailId) : killmailId,
+        },
         include: {
           attackers: true,
           victims: true,
@@ -130,12 +133,16 @@ export class KillRepository extends BaseRepository {
    */
   async saveKillmail(killmail: Killmail): Promise<Killmail> {
     return this.executeQuery(async () => {
+      const killmailId =
+        typeof killmail.killmailId === "string"
+          ? BigInt(killmail.killmailId || "0")
+          : killmail.killmailId || BigInt(0);
       const saved = await this.prisma.killFact.upsert({
         where: {
-          killmail_id: BigInt(killmail.killmailId || "0"),
+          killmail_id: killmailId,
         },
         create: {
-          killmail_id: BigInt(killmail.killmailId || "0"),
+          killmail_id: killmailId,
           kill_time: killmail.killTime || new Date(),
           npc: killmail.npc || false,
           solo: killmail.solo || false,
@@ -143,16 +150,29 @@ export class KillRepository extends BaseRepository {
           ship_type_id: killmail.shipTypeId || 0,
           system_id: killmail.systemId || 0,
           labels: killmail.labels || [],
-          total_value: BigInt(killmail.totalValue || 0),
+          total_value:
+            typeof killmail.totalValue === "string"
+              ? BigInt(killmail.totalValue)
+              : killmail.totalValue || BigInt(0),
           points: killmail.points || 0,
           attackers: {
             create:
               killmail.attackers?.map((a) => ({
-                character_id: a.characterId ? BigInt(a.characterId) : null,
-                corporation_id: a.corporationId
-                  ? BigInt(a.corporationId)
+                character_id: a.characterId
+                  ? typeof a.characterId === "string"
+                    ? BigInt(a.characterId)
+                    : a.characterId
                   : null,
-                alliance_id: a.allianceId ? BigInt(a.allianceId) : null,
+                corporation_id: a.corporationId
+                  ? typeof a.corporationId === "string"
+                    ? BigInt(a.corporationId)
+                    : a.corporationId
+                  : null,
+                alliance_id: a.allianceId
+                  ? typeof a.allianceId === "string"
+                    ? BigInt(a.allianceId)
+                    : a.allianceId
+                  : null,
                 damage_done: a.damageDone || 0,
                 final_blow: a.finalBlow || false,
                 security_status: a.securityStatus || 0,
@@ -164,13 +184,19 @@ export class KillRepository extends BaseRepository {
             ? {
                 create: {
                   character_id: killmail.victim.characterId
-                    ? BigInt(killmail.victim.characterId)
+                    ? typeof killmail.victim.characterId === "string"
+                      ? BigInt(killmail.victim.characterId)
+                      : killmail.victim.characterId
                     : null,
                   corporation_id: killmail.victim.corporationId
-                    ? BigInt(killmail.victim.corporationId)
+                    ? typeof killmail.victim.corporationId === "string"
+                      ? BigInt(killmail.victim.corporationId)
+                      : killmail.victim.corporationId
                     : null,
                   alliance_id: killmail.victim.allianceId
-                    ? BigInt(killmail.victim.allianceId)
+                    ? typeof killmail.victim.allianceId === "string"
+                      ? BigInt(killmail.victim.allianceId)
+                      : killmail.victim.allianceId
                     : null,
                   ship_type_id: killmail.victim.shipTypeId || 0,
                   damage_taken: killmail.victim.damageTaken || 0,
@@ -183,14 +209,21 @@ export class KillRepository extends BaseRepository {
               ...(killmail.victim?.characterId
                 ? [
                     {
-                      character_id: BigInt(killmail.victim.characterId),
+                      character_id:
+                        typeof killmail.victim.characterId === "string"
+                          ? BigInt(killmail.victim.characterId)
+                          : killmail.victim.characterId,
                       role: "victim",
                     },
                   ]
                 : []),
               // Add all attackers that are tracked
               ...(killmail.attackers?.map((a) => ({
-                character_id: a.characterId ? BigInt(a.characterId) : BigInt(0),
+                character_id: a.characterId
+                  ? typeof a.characterId === "string"
+                    ? BigInt(a.characterId)
+                    : a.characterId
+                  : BigInt(0),
                 role: "attacker",
               })) || []),
             ].filter((rel) => rel.character_id !== BigInt(0)),
@@ -204,17 +237,30 @@ export class KillRepository extends BaseRepository {
           ship_type_id: killmail.shipTypeId || 0,
           system_id: killmail.systemId || 0,
           labels: killmail.labels || [],
-          total_value: BigInt(killmail.totalValue || 0),
+          total_value:
+            typeof killmail.totalValue === "string"
+              ? BigInt(killmail.totalValue)
+              : killmail.totalValue || BigInt(0),
           points: killmail.points || 0,
           attackers: {
             deleteMany: {},
             create:
               killmail.attackers?.map((a) => ({
-                character_id: a.characterId ? BigInt(a.characterId) : null,
-                corporation_id: a.corporationId
-                  ? BigInt(a.corporationId)
+                character_id: a.characterId
+                  ? typeof a.characterId === "string"
+                    ? BigInt(a.characterId)
+                    : a.characterId
                   : null,
-                alliance_id: a.allianceId ? BigInt(a.allianceId) : null,
+                corporation_id: a.corporationId
+                  ? typeof a.corporationId === "string"
+                    ? BigInt(a.corporationId)
+                    : a.corporationId
+                  : null,
+                alliance_id: a.allianceId
+                  ? typeof a.allianceId === "string"
+                    ? BigInt(a.allianceId)
+                    : a.allianceId
+                  : null,
                 damage_done: a.damageDone || 0,
                 final_blow: a.finalBlow || false,
                 security_status: a.securityStatus || 0,
@@ -227,41 +273,27 @@ export class KillRepository extends BaseRepository {
                 deleteMany: {},
                 create: {
                   character_id: killmail.victim.characterId
-                    ? BigInt(killmail.victim.characterId)
+                    ? typeof killmail.victim.characterId === "string"
+                      ? BigInt(killmail.victim.characterId)
+                      : killmail.victim.characterId
                     : null,
                   corporation_id: killmail.victim.corporationId
-                    ? BigInt(killmail.victim.corporationId)
+                    ? typeof killmail.victim.corporationId === "string"
+                      ? BigInt(killmail.victim.corporationId)
+                      : killmail.victim.corporationId
                     : null,
                   alliance_id: killmail.victim.allianceId
-                    ? BigInt(killmail.victim.allianceId)
+                    ? typeof killmail.victim.allianceId === "string"
+                      ? BigInt(killmail.victim.allianceId)
+                      : killmail.victim.allianceId
                     : null,
                   ship_type_id: killmail.victim.shipTypeId || 0,
                   damage_taken: killmail.victim.damageTaken || 0,
                 },
               }
             : undefined,
-          characters: {
-            deleteMany: {},
-            create: [
-              // Add victim if present and tracked
-              ...(killmail.victim?.characterId
-                ? [
-                    {
-                      character_id: BigInt(killmail.victim.characterId),
-                      role: "victim",
-                    },
-                  ]
-                : []),
-              // Add all attackers that are tracked
-              ...(killmail.attackers?.map((a) => ({
-                character_id: a.characterId ? BigInt(a.characterId) : BigInt(0),
-                role: "attacker",
-              })) || []),
-            ].filter((rel) => rel.character_id !== BigInt(0)),
-          },
         },
       });
-
       return PrismaMapper.map(saved, Killmail);
     });
   }
@@ -745,7 +777,9 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
+    const bigIntIds = characterIds.map((id) =>
+      typeof id === "string" ? BigInt(id) : id
+    );
 
     const kills = await this.prisma.killFact.findMany({
       where: {
@@ -907,7 +941,9 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
+    const bigIntIds = characterIds.map((id) =>
+      typeof id === "string" ? BigInt(id) : id
+    );
 
     const kills = await this.prisma.killFact.findMany({
       where: {

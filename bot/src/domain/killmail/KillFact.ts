@@ -418,66 +418,36 @@ export class KillAttacker {
  */
 export class KillVictim {
   /** Unique ID in the database */
-  readonly id?: number;
-
-  /** Killmail ID this victim is associated with */
+  readonly id: number;
+  /** Killmail ID */
   readonly killmailId: bigint;
-
-  /** Character ID (optional - could be NPC) */
-  readonly characterId: bigint | null;
-
+  /** Character ID if victim was a player */
+  readonly characterId?: bigint;
   /** Corporation ID */
-  readonly corporationId: bigint | null;
-
-  /** Alliance ID (optional) */
-  readonly allianceId: bigint | null;
-
-  /** Ship type ID of the victim's ship */
+  readonly corporationId?: bigint;
+  /** Alliance ID if victim was in an alliance */
+  readonly allianceId?: bigint;
+  /** Ship type ID */
   readonly shipTypeId: number;
-
-  /** Damage taken by the victim */
+  /** Amount of damage taken */
   readonly damageTaken: number;
 
-  constructor(props: {
-    id?: number;
-    killmailId: bigint | string;
-    characterId?: bigint | string | null;
-    corporationId?: bigint | string | null;
-    allianceId?: bigint | string | null;
+  constructor(data: {
+    id: number;
+    killmailId: bigint;
+    characterId?: bigint;
+    corporationId?: bigint;
+    allianceId?: bigint;
     shipTypeId: number;
     damageTaken: number;
   }) {
-    this.id = props.id;
-
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
-
-    this.characterId =
-      props.characterId === null || props.characterId === undefined
-        ? null
-        : typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
-
-    this.corporationId =
-      props.corporationId === null || props.corporationId === undefined
-        ? null
-        : typeof props.corporationId === "string"
-        ? BigInt(props.corporationId)
-        : props.corporationId;
-
-    this.allianceId =
-      props.allianceId === null || props.allianceId === undefined
-        ? null
-        : typeof props.allianceId === "string"
-        ? BigInt(props.allianceId)
-        : props.allianceId;
-
-    this.shipTypeId = props.shipTypeId;
-    this.damageTaken = props.damageTaken;
+    this.id = data.id;
+    this.killmailId = data.killmailId;
+    this.characterId = data.characterId;
+    this.corporationId = data.corporationId;
+    this.allianceId = data.allianceId;
+    this.shipTypeId = data.shipTypeId;
+    this.damageTaken = data.damageTaken;
   }
 
   /**

@@ -115,11 +115,11 @@ export class MapActivityService {
           signatures: activity.signatures || 0,
           connections: activity.connections || 0,
           passages: activity.passages || 0,
-          allianceId: activity.character.alliance_id,
-          corporationId: activity.character.corporation_id,
+          allianceId: activity.character.alliance_id ?? null,
+          corporationId: activity.character.corporation_id ?? null,
         });
 
-        await this.mapActivityRepository.upsertMapActivity(
+        await this.upsertMapActivity(
           mapActivity.characterId.toString(),
           mapActivity.timestamp,
           mapActivity.signatures,
@@ -141,5 +141,29 @@ export class MapActivityService {
 
   public async close(): Promise<void> {
     await this.cache.close();
+  }
+
+  async upsertMapActivity(
+    characterId: string,
+    timestamp: Date,
+    signatures: number,
+    connections: number,
+    passages: number,
+    allianceId: number | null,
+    corporationId: number | null
+  ): Promise<void> {
+    if (corporationId === null) {
+      throw new Error("corporationId is required");
+    }
+
+    await this.mapActivityRepository.upsertMapActivity(
+      characterId,
+      timestamp,
+      signatures,
+      connections,
+      passages,
+      allianceId,
+      corporationId
+    );
   }
 }

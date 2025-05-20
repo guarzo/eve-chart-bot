@@ -48,7 +48,7 @@ export class MapActivityRepository extends BaseRepository {
       const activities = await this.prisma.mapActivity.findMany({
         where: {
           characterId: {
-            in: characterIds.map(BigInt),
+            in: characterIds.map((id) => BigInt(id)),
           },
           timestamp: {
             gte: startDate,
