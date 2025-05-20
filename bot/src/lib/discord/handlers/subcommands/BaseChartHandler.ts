@@ -3,6 +3,7 @@ import { ChartFactory } from "../../../../services/charts";
 import { CharacterRepository } from "../../../../infrastructure/repositories/CharacterRepository";
 import { logger } from "../../../logger";
 import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
+import { CharacterGroup } from "../../../../domain/character/CharacterGroup";
 
 /**
  * Base class for all chart command handlers
@@ -40,14 +41,35 @@ export abstract class BaseChartHandler {
   }
 
   /**
-   * Get all character groups from database
+   * Get all character groups from database and transform them into the format expected by chart generators
    */
-  protected async getCharacterGroups() {
+  protected async getCharacterGroups(): Promise<
+    Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{
+        eveId: string;
+        name: string;
+        mainCharacterId?: string;
+      }>;
+      mainCharacterId?: string;
+    }>
+  > {
     try {
-      const groups = await this.characterRepository.getCharacterGroups();
+      const groups = await this.characterRepository.getAllCharacterGroups();
 
-      // Filter out groups with no characters
-      return groups.filter((group) => group.characters.length > 0);
+      // Filter out groups with no characters and transform to expected format
+      return groups
+        .filter((group: CharacterGroup) => group.characters.length > 0)
+        .map((group: CharacterGroup) => ({
+          groupId: group.id,
+          name: group.name,
+          characters: group.characters.map((char) => ({
+            eveId: char.eveId,
+            name: char.name,
+          })),
+          mainCharacterId: group.mainCharacterId,
+        }));
     } catch (error) {
       logger.error("Error fetching character groups:", error);
       return [];

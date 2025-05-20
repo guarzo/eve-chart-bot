@@ -1,11 +1,15 @@
 import axios, { AxiosInstance } from "axios";
-import { ZkillResponseSchema } from "../../types/ingestion";
+import {
+  CompleteKillmailSchema,
+  BasicKillmailSchema,
+} from "../../types/ingestion";
 import { logger } from "../logger";
+import { fetchESIKillmail } from "../../lib/esi";
 
 export class ZkillClient {
   private client: AxiosInstance;
   private lastRequestTime: number = 0;
-  private readonly rateLimitMs: number = 100; // 10 requests per second
+  private readonly rateLimitMs: number = 200; // 5 requests per second to be more conservative
 
   constructor(baseUrl: string) {
     this.client = axios.create({
@@ -14,6 +18,7 @@ export class ZkillClient {
         Accept: "application/json",
         "User-Agent": "EVE-Chart-Bot/1.0",
       },
+      timeout: 30000, // 30 second timeout
     });
     logger.info(`ZkillClient initialized with base URL: ${baseUrl}`);
   }
@@ -42,18 +47,77 @@ export class ZkillClient {
       const kill = response.data[0];
       if (!kill) {
         logger.warn(`No killmail found for ID ${killId}`);
-        throw new Error(`No killmail found for ID ${killId}`);
+        return null;
       }
 
       try {
-        const parsedKill = ZkillResponseSchema.parse(kill);
-        return parsedKill;
+        // First validate the basic zKillboard response
+        const basicKill = BasicKillmailSchema.parse(kill);
+
+        // Then fetch complete killmail data from ESI
+        const esiData = await fetchESIKillmail(
+          basicKill.killmail_id,
+          basicKill.zkb.hash
+        );
+
+        if (!esiData) {
+          logger.warn(
+            `Failed to fetch ESI data for killmail ${basicKill.killmail_id}`
+          );
+          return null;
+        }
+
+        // Transform ESI data to match our schema
+        const transformedEsiData = {
+          killmail_time: esiData.killmail_time,
+          solar_system_id: esiData.solar_system_id,
+          victim: esiData.victim
+            ? {
+                character_id: esiData.victim.character_id,
+                corporation_id: esiData.victim.corporation_id,
+                alliance_id: esiData.victim.alliance_id,
+                ship_type_id: esiData.victim.ship_type_id,
+                damage_taken: esiData.victim.damage_taken,
+                position: esiData.victim.position,
+                items: esiData.victim.items.map((item) => ({
+                  type_id: item.type_id,
+                  flag: item.flag,
+                  quantity_destroyed: item.quantity_destroyed,
+                  quantity_dropped: item.quantity_dropped,
+                  singleton: item.singleton,
+                })),
+              }
+            : undefined,
+          attackers: esiData.attackers.map((attacker) => ({
+            character_id: attacker.character_id,
+            corporation_id: attacker.corporation_id,
+            alliance_id: attacker.alliance_id,
+            damage_done: attacker.damage_done,
+            final_blow: attacker.final_blow,
+            security_status: attacker.security_status,
+            ship_type_id: attacker.ship_type_id,
+            weapon_type_id: attacker.weapon_type_id,
+          })),
+        };
+
+        // Combine the data and validate the complete killmail
+        const completeKill = {
+          ...basicKill,
+          ...transformedEsiData,
+        };
+
+        return CompleteKillmailSchema.parse(completeKill);
       } catch (parseError) {
-        logger.error(
-          { error: parseError, killId },
+        logger.warn(
+          {
+            error: parseError,
+            killId,
+            rawData: kill,
+            expectedFields: Object.keys(BasicKillmailSchema.shape),
+          },
           "Failed to parse killmail response"
         );
-        throw parseError;
+        return null;
       }
     } catch (error: any) {
       logger.error(
@@ -79,10 +143,12 @@ export class ZkillClient {
       await this.rateLimit();
 
       // Use the endpoint that we've found to work in diagnostics
-      const url = `/kills/characterID/${characterId}/page/${page}/`;
+      const url = `/api/characterID/${characterId}/page/${page}/`;
       logger.debug(`Making zKillboard request to: ${url}`);
 
-      const response = await this.client.get(url);
+      const response = await this.client.get(url, {
+        timeout: 30000, // 30 second timeout
+      });
 
       if (!response.data) {
         logger.warn(
@@ -91,10 +157,88 @@ export class ZkillClient {
         return [];
       }
 
-      logger.info(
-        `Received ${response.data.length} kills for character ${characterId}`
+      logger.debug(
+        `Received ${response.data.length} raw kills from zKillboard`
       );
-      return response.data;
+
+      // Process each kill by fetching complete data from ESI
+      const validatedKills = [];
+      for (const kill of response.data) {
+        try {
+          // First validate the basic zKillboard response
+          const basicKill = BasicKillmailSchema.parse(kill);
+
+          // Then fetch complete killmail data from ESI
+          await this.rateLimit(); // Add rate limiting before ESI request
+          const esiData = await fetchESIKillmail(
+            basicKill.killmail_id,
+            basicKill.zkb.hash
+          );
+
+          if (!esiData) {
+            logger.warn(
+              `Failed to fetch ESI data for killmail ${basicKill.killmail_id}`
+            );
+            continue;
+          }
+
+          // Transform ESI data to match our schema
+          const transformedEsiData = {
+            killmail_time: esiData.killmail_time,
+            solar_system_id: esiData.solar_system_id,
+            victim: esiData.victim
+              ? {
+                  character_id: esiData.victim.character_id,
+                  corporation_id: esiData.victim.corporation_id,
+                  alliance_id: esiData.victim.alliance_id,
+                  ship_type_id: esiData.victim.ship_type_id,
+                  damage_taken: esiData.victim.damage_taken,
+                  position: esiData.victim.position,
+                  items: esiData.victim.items.map((item) => ({
+                    type_id: item.type_id,
+                    flag: item.flag,
+                    quantity_destroyed: item.quantity_destroyed,
+                    quantity_dropped: item.quantity_dropped,
+                    singleton: item.singleton,
+                  })),
+                }
+              : undefined,
+            attackers: esiData.attackers.map((attacker) => ({
+              character_id: attacker.character_id,
+              corporation_id: attacker.corporation_id,
+              alliance_id: attacker.alliance_id,
+              damage_done: attacker.damage_done,
+              final_blow: attacker.final_blow,
+              security_status: attacker.security_status,
+              ship_type_id: attacker.ship_type_id,
+              weapon_type_id: attacker.weapon_type_id,
+            })),
+          };
+
+          // Combine the data and validate the complete killmail
+          const completeKill = {
+            ...basicKill,
+            ...transformedEsiData,
+          };
+
+          validatedKills.push(CompleteKillmailSchema.parse(completeKill));
+        } catch (parseError) {
+          logger.warn(
+            {
+              error: parseError,
+              killId: kill.killmail_id,
+              rawData: kill,
+              expectedFields: Object.keys(BasicKillmailSchema.shape),
+            },
+            "Failed to parse killmail response"
+          );
+        }
+      }
+
+      logger.info(
+        `Received ${validatedKills.length} valid kills for character ${characterId}`
+      );
+      return validatedKills;
     } catch (error: any) {
       logger.error(
         {
@@ -103,7 +247,7 @@ export class ZkillClient {
           page,
           errorMessage: error?.message,
           errorStack: error?.stack,
-          url: `/kills/characterID/${characterId}/page/${page}/`,
+          url: `/api/characterID/${characterId}/page/${page}/`,
           statusCode: error?.response?.status,
           statusText: error?.response?.statusText,
         },
@@ -119,7 +263,9 @@ export class ZkillClient {
   async getCharacterLosses(characterId: number, page: number = 1) {
     try {
       await this.rateLimit();
-      logger.info(`Fetching losses for character ${characterId}, page ${page}`);
+      logger.info(
+        `Fetching losses for character ${characterId}, page ${page} from zKillboard API...`
+      );
 
       const url = `/losses/characterID/${characterId}/page/${page}/`;
       logger.debug(`Making zKillboard request to: ${url}`);
@@ -128,17 +274,94 @@ export class ZkillClient {
 
       if (!response.data) {
         logger.warn(
-          `Empty response from zKillboard for character ${characterId} losses`
+          `Empty response from zKillboard for character ${characterId}`
         );
         return [];
       }
 
-      logger.info(
-        `Received ${
-          response.data?.length || 0
-        } losses for character ${characterId}`
+      // Process each loss by fetching complete data from ESI
+      const validatedLosses = await Promise.all(
+        response.data.map(async (kill: any) => {
+          try {
+            // First validate the basic zKillboard response
+            const basicKill = BasicKillmailSchema.parse(kill);
+
+            // Then fetch complete killmail data from ESI
+            const esiData = await fetchESIKillmail(
+              basicKill.killmail_id,
+              basicKill.zkb.hash
+            );
+
+            if (!esiData) {
+              logger.warn(
+                `Failed to fetch ESI data for killmail ${basicKill.killmail_id}`
+              );
+              return null;
+            }
+
+            // Transform ESI data to match our schema
+            const transformedEsiData = {
+              killmail_time: esiData.killmail_time,
+              solar_system_id: esiData.solar_system_id,
+              victim: esiData.victim
+                ? {
+                    character_id: esiData.victim.character_id,
+                    corporation_id: esiData.victim.corporation_id,
+                    alliance_id: esiData.victim.alliance_id,
+                    ship_type_id: esiData.victim.ship_type_id,
+                    damage_taken: esiData.victim.damage_taken,
+                    position: esiData.victim.position,
+                    items: esiData.victim.items.map((item) => ({
+                      type_id: item.type_id,
+                      flag: item.flag,
+                      quantity_destroyed: item.quantity_destroyed,
+                      quantity_dropped: item.quantity_dropped,
+                      singleton: item.singleton,
+                    })),
+                  }
+                : undefined,
+              attackers: esiData.attackers.map((attacker) => ({
+                character_id: attacker.character_id,
+                corporation_id: attacker.corporation_id,
+                alliance_id: attacker.alliance_id,
+                damage_done: attacker.damage_done,
+                final_blow: attacker.final_blow,
+                security_status: attacker.security_status,
+                ship_type_id: attacker.ship_type_id,
+                weapon_type_id: attacker.weapon_type_id,
+              })),
+            };
+
+            // Combine the data and validate the complete killmail
+            const completeKill = {
+              ...basicKill,
+              ...transformedEsiData,
+            };
+
+            return CompleteKillmailSchema.parse(completeKill);
+          } catch (parseError) {
+            logger.warn(
+              {
+                error: parseError,
+                killId: kill.killmail_id,
+                rawData: kill,
+                expectedFields: Object.keys(BasicKillmailSchema.shape),
+              },
+              "Failed to parse killmail response"
+            );
+            return null;
+          }
+        })
       );
-      return response.data;
+
+      const validLosses = validatedLosses.filter(
+        (kill): kill is NonNullable<typeof kill> => kill !== null
+      );
+
+      logger.info(
+        `Received ${validLosses.length} valid losses for character ${characterId}`
+      );
+      return validLosses;
     } catch (error: any) {
       logger.error(
         {
@@ -150,7 +373,6 @@ export class ZkillClient {
           url: `/losses/characterID/${characterId}/page/${page}/`,
           statusCode: error?.response?.status,
           statusText: error?.response?.statusText,
-          retryAfter: error?.response?.headers?.["retry-after"],
         },
         "Failed to fetch character losses from zKillboard"
       );

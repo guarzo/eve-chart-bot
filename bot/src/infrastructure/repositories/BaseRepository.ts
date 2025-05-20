@@ -43,7 +43,7 @@ export abstract class BaseRepository {
       return false;
     }
 
-    return DatabaseUtils.tableExists(this.prisma, this.dbTableName);
+    return DatabaseUtils.tableExists(this.modelName);
   }
 
   /**

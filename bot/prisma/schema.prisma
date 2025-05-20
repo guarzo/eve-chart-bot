@@ -24,14 +24,24 @@ model Character {
   allianceTicker     String?         @map("alliance_ticker")
   corporationId      Int             @map("corporation_id")
   corporationTicker  String          @map("corporation_ticker")
+  isMain             Boolean
+  characterGroupId   String?         @map("character_group_id")
+  mainCharacterId    String?         @map("main_character_id")
+  lastSyncedAt       DateTime?       @map("last_synced_at")
+  lastBackfillAt     DateTime?       @map("last_backfill_at")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
-  characterGroupId   String?         @map("character_group_id")
-  lastBackfillAt     DateTime?       @map("last_backfill_at")
   groupMainCharacter CharacterGroup? @relation("GroupMainCharacter")
   characterGroup     CharacterGroup? @relation("GroupCharacters", fields: [characterGroupId], references: [id])
 
+  // Relationships
+  kills             KillCharacter[]
+  losses            LossFact[]
+  mapActivity       MapActivity[]
+
   @@index([characterGroupId])
+  @@index([corporationId])
+  @@index([allianceId])
   @@map("characters")
 }
 

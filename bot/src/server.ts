@@ -1,10 +1,7 @@
+import "reflect-metadata";
 import express, { RequestHandler } from "express";
 import { logger } from "./lib/logger";
-import { IngestionService } from "./services/IngestionService";
-import {
-  startConsumer,
-  refreshTrackedCharacters,
-} from "./ingestion/redisq-ingest";
+import { RedisQService } from "./services/ingestion/RedisQService";
 import { config as dotenvConfig } from "dotenv";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -15,10 +12,20 @@ import { ChartService } from "./services/ChartService";
 import { ChartRenderer } from "./services/ChartRenderer";
 import { ChartOptions } from "./types/chart";
 import { z } from "zod";
-import { ensureDatabaseTablesExist } from "./application/ingestion/DatabaseCheck";
+import { ensureDatabaseTablesExist as checkDatabaseTables } from "./application/ingestion/DatabaseCheck";
+import { initSentry } from "./lib/sentry";
+import { KillmailIngestionService } from "./services/ingestion/KillmailIngestionService";
+import { MapActivityService } from "./services/ingestion/MapActivityService";
+import { CharacterSyncService } from "./services/ingestion/CharacterSyncService";
+import { CharacterRepository } from "./infrastructure/repositories/CharacterRepository";
+import { KillRepository } from "./infrastructure/repositories/KillRepository";
+import { MapActivityRepository } from "./infrastructure/repositories/MapActivityRepository";
 
 // Load environment variables
 dotenvConfig();
+
+// Initialize Sentry
+initSentry();
 
 // Constants
 const appStartTime = Date.now();
@@ -43,21 +50,17 @@ app.use(
 );
 
 // Initialize services
-let ingestionService: IngestionService;
+let killmailService: KillmailIngestionService;
+let mapService: MapActivityService;
+let characterService: CharacterSyncService;
+let redisQService: RedisQService;
 const chartService = new ChartService();
 const chartRenderer = new ChartRenderer();
 
-// Configure ingestion
-const ingestionConfig = {
-  zkillApiUrl: process.env.ZKILLBOARD_API_URL || "https://zkillboard.com/api",
-  mapApiUrl: process.env.MAP_API_URL,
-  mapApiKey: process.env.MAP_API_KEY,
-  redisUrl: process.env.REDIS_URL,
-  cacheTtl: parseInt(process.env.CACHE_TTL || "300"),
-  batchSize: parseInt(process.env.BATCH_SIZE || "100"),
-  backoffMs: parseInt(process.env.BACKOFF_MS || "1000"),
-  maxRetries: parseInt(process.env.MAX_RETRIES || "3"),
-};
+// Initialize repositories
+const characterRepository = new CharacterRepository();
+const killRepository = new KillRepository();
+const mapActivityRepository = new MapActivityRepository();
 
 // Validation schemas
 const chartConfigSchema = z.object({
@@ -146,10 +149,10 @@ app.post("/v1/charts/generate", async (req, res) => {
 // Add debug endpoint for DB counts
 app.get("/debug/counts", async (_req, res) => {
   try {
-    const mapActivityCount = await app.locals.prisma.mapActivity.count();
-    const lossCount = await app.locals.prisma.lossFact.count();
-    const killCount = await app.locals.prisma.killFact.count();
-    const charCount = await app.locals.prisma.character.count();
+    const mapActivityCount = await mapActivityRepository.count();
+    const lossCount = await killRepository.countLosses();
+    const killCount = await killRepository.countKills();
+    const charCount = await characterRepository.count();
 
     res.status(200).json({
       status: "ok",
@@ -174,18 +177,16 @@ const discordClient = new DiscordClient();
 // Add diagnostic routes
 app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
   try {
-    const characters = await app.locals.prisma.character.findMany({
-      include: {
-        group: true,
-      },
-    });
+    const characters = await characterRepository.getAllCharacters();
 
     // Format the response
-    const formattedCharacters = characters.map((char: any) => ({
+    const formattedCharacters = characters.map((char) => ({
       id: char.eveId,
       name: char.name,
-      group: char.group?.name || "No Group",
-      groupId: char.group?.groupId,
+      group: char.characterGroupId
+        ? "Group " + char.characterGroupId
+        : "No Group",
+      groupId: char.characterGroupId,
       lastBackfill: char.lastBackfillAt,
     }));
 
@@ -218,7 +219,7 @@ const backfillKillsHandler: RequestHandler<BackfillKillsParams> = async (
     logger.info(
       `Manually triggering kill backfill for character ${characterId}`
     );
-    await ingestionService.backfillKills(characterId, 7);
+    await backfillKills(characterId);
 
     res.json({
       success: true,
@@ -235,13 +236,14 @@ app.get("/api/diagnostics/backfill-kills/:characterId", backfillKillsHandler);
 // Also add an endpoint to refresh tracked characters
 const refreshCharactersHandler: RequestHandler = async (_req, res) => {
   try {
-    logger.info("Manually refreshing character tracking");
-    await refreshTrackedCharacters();
-
-    res.json({ success: true, message: "Character tracking refreshed" });
+    if (!redisQService) {
+      throw new Error("RedisQ service not initialized");
+    }
+    await refreshCharacters();
+    res.json({ status: "ok", message: "Characters refreshed" });
   } catch (error) {
-    logger.error(`Error refreshing character tracking: ${error}`);
-    res.status(500).json({ error: "Failed to refresh character tracking" });
+    logger.error(`Error refreshing characters: ${error}`);
+    res.status(500).json({ error: "Failed to refresh characters" });
   }
 };
 
@@ -260,47 +262,35 @@ const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
   res
 ) => {
   try {
-    const groupId = req.params.groupId;
-    if (!groupId) {
-      res.status(400).json({ error: "Invalid group ID" });
-      return;
-    }
-
-    logger.info(
-      `Manually triggering kill backfill for all characters in group ${groupId}`
-    );
+    const { groupId } = req.params;
 
     // Find all characters in the group
-    const characters = await app.locals.prisma.character.findMany({
-      where: {
-        groupId: groupId,
-      },
-    });
+    const characters = await characterRepository.getCharactersByGroup(groupId);
 
     if (characters.length === 0) {
-      res
-        .status(404)
-        .json({ error: `No characters found for group ${groupId}` });
+      res.status(404).json({
+        success: false,
+        message: `No characters found in group ${groupId}`,
+      });
       return;
     }
 
-    logger.info(`Found ${characters.length} characters in group ${groupId}`);
+    // Start backfill for each character
+    processCharacterBackfills(characters).catch((error) => {
+      logger.error(`Error backfilling group ${groupId}: ${error}`);
+    });
 
-    // Send response first to avoid timeout
     res.json({
       success: true,
       message: `Backfill started for ${characters.length} characters in group ${groupId}`,
-      characters: characters.map((c: any) => ({ id: c.eveId, name: c.name })),
-    });
-
-    // Then process asynchronously (after response is sent)
-    // No need to await here since we've already responded
-    processCharacterBackfills(characters).catch((error) => {
-      logger.error(`Error in background processing: ${error}`);
+      characters: characters.map((c) => ({ id: c.eveId, name: c.name })),
     });
   } catch (error) {
-    logger.error(`Error triggering group backfill: ${error}`);
-    res.status(500).json({ error: "Failed to trigger group backfill" });
+    logger.error(`Error backfilling group: ${error}`);
+    res.status(500).json({
+      success: false,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 };
 
@@ -313,7 +303,7 @@ async function processCharacterBackfills(characters: any[]): Promise<void> {
       logger.info(
         `Backfilling kills for character ${character.name} (${character.eveId})`
       );
-      await ingestionService.backfillKills(parseInt(character.eveId), 30);
+      await backfillKills(parseInt(character.eveId));
     } catch (error) {
       logger.error(
         `Error backfilling kills for character ${character.name}: ${error}`
@@ -329,8 +319,8 @@ const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
     logger.info("Starting kill/loss data cleanup and rebalance");
 
     // First, get current counts
-    const initialLossCount = await app.locals.prisma.lossFact.count();
-    const initialKillCount = await app.locals.prisma.killFact.count();
+    const initialLossCount = await killRepository.countLosses();
+    const initialKillCount = await killRepository.countKills();
 
     logger.info(
       `Initial counts - Losses: ${initialLossCount}, Kills: ${initialKillCount}`
@@ -338,23 +328,16 @@ const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
 
     // Step 1: Remove all loss records to start fresh
     logger.info("Removing all existing loss records");
-    const deletedLosses = await app.locals.prisma.lossFact.deleteMany({});
+    const deletedLosses = await killRepository.deleteAllLosses();
     logger.info(`Deleted ${deletedLosses.count} loss records`);
 
     // Step 2: Reset all ingestion checkpoints for losses
     logger.info("Resetting ingestion checkpoints for losses");
-    const deletedCheckpoints =
-      await app.locals.prisma.ingestionCheckpoint.deleteMany({
-        where: {
-          streamName: {
-            startsWith: "losses:",
-          },
-        },
-      });
+    const deletedCheckpoints = await killRepository.deleteAllLossCheckpoints();
     logger.info(`Deleted ${deletedCheckpoints.count} loss checkpoints`);
 
     // Step 3: Backfill losses for all characters (but limit to 5 in dev mode)
-    const characters = await app.locals.prisma.character.findMany();
+    const characters = await characterRepository.getAllCharacters();
     const totalCharacters = characters.length;
     logger.info(`Found ${totalCharacters} characters to backfill losses for`);
 
@@ -396,7 +379,7 @@ async function processLossBackfill(characters: any[]): Promise<void> {
           character.eveId
         }) - ${i + 1}/${characters.length}`
       );
-      await ingestionService.backfillLosses(parseInt(character.eveId), 30);
+      await backfillLosses(parseInt(character.eveId), 30);
     } catch (error) {
       logger.error(
         `Error backfilling losses for character ${character.name}: ${error}`
@@ -405,12 +388,57 @@ async function processLossBackfill(characters: any[]): Promise<void> {
   }
 
   // Get final counts
-  const finalLossCount = await app.locals.prisma.lossFact.count();
-  const finalKillCount = await app.locals.prisma.killFact.count();
+  const finalLossCount = await killRepository.countLosses();
+  const finalKillCount = await killRepository.countKills();
 
   logger.info(
     `Fix kill/loss balance complete - Final counts - Losses: ${finalLossCount}, Kills: ${finalKillCount}`
   );
+}
+
+// Helper functions
+async function cleanup() {
+  logger.info("Cleaning up resources...");
+  if (redisQService) {
+    await redisQService.stop();
+  }
+  await killmailService.close();
+  await mapService.close();
+  await characterService.close();
+}
+
+async function backfillKills(characterId: number) {
+  await killmailService.backfillKills(characterId);
+}
+
+async function backfillLosses(characterId: number, days = 30) {
+  await killmailService.backfillLosses(characterId, days);
+}
+
+async function refreshMapActivity(mapName: string) {
+  await mapService.refreshMapActivityData(mapName, 7);
+  const count = await mapActivityRepository.count();
+  logger.info(`Map activity count: ${count}`);
+}
+
+function startRedisQConsumer() {
+  const REDIS_URL = process.env.REDIS_URL;
+  if (!REDIS_URL) {
+    logger.error("REDIS_URL environment variable is required");
+    return;
+  }
+
+  redisQService = new RedisQService(
+    REDIS_URL,
+    parseInt(process.env.MAX_RETRIES || "3"),
+    parseInt(process.env.RETRY_DELAY || "5000"),
+    parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
+    parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
+  );
+
+  redisQService.start().catch((error) => {
+    logger.error("Error starting RedisQ consumer:", error);
+  });
 }
 
 // Start server
@@ -442,15 +470,19 @@ async function startServer() {
 
     // Start ingestion service first
     logger.info("Starting ingestion service...");
-    ingestionService = new IngestionService(ingestionConfig);
-
-    // Set prisma instance in app.locals for other routes to access
-    app.locals.prisma = ingestionService.prisma;
+    killmailService = new KillmailIngestionService();
+    mapService = new MapActivityService(
+      process.env.MAP_API_URL!,
+      process.env.MAP_API_KEY!,
+      process.env.REDIS_URL!,
+      parseInt(process.env.CACHE_TTL || "300")
+    );
+    characterService = new CharacterSyncService();
 
     // Now check database tables (after ingestion service is initialized)
     logger.info("Ensuring database tables exist...");
     const dbCheckStartTime = Date.now();
-    await ensureTablesExist();
+    await checkDatabaseTables();
     logger.info(
       `Database tables checked/created (${
         (Date.now() - dbCheckStartTime) / 1000
@@ -478,7 +510,7 @@ async function startServer() {
 
     // Start RedisQ consumer
     logger.info("Starting RedisQ consumer...");
-    startRedisQConsumer(ingestionService);
+    startRedisQConsumer();
 
     // Sync characters from map
     const mapName = process.env.MAP_NAME;
@@ -500,14 +532,7 @@ async function startServer() {
       logger.info(`Syncing map activity data from map: ${mapName}`);
       try {
         // Use the new refresh method which handles duplicates
-        await ingestionService.refreshMapActivityData(mapName, 7); // Get 7 days of activity data instead of 30
-
-        // Check if we got any data
-        const mapActivityCount =
-          await ingestionService.prisma.mapActivity.count();
-        logger.info(
-          `Map activity records after ingestion: ${mapActivityCount}`
-        );
+        await refreshMapActivity(mapName);
       } catch (error) {
         logger.error(`Error ingesting map activity: ${error}`);
       }
@@ -524,11 +549,10 @@ async function startServer() {
         logger.info("Running scheduled map activity refresh...");
 
         // Use the simpler approach - completely refresh map activity data every hour
-        await ingestionService.refreshMapActivityData(process.env.MAP_NAME!, 7);
+        await refreshMapActivity(process.env.MAP_NAME!);
 
         // Log current count for monitoring
-        const mapActivityCount =
-          await ingestionService.prisma.mapActivity.count();
+        const mapActivityCount = await mapActivityRepository.count();
         logger.info(
           `Map activity count after scheduled refresh: ${mapActivityCount}`
         );
@@ -540,7 +564,7 @@ async function startServer() {
     // Handle graceful shutdown
     process.on("SIGTERM", async () => {
       logger.info("Shutting down server...");
-      await ingestionService.close();
+      await cleanup();
       process.exit(0);
     });
   } catch (error) {
@@ -623,15 +647,13 @@ async function backfillCharacters() {
   try {
     // Re-enable backfill now that we've fixed the database structure
     logger.info("Backfilling kills and losses for all characters...");
-    const characters = await ingestionService.prisma.character.findMany();
+    const characters = await characterRepository.getAllCharacters();
     const totalCharacters = characters.length;
     logger.info(`Found ${totalCharacters} characters to backfill`);
 
     // Check if we have any loss data before starting
-    const initialLossCount = await ingestionService.prisma.lossFact.count();
-    const initialKillCount = await (
-      ingestionService.prisma as any
-    ).killFact.count();
+    const initialLossCount = await killRepository.countLosses();
+    const initialKillCount = await killRepository.countKills();
     logger.info(
       `Initial counts - Losses: ${initialLossCount}, Kills: ${initialKillCount}`
     );
@@ -656,7 +678,7 @@ async function backfillCharacters() {
 
       try {
         // Backfill kills
-        await ingestionService.backfillKills(parseInt(character.eveId), 30); // 30 days max age
+        await backfillKills(parseInt(character.eveId));
       } catch (killsError) {
         const errorInfo = {
           character: character.name,
@@ -681,7 +703,7 @@ async function backfillCharacters() {
         logger.info(
           `Backfilling losses for character: ${character.name} (${character.eveId})`
         );
-        await ingestionService.backfillLosses(parseInt(character.eveId), 30); // 30 days max age
+        await backfillLosses(parseInt(character.eveId), 30); // 30 days max age
       } catch (lossesError) {
         const errorInfo = {
           character: character.name,
@@ -703,10 +725,8 @@ async function backfillCharacters() {
     }
 
     // Check our progress
-    const finalLossCount = await ingestionService.prisma.lossFact.count();
-    const finalKillCount = await (
-      ingestionService.prisma as any
-    ).killFact.count();
+    const finalLossCount = await killRepository.countLosses();
+    const finalKillCount = await killRepository.countKills();
 
     logger.info(
       `Final counts - Losses: ${finalLossCount} (+${
@@ -740,10 +760,10 @@ async function backfillCharacters() {
 async function syncCharacters(mapName: string) {
   try {
     logger.info(`Syncing user characters from map ${mapName}`);
-    await ingestionService.syncUserCharacters(mapName);
+    await characterService.syncUserCharacters(mapName);
 
     // Check how many characters we got
-    const characterCount = await ingestionService.prisma.character.count();
+    const characterCount = await characterRepository.count();
     logger.info(`Character count after sync: ${characterCount}`);
 
     if (characterCount === 0) {
@@ -759,35 +779,14 @@ async function syncCharacters(mapName: string) {
 // Refresh character tracking for RedisQ
 async function refreshCharacters() {
   try {
-    // This will refresh the list of characters we're tracking in RedisQ
-    logger.info("Refreshing tracked characters...");
-    await refreshTrackedCharacters();
-    logger.info("Character tracking refreshed");
+    if (!redisQService) {
+      throw new Error("RedisQ service not initialized");
+    }
+    await redisQService.refreshTrackedCharacters();
+    logger.info("Characters refreshed successfully");
   } catch (error) {
-    logger.error(`Error refreshing character tracking: ${error}`);
-  }
-}
-
-// Start RedisQ consumer for killmail ingestion
-function startRedisQConsumer(ingestionService: IngestionService) {
-  try {
-    logger.info("Starting RedisQ consumer...");
-    startConsumer(ingestionService);
-    logger.info("RedisQ consumer started successfully");
-  } catch (error) {
-    logger.error(`Error starting RedisQ consumer: ${error}`);
-  }
-}
-
-// Ensure all necessary database tables exist
-async function ensureTablesExist() {
-  try {
-    logger.info("Checking database schema...");
-
-    // Use the centralized database check utility
-    await ensureDatabaseTablesExist(ingestionService.prisma);
-  } catch (error) {
-    logger.error(`Error checking database schema: ${error}`);
+    logger.error(`Error refreshing characters: ${error}`);
+    throw error;
   }
 }
 

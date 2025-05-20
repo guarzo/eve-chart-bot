@@ -9,22 +9,6 @@ import { buildWhereFilter } from "../../utils/query-helper";
 export class MapActivityRepository extends BaseRepository {
   constructor() {
     super("MapActivity");
-
-    // Log the actual table name for debugging
-    logger.info(
-      `MapActivityRepository: Using table name ${this.dbTableName || "unknown"}`
-    );
-
-    // Validate that the table exists
-    this.tableExists().then((exists: boolean) => {
-      if (!exists) {
-        logger.warn(
-          "MapActivity table does not exist or is not accessible. This may cause errors."
-        );
-      } else {
-        logger.info("MapActivity table exists and is accessible.");
-      }
-    });
   }
 
   /**
@@ -328,5 +312,51 @@ export class MapActivityRepository extends BaseRepository {
         }))
         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     });
+  }
+
+  /**
+   * Create or update a map activity record
+   */
+  async upsertMapActivity(
+    characterId: bigint,
+    timestamp: Date,
+    signatures: number,
+    connections: number,
+    passages: number,
+    allianceId: number | null,
+    corporationId: number | null
+  ): Promise<void> {
+    if (corporationId === null) {
+      throw new Error("corporationId is required");
+    }
+
+    await this.prisma.mapActivity.upsert({
+      where: {
+        characterId_timestamp: {
+          characterId,
+          timestamp,
+        },
+      },
+      update: {
+        signatures,
+        connections,
+        passages,
+        allianceId,
+        corporationId,
+      },
+      create: {
+        characterId,
+        timestamp,
+        signatures,
+        connections,
+        passages,
+        allianceId,
+        corporationId,
+      },
+    });
+  }
+
+  public async count(): Promise<number> {
+    return this.prisma.mapActivity.count();
   }
 }

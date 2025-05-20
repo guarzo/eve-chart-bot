@@ -1,4 +1,12 @@
-import { PrismaClient } from "@prisma/client";
+import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
+import { KillRepository } from "../infrastructure/repositories/KillRepository";
+import { MapActivityRepository } from "../infrastructure/repositories/MapActivityRepository";
+import { RepositoryManager } from "../infrastructure/repositories/RepositoryManager";
+import { logger } from "../lib/logger";
+import { Character } from "../domain/character/Character";
+import { CharacterGroup } from "../domain/character/CharacterGroup";
+import { Killmail } from "../domain/killmail/Killmail";
+import { MapActivity } from "../domain/activity/MapActivity";
 import {
   ChartConfigInput,
   ChartData,
@@ -6,7 +14,6 @@ import {
   ChartMetric,
 } from "../types/chart";
 import { format } from "date-fns";
-import { logger } from "../lib/logger";
 
 interface KillData {
   killTime: Date;
@@ -19,11 +26,13 @@ interface KillData {
 interface ActivityData {
   timestamp: Date;
   signatures: number;
-  characterId: string;
+  characterId: bigint;
 }
 
 export class ChartService {
-  private prisma: PrismaClient;
+  private readonly characterRepository: CharacterRepository;
+  private readonly killRepository: KillRepository;
+  private readonly mapActivityRepository: MapActivityRepository;
   private colors: string[] = [
     "#3366CC", // deep blue
     "#DC3912", // red
@@ -44,7 +53,10 @@ export class ChartService {
   ];
 
   constructor() {
-    this.prisma = new PrismaClient();
+    const repositoryManager = new RepositoryManager();
+    this.characterRepository = repositoryManager.getCharacterRepository();
+    this.killRepository = repositoryManager.getKillRepository();
+    this.mapActivityRepository = repositoryManager.getMapActivityRepository();
   }
 
   async generateChart(config: ChartConfigInput): Promise<ChartData> {
@@ -148,35 +160,26 @@ export class ChartService {
 
     try {
       // Find all related characters via character groups
-      const allCharacters = await this.prisma.character.findMany({
-        where: {
-          OR: [
-            { eveId: { in: characterIdStrings } }, // Main characters
-            {
-              characterGroup: {
-                mainCharacterId: { in: characterIdStrings },
-              },
-            }, // Characters in groups with these mains
-          ],
-        },
-      });
-
-      const allCharacterIds = allCharacters.map((c) => BigInt(c.eveId));
+      const allCharactersNested = await Promise.all(
+        characterIdStrings.map((id: string) =>
+          this.characterRepository.getCharactersByGroup(id)
+        )
+      );
+      const allCharacters = allCharactersNested.flat();
+      const allCharacterIdStrings = allCharacters.map(
+        (c: Character) => c.eveId
+      );
       logger.info(
         `Including all characters in same groups: ${allCharacters.length} characters total`
       );
 
       // Get kills for each character using the updated schema
       logger.info("Querying killFact table with expanded character list...");
-      const killsQuery = await this.prisma.killFact.findMany({
-        where: {
-          character_id: {
-            in: allCharacterIds,
-          },
-          kill_time: { gte: startDate },
-        },
-        orderBy: { kill_time: "asc" },
-      });
+      const killsQuery = await this.killRepository.getKillsForCharacters(
+        allCharacterIdStrings,
+        startDate,
+        new Date()
+      );
 
       logger.info(`Found ${killsQuery.length} kill records in database`);
 
@@ -189,9 +192,9 @@ export class ChartService {
           characterIds.slice(0, limit).map(async (characterId, index) => {
             // Try to get character name
             try {
-              const character = await this.prisma.character.findUnique({
-                where: { eveId: characterId.toString() },
-              });
+              const character = await this.characterRepository.getCharacter(
+                characterId.toString()
+              );
 
               return {
                 label: character?.name || `Character ${characterId}`,
@@ -268,9 +271,9 @@ export class ChartService {
         [];
 
       for (const characterId of characterIds) {
-        const character = await this.prisma.character.findUnique({
-          where: { eveId: characterId.toString() },
-        });
+        const character = await this.characterRepository.getCharacter(
+          characterId.toString()
+        );
 
         if (!character) {
           logger.warn(`Character ${characterId} not found in database`);
@@ -278,13 +281,9 @@ export class ChartService {
         }
 
         // Find all alts for this character
-        const alts = await this.prisma.character.findMany({
-          where: {
-            characterGroup: {
-              mainCharacterId: character.eveId,
-            },
-          },
-        });
+        const alts = await this.characterRepository.getCharactersByGroup(
+          character.eveId
+        );
 
         // Get all character IDs (main + alts)
         const allIds = [
@@ -345,9 +344,9 @@ export class ChartService {
         topCharacterIds.map(async (charItem, index) => {
           const characterId = charItem.id;
           const characterIdString = characterId.toString();
-          const character = await this.prisma.character.findUnique({
-            where: { eveId: characterIdString },
-          });
+          const character = await this.characterRepository.getCharacter(
+            characterIdString
+          );
 
           if (!character) {
             logger.warn(`Character ${characterId} not found in database`);
@@ -364,13 +363,9 @@ export class ChartService {
           );
 
           // Find all alts for this character
-          const alts = await this.prisma.character.findMany({
-            where: {
-              characterGroup: {
-                mainCharacterId: character.eveId,
-              },
-            },
-          });
+          const alts = await this.characterRepository.getCharactersByGroup(
+            character.eveId
+          );
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
@@ -500,51 +495,50 @@ export class ChartService {
 
     try {
       // First, get all characters including alts for the requested main characters
-      const allCharacters = await this.prisma.character.findMany({
-        where: {
-          OR: [
-            { eveId: { in: characterIdStrings } }, // Main characters
-            {
-              characterGroup: {
-                mainCharacterId: { in: characterIdStrings },
-              },
-            }, // Alt characters
-          ],
-        },
-      });
+      const allCharacters = await Promise.all(
+        characterIdStrings.map((id) =>
+          this.characterRepository.getCharactersByGroup(id)
+        )
+      );
 
-      const allCharacterIdStrings = allCharacters.map((c) => c.eveId);
+      const allCharacterIdStrings = allCharacters
+        .flat()
+        .map((c: Character) => c.eveId);
       logger.info(
         `Including all characters and alts: ${allCharacters.length} characters total`
       );
 
       // Get map activity for each character
       logger.info("Querying mapActivity table with expanded character list...");
-      const activitiesRaw = await this.prisma.mapActivity.findMany({
-        where: {
-          characterId: { in: allCharacterIdStrings as any },
-          timestamp: { gte: startDate },
-        },
-        orderBy: { timestamp: "asc" },
-      });
+      const rawActivities =
+        await this.mapActivityRepository.getActivityForGroup(
+          allCharacterIdStrings.join(","),
+          startDate,
+          new Date()
+        );
 
       logger.info(
-        `Found ${activitiesRaw.length} map activity records in database`
+        `Found ${rawActivities.length} map activity records in database`
       );
 
-      if (activitiesRaw.length === 0) {
+      if (rawActivities.length === 0) {
         logger.warn(
           "No map activity found for the specified characters and time period"
         );
         // Let's check if there are any activity records at all in the database
-        const totalActivityCount = await this.prisma.mapActivity.count();
-        logger.info(`Total map activities in database: ${totalActivityCount}`);
+        const totalActivityCount =
+          await this.mapActivityRepository.getActivityForGroup(
+            characterIdStrings[0],
+            startDate,
+            new Date()
+          );
+        logger.info(
+          `Total map activities in database: ${totalActivityCount.length}`
+        );
 
         // Sample a few records to understand the data structure
-        if (totalActivityCount > 0) {
-          const sampleRecords = await this.prisma.mapActivity.findMany({
-            take: 5,
-          });
+        if (totalActivityCount.length > 0) {
+          const sampleRecords = totalActivityCount;
           logger.info(
             `Sample map activity records: ${JSON.stringify(sampleRecords)}`
           );
@@ -552,10 +546,10 @@ export class ChartService {
       }
 
       // Convert to ActivityData
-      const activities: ActivityData[] = activitiesRaw.map((activity) => ({
+      const activities: ActivityData[] = rawActivities.map((activity) => ({
         timestamp: activity.timestamp,
         signatures: activity.signatures,
-        characterId: String(activity.characterId),
+        characterId: activity.characterId,
       }));
 
       // Group activities by time period
@@ -578,9 +572,9 @@ export class ChartService {
       const datasets = await Promise.all(
         characterIds.map(async (characterId) => {
           const characterIdString = characterId.toString();
-          const character = await this.prisma.character.findUnique({
-            where: { eveId: characterIdString },
-          });
+          const character = await this.characterRepository.getCharacter(
+            characterIdString
+          );
 
           if (!character) {
             logger.warn(`Character ${characterId} not found in database`);
@@ -597,22 +591,22 @@ export class ChartService {
           );
 
           // Find all alts for this character
-          const alts = await this.prisma.character.findMany({
-            where: {
-              characterGroup: {
-                mainCharacterId: character.eveId,
-              },
-            },
-          });
+          const alts = await this.characterRepository.getCharactersByGroup(
+            character.eveId
+          );
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
           // Get all character IDs (main + alts)
-          const allIds = [character.eveId, ...alts.map((alt) => alt.eveId)];
+          const allIds = [
+            character.eveId,
+            ...alts.map((alt) => BigInt(alt.eveId)),
+          ];
 
           // Filter activities for this character and all its alts
           const characterActivities = activities.filter(
-            (activity: ActivityData) => allIds.includes(activity.characterId)
+            (activity: ActivityData) =>
+              allIds.includes(BigInt(activity.characterId))
           );
 
           logger.info(
@@ -772,16 +766,11 @@ export class ChartService {
 
         // First, check if any character in the group is set as a main character
         for (const character of group.characters) {
-          const hasAlts = await this.prisma.character.count({
-            where: {
-              characterGroup: {
-                mainCharacterId: character.eveId,
-              },
-            },
-          });
-
-          if (hasAlts > 0) {
-            // This character is a main character
+          const alts = await this.characterRepository.getCharactersByGroup(
+            character.eveId
+          );
+          const hasAlts = alts.length > 0;
+          if (hasAlts) {
             mainCharacter = character;
             break;
           }
@@ -851,17 +840,12 @@ export class ChartService {
         }
 
         // Count kills for these characters (faster than fetching all data)
-        const killCount = await this.prisma.killFact.count({
-          where: {
-            character_id: {
-              in: characterIds,
-            },
-            kill_time: {
-              gte: startDate,
-              lte: endDate,
-            },
-          },
-        });
+        const kills = await this.killRepository.getKillsForCharacters(
+          characterIds.map((id) => id.toString()),
+          startDate,
+          endDate
+        );
+        const killCount = kills.length;
 
         if (killCount === 0) {
           logger.info(
@@ -871,34 +855,6 @@ export class ChartService {
           continue;
         }
 
-        // Now get full kill details
-        const kills = await this.prisma.killFact.findMany({
-          where: {
-            character_id: {
-              in: characterIds,
-            },
-            kill_time: {
-              gte: startDate,
-              lte: endDate,
-            },
-          },
-          include: {
-            attackers: {
-              select: {
-                character_id: true,
-                corporation_id: true,
-                alliance_id: true,
-                ship_type_id: true,
-                weapon_type_id: true,
-                damage_done: true,
-                final_blow: true,
-              },
-            },
-          },
-        });
-
-        logger.info(`Group ${group.displayName}: Found ${kills.length} kills`);
-
         // Calculate solo kills (where all attackers are from this group)
         let soloKills = 0;
         for (const kill of kills) {
@@ -906,14 +862,18 @@ export class ChartService {
           if (!kill.attackers || kill.attackers.length === 0) continue;
 
           // Get all player attackers (those with character IDs)
-          const playerAttackers = kill.attackers.filter((a) => a.character_id);
+          const playerAttackers = kill.attackers.filter(
+            (a: { character_id?: string }) => a.character_id
+          );
           if (playerAttackers.length === 0) continue;
 
           // Check if all attackers are from this group
-          const allFromGroup = playerAttackers.every((attacker) => {
-            if (!attacker.character_id) return false;
-            return characterIds.includes(BigInt(attacker.character_id));
-          });
+          const allFromGroup = playerAttackers.every(
+            (attacker: { character_id?: string }) => {
+              if (!attacker.character_id) return false;
+              return characterIds.includes(BigInt(attacker.character_id));
+            }
+          );
 
           if (allFromGroup) {
             soloKills++;
@@ -1034,12 +994,7 @@ export class ChartService {
         "No character groups provided, creating default group with all characters"
       );
       try {
-        const allCharacters = await this.prisma.character.findMany({
-          select: {
-            eveId: true,
-            name: true,
-          },
-        });
+        const allCharacters = await this.characterRepository.getAllCharacters();
 
         if (allCharacters.length === 0) {
           logger.warn("No characters found in database");
@@ -1095,16 +1050,11 @@ export class ChartService {
 
         // First, check if any character in the group is set as a main character
         for (const character of group.characters) {
-          const hasAlts = await this.prisma.character.count({
-            where: {
-              characterGroup: {
-                mainCharacterId: character.eveId,
-              },
-            },
-          });
-
-          if (hasAlts > 0) {
-            // This character is a main character
+          const alts = await this.characterRepository.getCharactersByGroup(
+            character.eveId
+          );
+          const hasAlts = alts.length > 0;
+          if (hasAlts) {
             mainCharacter = character;
             break;
           }
@@ -1166,22 +1116,15 @@ export class ChartService {
         }
 
         // Get all map activities for these characters
-        const activities = await this.prisma.mapActivity.findMany({
-          where: {
-            characterId: {
-              in: characterIds,
-            },
-            timestamp: {
-              gte: startDate,
-              lte: endDate,
-            },
-          },
-          select: {
-            signatures: true,
-            connections: true,
-            passages: true,
-          },
-        });
+        const activities = await Promise.all(
+          characterIds.map((id) =>
+            this.mapActivityRepository.getActivityForGroup(
+              id.toString(),
+              startDate,
+              endDate
+            )
+          )
+        ).then((results) => results.flat());
 
         if (activities.length === 0) {
           logger.info(`No map activities found for group ${group.displayName}`);
@@ -1293,24 +1236,16 @@ export class ChartService {
   > {
     try {
       // Find main characters (where they are referenced by CharacterGroup.mainCharacterId)
-      const groups = await this.prisma.characterGroup.findMany({
-        where: {
-          mainCharacterId: { not: null },
-        },
-        select: {
-          mainCharacter: {
-            select: {
-              eveId: true,
-              name: true,
-            },
-          },
-        },
-      });
+      const groups = await this.characterRepository.getAllCharacterGroups();
 
       // Extract characters from groups
       const characters = groups
-        .map((g) => g.mainCharacter)
-        .filter((c): c is { eveId: string; name: string } => c !== null);
+        .map((g) =>
+          g.mainCharacterId
+            ? g.characters.find((c: Character) => c.eveId === g.mainCharacterId)
+            : null
+        )
+        .filter((c): c is Character => c !== null);
 
       logger.info(
         `Found ${characters.length} tracked characters (main characters)`
@@ -1337,7 +1272,9 @@ export class ChartService {
   > {
     try {
       // First, count the total number of character groups
-      const totalGroups = await this.prisma.characterGroup.count();
+      const totalGroups = (
+        await this.characterRepository.getAllCharacterGroups()
+      ).length;
 
       logger.info(`Found ${totalGroups} character groups in database`);
 
@@ -1348,20 +1285,9 @@ export class ChartService {
         );
 
         // Get only groups that have at least one character (using a JOIN)
-        const groupsWithCharacters = await this.prisma.characterGroup.findMany({
-          where: {
-            characters: {
-              some: {}, // Groups that have at least one character
-            },
-          },
-          select: {
-            id: true,
-            slug: true,
-            _count: {
-              select: { characters: true },
-            },
-          },
-        });
+        const groupsWithCharacters = (
+          await this.characterRepository.getAllCharacterGroups()
+        ).filter((g) => g.characters.length > 0);
 
         logger.info(
           `Found ${groupsWithCharacters.length} groups with at least one character`
@@ -1381,15 +1307,11 @@ export class ChartService {
 
           for (const group of batch) {
             // For each group, get its characters
-            const characters = await this.prisma.character.findMany({
-              where: {
-                characterGroupId: group.id,
-              },
-              select: {
-                eveId: true,
-                name: true,
-              },
-            });
+            const characters = await Promise.all(
+              group.characters.map((c: Character) =>
+                this.characterRepository.getCharactersByGroup(c.eveId)
+              )
+            ).then((results) => results.flat());
 
             if (characters.length > 0) {
               result.push({
@@ -1408,19 +1330,7 @@ export class ChartService {
       }
 
       // Standard approach for a reasonable number of groups
-      const groups = await this.prisma.characterGroup.findMany({
-        select: {
-          id: true,
-          slug: true,
-          mainCharacterId: true,
-          characters: {
-            select: {
-              eveId: true,
-              name: true,
-            },
-          },
-        },
-      });
+      const groups = await this.characterRepository.getAllCharacterGroups();
 
       logger.info(`Found ${groups.length} character groups`);
 
@@ -1450,16 +1360,10 @@ export class ChartService {
         );
 
         // Get characters that belong to a group
-        const characters = await this.prisma.character.findMany({
-          where: {
-            characterGroupId: { not: null },
-          },
-          select: {
-            eveId: true,
-            name: true,
-            characterGroupId: true,
-          },
-        });
+        const allCharacters = await this.characterRepository.getAllCharacters();
+        const characters = allCharacters.filter(
+          (c) => c.characterGroupId !== null
+        );
 
         // Manually group them
         const groupMap = new Map<
@@ -1509,5 +1413,108 @@ export class ChartService {
         return [];
       }
     }
+  }
+
+  /**
+   * Get kills for a character group within a date range
+   */
+  async getKillsForGroup(
+    groupId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<Killmail[]> {
+    const kills = await this.killRepository.getKillsForGroup(
+      groupId,
+      startDate,
+      endDate
+    );
+    return kills.map((kill) => new Killmail(kill));
+  }
+
+  /**
+   * Get map activity for a character group within a date range
+   */
+  async getMapActivityForGroup(
+    groupId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<MapActivity[]> {
+    const activities = await this.mapActivityRepository.getActivityForGroup(
+      groupId,
+      startDate,
+      endDate
+    );
+    return activities.map((activity) => new MapActivity(activity));
+  }
+
+  /**
+   * Get all character groups
+   */
+  async getAllCharacterGroups(): Promise<CharacterGroup[]> {
+    return this.characterRepository.getAllCharacterGroups();
+  }
+
+  /**
+   * Get a character group by ID
+   */
+  async getCharacterGroup(groupId: string): Promise<CharacterGroup | null> {
+    return this.characterRepository.getCharacterGroup(groupId);
+  }
+
+  /**
+   * Get all characters
+   */
+  async getAllCharacters(): Promise<Character[]> {
+    return this.characterRepository.getAllCharacters();
+  }
+
+  /**
+   * Get characters by group ID
+   */
+  async getCharactersByGroup(groupId: string): Promise<Character[]> {
+    return this.characterRepository.getCharactersByGroup(groupId);
+  }
+
+  /**
+   * Get map activity statistics for a character group
+   */
+  async getGroupActivityStats(
+    groupId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    totalSystems: number;
+    totalSignatures: number;
+    averageSignaturesPerSystem: number;
+  }> {
+    return this.mapActivityRepository.getGroupActivityStats(
+      groupId,
+      startDate,
+      endDate
+    );
+  }
+
+  /**
+   * Get kill statistics for a character group
+   */
+  async getGroupKillStats(
+    groupId: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    totalKills: number;
+    totalValue: bigint;
+    averageValue: number;
+    soloKills: number;
+  }> {
+    const stats = await this.killRepository.getGroupKillStats(
+      groupId,
+      startDate,
+      endDate
+    );
+    return {
+      ...stats,
+      averageValue: Number(stats.averageValue),
+    };
   }
 }

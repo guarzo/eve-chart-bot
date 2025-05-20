@@ -1,14 +1,14 @@
-import { ESIClient } from "../infrastructure/http/esi-client";
+import { UnifiedESIClient } from "../infrastructure/http/UnifiedESIClient";
 import { CacheAdapter } from "../infrastructure/cache/CacheAdapter";
 import { logger } from "../lib/logger";
-import { RedisCache } from "../infrastructure/cache/RedisCache";
+import { RedisCache } from "../lib/cache/RedisCache";
 
 /**
  * Service for interacting with EVE Online's ESI API
  * Provides caching and error handling around ESI data
  */
 export class ESIService {
-  private client: ESIClient;
+  private client: UnifiedESIClient;
   private cache: CacheAdapter;
 
   /**
@@ -16,10 +16,13 @@ export class ESIService {
    * @param cache Optional cache adapter to use
    */
   constructor(cache?: CacheAdapter) {
-    this.cache = cache || new RedisCache("esi-service:");
-    this.client = new ESIClient(
+    this.cache =
+      cache || new RedisCache(process.env.REDIS_URL || "redis://redis:6379");
+    this.client = new UnifiedESIClient(
       {
         cacheTtl: 30 * 60, // 30 minutes cache for ESI data
+        maxRetries: 3,
+        initialRetryDelay: 1000,
       },
       this.cache
     );

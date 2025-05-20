@@ -1,5 +1,5 @@
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../lib/logger";
+import prisma from "../infrastructure/persistence/client";
 
 /**
  * Utility functions for database operations
@@ -8,14 +8,10 @@ export class DatabaseUtils {
   /**
    * Check if a table exists in the database, properly handling case sensitivity
    *
-   * @param prisma PrismaClient instance
    * @param modelName Prisma model name (e.g., "MapActivity")
    * @returns Promise<boolean> indicating if the table exists
    */
-  static async tableExists(
-    prisma: PrismaClient,
-    modelName: string
-  ): Promise<boolean> {
+  static async tableExists(modelName: string): Promise<boolean> {
     try {
       // Get the table name first, either from our mapping or fall back to model name
       const tableName = this.getTableNameFromMapping(modelName);

@@ -34,7 +34,7 @@ export class DistributionHandler extends BaseChartHandler {
 
       // Get all character groups
       const characterGroups =
-        await this.characterRepository.getCharacterGroups();
+        await this.characterRepository.getAllCharacterGroups();
 
       if (characterGroups.length === 0) {
         await interaction.editReply(
@@ -43,6 +43,17 @@ export class DistributionHandler extends BaseChartHandler {
         return;
       }
 
+      // Transform character groups into the format expected by the chart generator
+      const transformedGroups = characterGroups.map((group) => ({
+        groupId: group.id,
+        name: group.name,
+        characters: group.characters.map((char) => ({
+          eveId: char.eveId,
+          name: char.name,
+        })),
+        mainCharacterId: group.mainCharacterId,
+      }));
+
       // Get the chart generator
       const generator = ChartFactory.createGenerator("distribution");
 
@@ -50,7 +61,7 @@ export class DistributionHandler extends BaseChartHandler {
       const chartData = await generator.generateChart({
         startDate,
         endDate,
-        characterGroups,
+        characterGroups: transformedGroups,
         displayType: displayOption,
       });
 

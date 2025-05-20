@@ -1,23 +1,19 @@
 // services/IngestionService.ts
-import { PrismaClient, Prisma } from "@prisma/client";
 import { ZkillClient } from "../lib/api/ZkillClient";
 import { MapClient } from "../lib/api/MapClient";
 import { RedisCache } from "../lib/cache/RedisCache";
 import { IngestionConfig } from "../types/ingestion";
 import { logger } from "../lib/logger";
 import { ESIService } from "./ESIService";
-
-// ——— Prisma client singleton ———
-const prisma = new PrismaClient();
-
-// Log every SQL query in development
-if (process.env.NODE_ENV === "development") {
-  // cast to any so TS accepts the string event name
-  (prisma as any).$on("query", (e: Prisma.QueryEvent) => {
-    logger.debug(`SQL ▶ ${e.query}`);
-    logger.debug(`⏱  ${e.duration}ms`);
-  });
-}
+import { CharacterService } from "./CharacterService";
+import { KillRepository } from "../infrastructure/repositories/KillRepository";
+import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
+import {
+  Killmail,
+  KillmailAttacker,
+  KillmailVictim,
+} from "../domain/killmail/Killmail";
+import { Character } from "../domain/character/Character";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
@@ -26,12 +22,13 @@ const toBigInt = (val?: number | string | null): bigint | null =>
 
 // ——— Ingestion Service ———
 export class IngestionService {
-  /** Exposed for external access (e.g. in server.ts) */
-  public readonly prisma = prisma;
   private readonly zkill: ZkillClient;
   private readonly map: MapClient;
   private readonly cache: RedisCache;
   private readonly esiService: ESIService;
+  private readonly characterService: CharacterService;
+  private readonly killRepository: KillRepository;
+  private readonly characterRepository: CharacterRepository;
   private readonly cfg: {
     zkillApiUrl: string;
     mapApiUrl: string;
@@ -60,6 +57,9 @@ export class IngestionService {
     this.map = new MapClient(this.cfg.mapApiUrl, this.cfg.mapApiKey);
     this.cache = new RedisCache(this.cfg.redisUrl, this.cfg.cacheTtl);
     this.esiService = new ESIService();
+    this.characterService = new CharacterService();
+    this.killRepository = new KillRepository();
+    this.characterRepository = new CharacterRepository();
   }
 
   private async retryOperation<T>(
@@ -130,10 +130,10 @@ export class IngestionService {
   }> {
     try {
       // 1) Skip if already in DB - killmails are immutable
-      const exists = await this.prisma.killFact.findUnique({
-        where: { killmail_id: toBigInt(killId)! },
-      });
-      if (exists) {
+      const existingKillmail = await this.killRepository.getKillmail(
+        killId.toString()
+      );
+      if (existingKillmail) {
         logger.debug(`Skipping killmail ${killId}, already processed`);
         return { success: false, existing: true, skipped: true };
       }
@@ -164,94 +164,89 @@ export class IngestionService {
         return { success: false, skipped: true };
       }
 
-      // 4) Shape victim + attackers
-      const victim = {
-        character_id: toBigInt(esi.victim.character_id),
-        corporation_id: toBigInt(esi.victim.corporation_id),
-        alliance_id: toBigInt(esi.victim.alliance_id),
-        ship_type_id: esi.victim.ship_type_id,
-        damage_taken: esi.victim.damage_taken,
-      };
-      const attackers = (esi.attackers as any[]).map((a: any) => ({
-        character_id: toBigInt(a.character_id),
-        corporation_id: toBigInt(a.corporation_id),
-        alliance_id: toBigInt(a.alliance_id),
-        damage_done: a.damage_done,
-        final_blow: a.final_blow,
-        security_status: a.security_status,
-        ship_type_id: a.ship_type_id,
-        weapon_type_id: a.weapon_type_id,
-      }));
+      // 4) Create domain entities
+      const victim = new KillmailVictim({
+        characterId: toBigInt(esi.victim.character_id) ?? undefined,
+        corporationId: toBigInt(esi.victim.corporation_id) ?? undefined,
+        allianceId: toBigInt(esi.victim.alliance_id) ?? undefined,
+        shipTypeId: esi.victim.ship_type_id,
+        damageTaken: esi.victim.damage_taken,
+      });
+
+      const attackers = (esi.attackers as any[]).map(
+        (a: any) =>
+          new KillmailAttacker({
+            characterId: toBigInt(a.character_id) ?? undefined,
+            corporationId: toBigInt(a.corporation_id) ?? undefined,
+            allianceId: toBigInt(a.alliance_id) ?? undefined,
+            damageDone: a.damage_done,
+            finalBlow: a.final_blow,
+            securityStatus: a.security_status,
+            shipTypeId: a.ship_type_id,
+            weaponTypeId: a.weapon_type_id,
+          })
+      );
 
       // 5) Determine which characters are tracked
       const allIds = [
-        victim.character_id,
-        ...attackers.map((att) => att.character_id),
+        victim.characterId,
+        ...attackers.map((att) => att.characterId),
       ]
         .filter((x): x is bigint => x != null)
         .map((b) => b.toString());
 
-      const tracked = await this.prisma.character.findMany({
-        where: { eveId: { in: allIds } },
-      });
+      const tracked = await this.characterRepository.getCharactersByEveIds(
+        allIds
+      );
       if (tracked.length === 0) {
         logger.debug(`No tracked characters in killmail ${killId}`);
         return { success: false, skipped: true };
       }
-      const trackedSet = new Set(tracked.map((c) => c.eveId));
+      const trackedSet = new Set(tracked.map((c: Character) => c.eveId));
 
-      // 6) Persist in one transaction
-      await this.prisma.$transaction(async (tx) => {
-        // a) KillFact
-        const mainChar =
-          attackers.find(
-            (a) =>
-              a.character_id != null &&
-              trackedSet.has(a.character_id.toString())
-          )?.character_id ??
-          victim.character_id ??
-          BigInt(0);
+      // 6) Create and save killmail
+      const mainChar =
+        attackers.find(
+          (a) =>
+            a.characterId != null && trackedSet.has(a.characterId.toString())
+        )?.characterId ??
+        victim.characterId ??
+        BigInt(0);
 
-        await tx.killFact.create({
-          data: {
-            killmail_id: BigInt(killId),
-            kill_time: new Date(esi.killmail_time),
-            system_id: esi.solar_system_id,
-            total_value: BigInt(Math.round(zk.zkb.totalValue)),
-            points: zk.zkb.points,
-            character_id: mainChar,
-            npc: false,
-            solo: attackers.length === 1,
-            awox: false,
-            ship_type_id: esi.victim.ship_type_id,
-            labels: zk.zkb.labels ?? [],
-          },
-        });
-
-        // b) KillVictim
-        await tx.killVictim.create({
-          data: { killmail_id: BigInt(killId), ...victim },
-        });
-
-        // c) KillAttackers (in parallel)
-        await Promise.all(
-          attackers.map((att: any) =>
-            tx.killAttacker.create({
-              data: { killmail_id: BigInt(killId), ...att },
-            })
-          )
-        );
+      const killmail = new Killmail({
+        killmailId: BigInt(killId),
+        characterId: mainChar,
+        killTime: new Date(esi.killmail_time),
+        systemId: esi.solar_system_id,
+        totalValue: BigInt(Math.round(zk.zkb.totalValue)),
+        points: zk.zkb.points,
+        npc: false,
+        solo: attackers.length === 1,
+        awox: false,
+        shipTypeId: esi.victim.ship_type_id,
+        labels: zk.zkb.labels ?? [],
+        victim,
+        attackers,
       });
+
+      await this.killRepository.saveKillmail(killmail);
 
       const timestamp = esi.killmail_time;
       const age = Math.floor(
         (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60 * 24)
       );
 
-      return { success: true, timestamp, age };
-    } catch (err: any) {
-      logger.error(`ingestKillmail(${killId}) error: ${err.message || err}`);
-      return { success: false, skipped: true, error: err.message };
+      return {
+        success: true,
+        timestamp,
+        age,
+      };
+    } catch (error: any) {
+      logger.error(`Error ingesting killmail ${killId}:`, error);
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
 
@@ -272,30 +267,15 @@ export class IngestionService {
           if (!act.character?.eve_id) return Promise.resolve();
           const charId = BigInt(act.character.eve_id);
           const ts = new Date(act.timestamp);
-          return this.prisma.mapActivity.upsert({
-            where: {
-              characterId_timestamp: {
-                characterId: charId,
-                timestamp: ts,
-              },
-            },
-            update: {
-              signatures: act.signatures,
-              connections: act.connections,
-              passages: act.passages,
-              allianceId: act.character.alliance_id,
-              corporationId: act.character.corporation_id,
-            },
-            create: {
-              characterId: charId,
-              timestamp: ts,
-              signatures: act.signatures,
-              connections: act.connections,
-              passages: act.passages,
-              allianceId: act.character.alliance_id,
-              corporationId: act.character.corporation_id,
-            },
-          });
+          return this.characterRepository.upsertMapActivity(
+            charId,
+            ts,
+            act.signatures,
+            act.connections,
+            act.passages,
+            act.character.alliance_id,
+            act.character.corporation_id
+          );
         })
       );
     } catch (err: any) {
@@ -339,18 +319,10 @@ export class IngestionService {
       );
 
       // First, get a list of characters we want to track
-      const characters = await this.prisma.character.findMany({
-        where: {
-          characterGroupId: { not: null }, // Only track characters in groups
-        },
-        select: {
-          eveId: true,
-          name: true,
-        },
-      });
+      const characters = await this.characterRepository.getCharactersInGroups();
 
       // Get current count
-      const initialCount = await this.prisma.mapActivity.count();
+      const initialCount = await this.characterRepository.getMapActivityCount();
       logger.info(
         `Found ${characters.length} characters to track, current DB has ${initialCount} activity records`
       );
@@ -411,43 +383,43 @@ export class IngestionService {
       }
 
       // Start transaction
-      await this.prisma.$transaction(async (tx) => {
-        // Delete ALL existing data from the table, regardless of date
-        const deleted = await tx.mapActivity.deleteMany({});
+      await this.characterRepository.beginTransaction();
 
-        logger.info(
-          `Deleted all ${deleted.count} existing map activity records from the database`
+      // Delete ALL existing data from the table, regardless of date
+      const deleted = await this.characterRepository.deleteAllMapActivity();
+
+      logger.info(
+        `Deleted all ${deleted.count} existing map activity records from the database`
+      );
+
+      // Insert all new data in bulk
+      let insertedCount = 0;
+      for (const act of filteredData) {
+        if (!act.character?.eve_id) continue;
+
+        const charId = BigInt(act.character.eve_id);
+        const ts = new Date(act.timestamp);
+
+        await this.characterRepository.upsertMapActivity(
+          charId,
+          ts,
+          act.signatures,
+          act.connections,
+          act.passages,
+          act.character.alliance_id,
+          act.character.corporation_id
         );
-
-        // Insert all new data in bulk
-        let insertedCount = 0;
-        for (const act of filteredData) {
-          if (!act.character?.eve_id) continue;
-
-          const charId = BigInt(act.character.eve_id);
-          const ts = new Date(act.timestamp);
-
-          await tx.mapActivity.create({
-            data: {
-              characterId: charId,
-              timestamp: ts,
-              signatures: act.signatures,
-              connections: act.connections,
-              passages: act.passages,
-              allianceId: act.character.alliance_id,
-              corporationId: act.character.corporation_id,
-            },
-          });
-          insertedCount++;
-        }
-        logger.info(`Inserted ${insertedCount} new map activity records`);
-      });
+        insertedCount++;
+      }
+      logger.info(`Inserted ${insertedCount} new map activity records`);
 
       // Get new count
-      const finalCount = await this.prisma.mapActivity.count();
+      const finalCount = await this.characterRepository.getMapActivityCount();
       logger.info(
         `Map activity refresh complete: Now have ${finalCount} total activity records (was ${initialCount})`
       );
+
+      await this.characterRepository.commitTransaction();
     } catch (err: any) {
       logger.error(`refreshMapActivityData error: ${err.message || err}`);
       throw err;
@@ -455,243 +427,40 @@ export class IngestionService {
   }
 
   /**
-   * Syncs user characters from a map source
+   * Syncs characters from the Map API for a given map name
    */
-  public async syncUserCharacters(slug: string): Promise<void> {
-    logger.info(`Syncing user characters from map ${slug}`);
-    const userData = await this.map.getUserCharacters(slug);
-    const users = userData.data || [];
-    logger.info(`Parsed ${users.length} user entries`);
+  public async syncUserCharacters(mapName: string): Promise<void> {
+    try {
+      logger.info(`Syncing characters for map: ${mapName}`);
 
-    // Count total characters
-    const totalChars = users.reduce(
-      (sum: number, user: any) => sum + (user.characters?.length || 0),
-      0
-    );
-    logger.info(`Total characters: ${totalChars}`);
+      // Get characters from Map API
+      const mapResponse = await this.map.getUserCharacters(mapName);
+      const users = mapResponse.data || [];
+      logger.info(`Found ${users.length} users in map`);
 
-    let processed = 0;
-    let skipped = 0;
-    let groupsCreated = 0;
-    let groupsUpdated = 0;
-    let groupsDeleted = 0;
+      // Extract all characters with their data from all users
+      const characters = users.flatMap((user) => user.characters || []);
 
-    logger.info(`Processing ${users.length} users from map API`);
+      logger.info(`Found ${characters.length} characters to sync`);
 
-    // Get all existing groups for this slug
-    const existingGroups = await this.prisma.characterGroup.findMany({
-      where: {
-        slug: {
-          startsWith: `${slug}_`,
-        },
-      },
-      include: {
-        characters: true,
-      },
-    });
-
-    // Create maps for efficient group lookup
-    const mainCharToGroup = new Map(
-      existingGroups
-        .filter((g) => g.mainCharacterId)
-        .map((g) => [g.mainCharacterId, g])
-    );
-    const slugToGroup = new Map(existingGroups.map((g) => [g.slug, g]));
-
-    // PHASE 1: Create all characters first without assigning to groups
-    for (const user of users) {
-      const chars = user.characters || [];
-      if (chars.length === 0) continue;
-
-      // Find the main character ID (if specified)
-      const mainId = user.main_character_eve_id?.toString();
-
-      logger.info(
-        `User ${slug}: main=${mainId ?? "none"}, count=${chars.length}`
-      );
-
-      // Process each character
-      for (const c of chars) {
-        processed++;
-        const charData = {
-          eveId: c.eve_id.toString(),
-          name: c.name,
-          allianceId: c.alliance_id,
-          allianceTicker: c.alliance_ticker,
-          corporationId: c.corporation_id,
-          corporationTicker: c.corporation_ticker,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
+      // Sync each character with their Map API data
+      for (const char of characters) {
         try {
-          // Create character without a group association yet
-          await this.prisma.character.upsert({
-            where: { eveId: charData.eveId },
-            update: {
-              name: charData.name,
-              allianceId: charData.allianceId,
-              allianceTicker: charData.allianceTicker,
-              corporationId: charData.corporationId,
-              corporationTicker: charData.corporationTicker,
-            },
-            create: {
-              ...charData,
-            },
+          await this.characterService.syncCharacter(char.eve_id.toString(), {
+            corporationTicker: char.corporation_ticker,
+            allianceTicker: char.alliance_ticker,
+            corporationId: char.corporation_id,
           });
-        } catch (e: any) {
-          skipped++;
-          logger.error(
-            { error: e.message || e, char: charData },
-            `Failed to upsert character ${c.eve_id}`
-          );
-        }
-      }
-    }
-
-    // PHASE 2: Update or create character groups and link characters
-    for (const user of users) {
-      const chars = user.characters || [];
-      if (chars.length === 0) continue;
-
-      // Find the main character ID (if specified)
-      const mainId = user.main_character_eve_id?.toString();
-
-      // Create a unique group slug for this user
-      const grpSlug = `${slug}_${mainId ?? chars[0].eve_id}`;
-
-      // Find existing group by main character ID or slug
-      let group = mainId
-        ? mainCharToGroup.get(mainId)
-        : slugToGroup.get(grpSlug);
-
-      if (!group) {
-        logger.info(`Creating new character group with slug ${grpSlug}`);
-        try {
-          const newGroup = await this.prisma.characterGroup.upsert({
-            where: { slug: grpSlug },
-            update: {
-              mainCharacterId: mainId,
-            },
-            create: {
-              slug: grpSlug,
-              mainCharacterId: mainId,
-            },
-            include: {
-              characters: true,
-            },
-          });
-          group = newGroup;
-          groupsCreated++;
-
-          // Log if this is a group without a main character
-          if (!mainId) {
-            logger.warn(
-              `Group ${grpSlug} created without main character. First character: ${chars[0].name} (${chars[0].eve_id})`
-            );
-          }
-        } catch (e: any) {
-          logger.error(
-            { error: e.message || e },
-            `Failed to create/update group with slug ${grpSlug}`
-          );
-          // Skip this group and continue with the next one
-          continue;
-        }
-      } else {
-        // Update existing group if needed
-        if (group.slug !== grpSlug || group.mainCharacterId !== mainId) {
-          logger.info(`Updating group ${group.id} with new slug ${grpSlug}`);
-          const updatedGroup = await this.prisma.characterGroup.update({
-            where: { id: group.id },
-            data: {
-              slug: grpSlug,
-              mainCharacterId: mainId,
-            },
-            include: {
-              characters: true,
-            },
-          });
-          group = updatedGroup;
-          groupsUpdated++;
-
-          // Log if this group is being updated to have no main character
-          if (!mainId) {
-            logger.warn(
-              `Group ${grpSlug} updated to have no main character. First character: ${chars[0].name} (${chars[0].eve_id})`
-            );
-          }
+        } catch (error) {
+          logger.error(`Failed to sync character ${char.eve_id}:`, error);
         }
       }
 
-      // Now link characters to the group
-      for (const c of chars) {
-        try {
-          await this.prisma.character.update({
-            where: { eveId: c.eve_id.toString() },
-            data: { characterGroupId: group.id },
-          });
-        } catch (e: any) {
-          logger.error(
-            { error: e.message || e },
-            `Failed to link character ${c.eve_id} to group ${group.id}`
-          );
-        }
-      }
+      logger.info("Successfully synced characters from Map API");
+    } catch (error) {
+      logger.error("Failed to sync characters:", error);
+      throw error;
     }
-
-    // PHASE 3: Clean up empty groups
-    for (const group of existingGroups) {
-      const charCount = await this.prisma.character.count({
-        where: { characterGroupId: group.id },
-      });
-
-      if (charCount === 0) {
-        logger.info(`Deleting empty group ${group.id} (${group.slug})`);
-        await this.prisma.characterGroup.delete({
-          where: { id: group.id },
-        });
-        groupsDeleted++;
-      }
-    }
-
-    // Log summary of groups without main characters
-    const groupsWithoutMain = await this.prisma.characterGroup.findMany({
-      where: {
-        mainCharacterId: null,
-        characters: {
-          some: {}, // Has at least one character
-        },
-      },
-      include: {
-        characters: {
-          orderBy: {
-            name: "asc",
-          },
-          take: 1, // Get first character
-        },
-      },
-    });
-
-    if (groupsWithoutMain.length > 0) {
-      logger.warn(
-        `Found ${groupsWithoutMain.length} groups without main characters:`
-      );
-      for (const group of groupsWithoutMain) {
-        const firstChar = group.characters[0];
-        logger.warn(
-          `- Group ${group.slug}: First character ${firstChar.name} (${firstChar.eveId})`
-        );
-      }
-    }
-
-    const totalCharsAfterSync = await this.prisma.character.count();
-    const totalGroups = await this.prisma.characterGroup.count();
-    logger.info(
-      `Character sync complete: processed=${processed}, skipped=${skipped}, ` +
-        `chars=${totalCharsAfterSync}, groups=${totalGroups}, ` +
-        `created=${groupsCreated}, updated=${groupsUpdated}, deleted=${groupsDeleted}`
-    );
   }
 
   /** Safely parse a date string, returning null if invalid */
@@ -710,9 +479,9 @@ export class IngestionService {
     type: "kills" | "losses",
     maxAgeInDays = 30
   ): Promise<void> {
-    const char = await this.prisma.character.findUnique({
-      where: { eveId: characterId.toString() },
-    });
+    const char = await this.characterRepository.getCharacter(
+      characterId.toString()
+    );
     if (!char) {
       logger.warn(
         `Character ${characterId} not in DB, skipping ${type} backfill.`
@@ -744,40 +513,18 @@ export class IngestionService {
     // Get current count for this character
     const currentCount =
       type === "kills"
-        ? await this.prisma.killFact.count({
-            where: {
-              OR: [
-                { character_id: BigInt(characterId) },
-                {
-                  attackers: {
-                    some: {
-                      character_id: BigInt(characterId),
-                    },
-                  },
-                },
-              ],
-            },
-          })
-        : await this.prisma.lossFact.count({
-            where: {
-              character_id: BigInt(characterId),
-            },
-          });
+        ? await this.killRepository.countKills(characterId)
+        : await this.killRepository.countLosses(characterId);
 
     logger.info(
       `Character ${char.name} has ${currentCount} ${type} in database before backfill`
     );
 
     // Get or create checkpoint
-    const checkpoint = await this.prisma.ingestionCheckpoint.upsert({
-      where: { streamName: `${type}:${characterId}` },
-      update: {},
-      create: {
-        streamName: `${type}:${characterId}`,
-        lastSeenId: BigInt(0),
-        lastSeenTime: new Date(),
-      },
-    });
+    const checkpoint = await this.characterRepository.upsertIngestionCheckpoint(
+      type,
+      characterId
+    );
 
     let page = 1;
     let hasMore = true;
@@ -810,7 +557,7 @@ export class IngestionService {
           type === "kills" ? 15000 : 20000 // timeout
         );
 
-        if (!records.length) {
+        if (!records || !records.length) {
           consecutiveEmptyPages++;
           logger.info(
             `Empty page ${page} received (consecutive: ${consecutiveEmptyPages}/${MAX_CONSECUTIVE_EMPTY})`
@@ -908,9 +655,7 @@ export class IngestionService {
               }
             } else {
               // Check if loss already exists
-              const existing = await this.prisma.lossFact.findUnique({
-                where: { killmail_id: recordId },
-              });
+              const existing = await this.killRepository.getLoss(recordId);
               if (existing) {
                 logger.debug(`Skipping loss ${recordId}, already processed`);
                 pageSkippedCount++;
@@ -919,18 +664,16 @@ export class IngestionService {
               }
 
               // Create the loss record
-              await this.prisma.lossFact.create({
-                data: {
-                  killmail_id: recordId,
-                  character_id: BigInt(characterId),
-                  kill_time: recordTime,
-                  ship_type_id: record.victim?.ship_type_id ?? 0,
-                  system_id: record.solar_system_id ?? 0,
-                  total_value: BigInt(Math.round(record.zkb?.totalValue ?? 0)),
-                  attacker_count: record.attackers?.length ?? 0,
-                  labels: record.zkb?.labels ?? [],
-                },
-              });
+              await this.killRepository.saveLoss(
+                recordId,
+                recordTime,
+                record.solar_system_id ?? 0,
+                record.zkb?.totalValue ?? 0,
+                record.attackers?.length ?? 0,
+                record.zkb?.labels ?? [],
+                BigInt(characterId),
+                record.victim?.ship_type_id ?? 0
+              );
 
               successfulIngestCount++;
               pageProcessedCount++;
@@ -952,13 +695,11 @@ export class IngestionService {
 
         // Update checkpoint with the last processed ID
         if (lastProcessedId > checkpoint.lastSeenId) {
-          await this.prisma.ingestionCheckpoint.update({
-            where: { streamName: `${type}:${characterId}` },
-            data: {
-              lastSeenId: lastProcessedId,
-              lastSeenTime: new Date(),
-            },
-          });
+          await this.characterRepository.updateIngestionCheckpoint(
+            type,
+            characterId,
+            lastProcessedId
+          );
           logger.info(`Updated checkpoint to ID ${lastProcessedId}`);
         }
 
@@ -991,33 +732,13 @@ export class IngestionService {
     }
 
     // Update the backfill timestamp
-    await this.prisma.character.update({
-      where: { eveId: characterId.toString() },
-      data: { lastBackfillAt: new Date() },
-    });
+    await this.characterRepository.updateLastBackfillAt(characterId);
 
     // Get the new count
     const newCount =
       type === "kills"
-        ? await this.prisma.killFact.count({
-            where: {
-              OR: [
-                { character_id: BigInt(characterId) },
-                {
-                  attackers: {
-                    some: {
-                      character_id: BigInt(characterId),
-                    },
-                  },
-                },
-              ],
-            },
-          })
-        : await this.prisma.lossFact.count({
-            where: {
-              character_id: BigInt(characterId),
-            },
-          });
+        ? await this.killRepository.countKills(characterId)
+        : await this.killRepository.countLosses(characterId);
 
     // Log detailed summary
     logger.info(
@@ -1053,9 +774,8 @@ export class IngestionService {
     await this.backfillRecords(characterId, "losses", maxAgeDays);
   }
 
-  /** Cleanly close cache & Prisma */
+  /** Cleanly close cache */
   public async close(): Promise<void> {
     await this.cache.close();
-    await this.prisma.$disconnect();
   }
 }

@@ -1,6 +1,7 @@
+import { Character } from "../../domain/character/Character";
+import { CharacterGroup } from "../../domain/character/CharacterGroup";
+import { PrismaMapper } from "../mapper/PrismaMapper";
 import { BaseRepository } from "./BaseRepository";
-import { Character, Prisma } from "@prisma/client";
-import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for character-related data access
@@ -11,165 +12,309 @@ export class CharacterRepository extends BaseRepository {
   }
 
   /**
-   * Get all tracked characters
+   * Get a character by their EVE ID
    */
-  async getTrackedCharacters(): Promise<Character[]> {
-    return this.executeQuery(() =>
-      this.prisma.character.findMany({
-        orderBy: {
-          name: "asc",
-        },
-      })
-    );
+  async getCharacter(eveId: string): Promise<Character | null> {
+    const character = await this.prisma.character.findUnique({
+      where: { eveId },
+    });
+    return character ? PrismaMapper.map(character, Character) : null;
   }
 
   /**
-   * Get character by EVE ID
+   * Get all characters
    */
-  async getCharacterById(eveId: string): Promise<Character | null> {
-    return this.executeQuery(() =>
-      this.prisma.character.findUnique({
-        where: { eveId },
-      })
-    );
+  async getAllCharacters(): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany();
+    return characters.map((char: any) => PrismaMapper.map(char, Character));
   }
 
   /**
-   * Get all characters belonging to a main character (alts)
+   * Get characters by group ID
    */
-  async getCharacterAlts(mainCharacterId: string): Promise<Character[]> {
-    return this.executeQuery(() => {
-      const where = buildWhereFilter({ mainCharacterId });
-      return this.prisma.character.findMany({
-        where,
-        orderBy: {
-          name: "asc",
-        },
-      });
+  async getCharactersByGroup(groupId: string): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany({
+      where: { characterGroupId: groupId },
+    });
+    return characters.map((char: any) => PrismaMapper.map(char, Character));
+  }
+
+  /**
+   * Create or update a character
+   */
+  async saveCharacter(character: Character): Promise<Character> {
+    const data = character.toJSON();
+    const saved = await this.prisma.character.upsert({
+      where: { eveId: character.eveId },
+      update: {
+        name: data.name,
+        allianceId: data.allianceId,
+        allianceTicker: data.allianceTicker,
+        corporationId: data.corporationId,
+        corporationTicker: data.corporationTicker,
+        characterGroupId: data.characterGroupId,
+        lastBackfillAt: data.lastBackfillAt,
+      },
+      create: {
+        eveId: data.eveId,
+        name: data.name,
+        allianceId: data.allianceId,
+        allianceTicker: data.allianceTicker,
+        corporationId: data.corporationId,
+        corporationTicker: data.corporationTicker,
+        characterGroupId: data.characterGroupId,
+        lastBackfillAt: data.lastBackfillAt,
+      },
+    });
+    return PrismaMapper.map(saved, Character);
+  }
+
+  /**
+   * Delete a character
+   */
+  async deleteCharacter(eveId: string): Promise<void> {
+    await this.prisma.character.delete({
+      where: { eveId },
     });
   }
 
   /**
-   * Get all characters including main and alts for a list of main character IDs
+   * Get a character group by ID
    */
-  async getExpandedCharacterList(
-    mainCharacterIds: string[]
-  ): Promise<Character[]> {
-    return this.executeQuery(async () => {
-      // Get all main characters
-      const mainWhere = buildWhereFilter({
-        eveId: {
-          in: mainCharacterIds,
-        },
-      });
+  async getCharacterGroup(id: string): Promise<CharacterGroup | null> {
+    const group = await this.prisma.characterGroup.findUnique({
+      where: { id },
+      include: { characters: true },
+    });
+    return group ? PrismaMapper.map(group, CharacterGroup) : null;
+  }
 
-      const mainCharacters = await this.prisma.character.findMany({
-        where: mainWhere,
-      });
+  /**
+   * Get all character groups
+   */
+  async getAllCharacterGroups(): Promise<CharacterGroup[]> {
+    const groups = await this.prisma.characterGroup.findMany({
+      include: { characters: true },
+    });
+    return groups.map((group: any) => PrismaMapper.map(group, CharacterGroup));
+  }
 
-      // Get all alt characters
-      const altWhere = buildWhereFilter({
-        mainCharacterId: {
-          in: mainCharacterIds,
-        },
-      });
+  /**
+   * Create or update a character group
+   */
+  async saveCharacterGroup(group: CharacterGroup): Promise<CharacterGroup> {
+    const data = group.toJSON();
+    const saved = await this.prisma.characterGroup.upsert({
+      where: { id: group.id },
+      update: {
+        slug: data.slug,
+        mainCharacterId: data.mainCharacterId,
+      },
+      create: {
+        id: data.id,
+        slug: data.slug,
+        mainCharacterId: data.mainCharacterId,
+      },
+    });
+    return PrismaMapper.map(saved, CharacterGroup);
+  }
 
-      const altCharacters = await this.prisma.character.findMany({
-        where: altWhere,
-      });
-
-      // Combine and return unique characters
-      return [...mainCharacters, ...altCharacters];
+  /**
+   * Delete a character group
+   */
+  async deleteCharacterGroup(id: string): Promise<void> {
+    await this.prisma.characterGroup.delete({
+      where: { id },
     });
   }
 
   /**
-   * Get a single character group with its characters
-   * @param groupId ID of the character group to retrieve
-   * @returns The group and its characters, or null if not found
+   * Set a character as the main character of their group
    */
-  async getGroupWithCharacters(groupId: string): Promise<{
-    groupId: string;
-    name: string;
-    characters: Array<{ eveId: string; name: string }>;
-    mainCharacterId?: string;
-  } | null> {
-    return this.executeQuery(async () => {
-      // Get the character group
-      const group = await this.prisma.characterGroup.findUnique({
-        where: { id: groupId },
-        select: {
-          id: true,
-          slug: true,
-          mainCharacterId: true,
-          characters: {
-            select: {
-              eveId: true,
-              name: true,
-            },
-          },
+  async setMainCharacter(eveId: string): Promise<CharacterGroup> {
+    const character = await this.getCharacter(eveId);
+    if (!character || !character.characterGroupId) {
+      throw new Error("Character not found or not in a group");
+    }
+
+    const updated = await this.prisma.characterGroup.update({
+      where: { id: character.characterGroupId },
+      data: { mainCharacterId: eveId },
+      include: { characters: true },
+    });
+    return PrismaMapper.map(updated, CharacterGroup);
+  }
+
+  /**
+   * Remove a character from their group
+   */
+  async removeFromGroup(eveId: string): Promise<Character> {
+    const updated = await this.prisma.character.update({
+      where: { eveId },
+      data: { characterGroupId: null },
+    });
+    return PrismaMapper.map(updated, Character);
+  }
+
+  /**
+   * Get characters by their EVE IDs
+   */
+  async getCharactersByEveIds(eveIds: string[]): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany({
+      where: { eveId: { in: eveIds } },
+    });
+    return characters.map((char: any) => PrismaMapper.map(char, Character));
+  }
+
+  /**
+   * Get all characters that are in groups
+   */
+  async getCharactersInGroups(): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany({
+      where: { characterGroupId: { not: null } },
+      select: {
+        eveId: true,
+        name: true,
+      },
+    });
+    return characters.map((char: any) => PrismaMapper.map(char, Character));
+  }
+
+  /**
+   * Get the count of map activity records
+   */
+  async getMapActivityCount(): Promise<number> {
+    return this.prisma.mapActivity.count();
+  }
+
+  /**
+   * Delete all map activity records
+   */
+  async deleteAllMapActivity(): Promise<{ count: number }> {
+    const deleted = await this.prisma.mapActivity.deleteMany({});
+    return { count: deleted.count };
+  }
+
+  /**
+   * Create or update a map activity record
+   */
+  async upsertMapActivity(
+    characterId: bigint,
+    timestamp: Date,
+    signatures: number,
+    connections: number,
+    passages: number,
+    allianceId: number | null,
+    corporationId: number | null
+  ): Promise<void> {
+    if (corporationId === null) {
+      throw new Error("corporationId is required");
+    }
+
+    await this.prisma.mapActivity.upsert({
+      where: {
+        characterId_timestamp: {
+          characterId,
+          timestamp,
         },
-      });
-
-      if (!group) return null;
-
-      // Format the response
-      return {
-        groupId: group.id,
-        name: group.slug,
-        mainCharacterId: group.mainCharacterId || undefined,
-        characters: group.characters.map(
-          (char: { eveId: string; name: string }) => ({
-            eveId: char.eveId,
-            name: char.name,
-          })
-        ),
-      };
+      },
+      update: {
+        signatures,
+        connections,
+        passages,
+        allianceId,
+        corporationId,
+      },
+      create: {
+        characterId,
+        timestamp,
+        signatures,
+        connections,
+        passages,
+        allianceId,
+        corporationId,
+      },
     });
   }
 
   /**
-   * Get all character groups with their characters
+   * Create or update an ingestion checkpoint
    */
-  async getCharacterGroups(): Promise<
-    Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>
-  > {
-    return this.executeQuery(async () => {
-      // Get all character groups
-      const groups = await this.prisma.characterGroup.findMany({
-        select: {
-          id: true,
-          slug: true,
-          mainCharacterId: true,
-          characters: {
-            select: {
-              eveId: true,
-              name: true,
-            },
-          },
-        },
-        orderBy: {
-          slug: "asc" as Prisma.SortOrder,
-        },
-      });
-
-      // Format the response with explicit type annotation
-      return groups.map((group) => ({
-        groupId: group.id,
-        name: group.slug,
-        mainCharacterId: group.mainCharacterId || undefined,
-        characters: group.characters.map(
-          (char: { eveId: string; name: string }) => ({
-            eveId: char.eveId,
-            name: char.name,
-          })
-        ),
-      }));
+  async upsertIngestionCheckpoint(
+    type: string,
+    characterId: number
+  ): Promise<{ lastSeenId: bigint; lastSeenTime: Date }> {
+    const checkpoint = await this.prisma.ingestionCheckpoint.upsert({
+      where: { streamName: `${type}:${characterId}` },
+      update: {},
+      create: {
+        streamName: `${type}:${characterId}`,
+        lastSeenId: BigInt(0),
+        lastSeenTime: new Date(),
+      },
     });
+    return {
+      lastSeenId: checkpoint.lastSeenId,
+      lastSeenTime: checkpoint.lastSeenTime,
+    };
+  }
+
+  /**
+   * Update an ingestion checkpoint
+   */
+  async updateIngestionCheckpoint(
+    type: string,
+    characterId: number,
+    lastSeenId: bigint
+  ): Promise<void> {
+    await this.prisma.ingestionCheckpoint.update({
+      where: { streamName: `${type}:${characterId}` },
+      data: {
+        lastSeenId,
+        lastSeenTime: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Update a character's last backfill timestamp
+   */
+  async updateLastBackfillAt(characterId: number): Promise<void> {
+    await this.prisma.character.update({
+      where: { eveId: characterId.toString() },
+      data: { lastBackfillAt: new Date() },
+    });
+  }
+
+  /**
+   * Begin a transaction
+   */
+  async beginTransaction(): Promise<void> {
+    await this.prisma.$transaction([]);
+  }
+
+  /**
+   * Commit a transaction
+   */
+  async commitTransaction(): Promise<void> {
+    // No-op as Prisma handles transaction commits automatically
+  }
+
+  /**
+   * Get characters by map name (slug)
+   */
+  async getCharactersByMapName(mapName: string): Promise<Character[]> {
+    const characters = await this.prisma.character.findMany({
+      where: {
+        characterGroup: {
+          slug: mapName,
+        },
+      },
+    });
+    return characters.map((char: any) => PrismaMapper.map(char, Character));
+  }
+
+  public async count(): Promise<number> {
+    return this.prisma.character.count();
   }
 }

@@ -18,6 +18,56 @@ export const ZkillResponseSchema = z.object({
   }),
 });
 
+// Basic Killmail Schema (from zKillboard)
+export const BasicKillmailSchema = ZkillResponseSchema;
+
+// Complete Killmail Schema (after ESI data is fetched)
+export const CompleteKillmailSchema = BasicKillmailSchema.extend({
+  killmail_time: z.string().optional(),
+  solar_system_id: z.number().optional(),
+  victim: z
+    .object({
+      character_id: z.number().optional(),
+      corporation_id: z.number().optional(),
+      alliance_id: z.number().optional(),
+      ship_type_id: z.number().optional(),
+      damage_taken: z.number().optional(),
+      position: z
+        .object({
+          x: z.number(),
+          y: z.number(),
+          z: z.number(),
+        })
+        .optional(),
+      items: z
+        .array(
+          z.object({
+            type_id: z.number().optional(),
+            flag: z.number().optional(),
+            quantity_destroyed: z.number().optional(),
+            quantity_dropped: z.number().optional(),
+            singleton: z.number().optional(),
+          })
+        )
+        .optional(),
+    })
+    .optional(),
+  attackers: z
+    .array(
+      z.object({
+        character_id: z.number().optional(),
+        corporation_id: z.number().optional(),
+        alliance_id: z.number().optional(),
+        damage_done: z.number().optional(),
+        final_blow: z.boolean().optional(),
+        security_status: z.number().optional(),
+        ship_type_id: z.number().optional(),
+        weapon_type_id: z.number().optional(),
+      })
+    )
+    .optional(),
+});
+
 // Character Schema
 export const CharacterSchema = z.object({
   eve_id: z.string(),

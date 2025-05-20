@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { logger } from "../../lib/logger";
 import { chartRoutes } from "./routes/chart";
 import { apiKeyMiddleware } from "./middleware/auth";
+import { errorHandler, asyncHandler } from "./middleware/error-handler";
 
 /**
  * Initialize the REST API server
@@ -33,31 +34,8 @@ export function createServer(port: number = 3000): express.Application {
     res.status(200).json({ status: "ok" });
   });
 
-  // Error handling middleware
-  app.use(
-    (
-      err: Error,
-      req: express.Request,
-      res: express.Response,
-      next: express.NextFunction
-    ) => {
-      logger.error(
-        {
-          error: err.message,
-          stack: err.stack,
-          method: req.method,
-          url: req.url,
-        },
-        "Server error"
-      );
-
-      res.status(500).json({
-        error: "Internal server error",
-        message:
-          process.env.NODE_ENV === "production" ? undefined : err.message,
-      });
-    }
-  );
+  // Error handling middleware (must be last)
+  app.use(errorHandler);
 
   return app;
 }

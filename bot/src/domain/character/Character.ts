@@ -1,188 +1,89 @@
+import { Exclude, Expose, Transform } from "class-transformer";
+
 /**
  * Character domain entity
- * Represents an EVE Online character with core game attributes and application-specific business logic
+ * Represents a character in EVE Online
  */
+@Exclude()
 export class Character {
-  /** EVE character ID (unique identifier) */
-  readonly eveId: string;
+  @Expose()
+  @Transform(({ value }: { value: unknown }) => value?.toString())
+  readonly eveId!: string;
 
-  /** Character name */
-  name: string;
+  @Expose()
+  readonly name!: string;
 
-  /** Alliance ID (optional, as character might not be in an alliance) */
-  allianceId: number | null;
+  @Expose()
+  readonly allianceId?: number;
 
-  /** Alliance ticker (optional) */
-  allianceTicker: string | null;
+  @Expose()
+  readonly allianceTicker?: string;
 
-  /** Corporation ID (all characters must be in a corporation) */
-  corporationId: number;
+  @Expose()
+  readonly corporationId!: number;
 
-  /** Corporation ticker */
-  corporationTicker: string;
+  @Expose()
+  readonly corporationTicker!: string;
 
-  /** Optional link to character group ID */
-  characterGroupId: string | null;
+  @Expose()
+  readonly characterGroupId?: string;
 
-  /** Optional link to main character ID */
-  mainCharacterId: string | null;
+  @Expose()
+  readonly mainCharacterId?: string;
 
-  /** Last time backfill was run for this character */
-  lastBackfillAt: Date | null;
+  @Expose()
+  @Transform(({ value }: { value: Date | string | null }) => {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  })
+  readonly createdAt!: Date;
 
-  /**
-   * Create a new Character instance
-   *
-   * @param props Character properties
-   */
-  constructor(props: {
-    eveId: string;
-    name: string;
-    corporationId: number;
-    corporationTicker: string;
-    allianceId?: number | null;
-    allianceTicker?: string | null;
-    characterGroupId?: string | null;
-    mainCharacterId?: string | null;
-    lastBackfillAt?: Date | null;
-  }) {
-    // Required properties
-    this.eveId = props.eveId;
-    this.name = props.name;
-    this.corporationId = props.corporationId;
-    this.corporationTicker = props.corporationTicker;
+  @Expose()
+  @Transform(({ value }: { value: Date | string | null }) => {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  })
+  readonly updatedAt!: Date;
 
-    // Optional properties with defaults
-    this.allianceId = props.allianceId || null;
-    this.allianceTicker = props.allianceTicker || null;
-    this.characterGroupId = props.characterGroupId || null;
-    this.mainCharacterId = props.mainCharacterId || null;
-    this.lastBackfillAt = props.lastBackfillAt || null;
+  @Expose()
+  @Transform(({ value }: { value: Date | string | null }) => {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  })
+  readonly lastBackfillAt?: Date;
 
-    // Validate the character
-    this.validate();
+  @Expose()
+  @Transform(({ value }: { value: Date | string | null }) => {
+    if (!value) return null;
+    if (value instanceof Date) return value.toISOString();
+    return value;
+  })
+  readonly lastKillmailAt?: Date;
+
+  @Transform(({ value }: { value: Date | string | null }) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    return new Date(value);
+  })
+  get lastUpdatedDate(): Date {
+    return this.updatedAt;
+  }
+
+  get isMain(): boolean {
+    return this.mainCharacterId === this.eveId;
+  }
+
+  constructor(data: Partial<Character>) {
+    Object.assign(this, data);
   }
 
   /**
-   * Validate the character data
-   * @throws Error if character data is invalid
+   * Creates a new Character instance from a Prisma model
    */
-  private validate(): void {
-    if (!this.eveId || isNaN(parseInt(this.eveId))) {
-      throw new Error("Character must have a valid EVE ID");
-    }
-
-    if (!this.name || this.name.trim() === "") {
-      throw new Error("Character must have a name");
-    }
-
-    if (!this.corporationId || this.corporationId <= 0) {
-      throw new Error("Character must have a valid corporation ID");
-    }
-
-    if (!this.corporationTicker || this.corporationTicker.trim() === "") {
-      throw new Error("Character must have a corporation ticker");
-    }
-
-    // Validate alliance data if present
-    if (this.allianceId !== null && this.allianceId <= 0) {
-      throw new Error("If alliance ID is provided, it must be valid");
-    }
-  }
-
-  /**
-   * Set this character as the main character of its group
-   * This is now handled at the CharacterGroup level only
-   * @deprecated Use CharacterGroup.setMainCharacter instead
-   */
-  setAsMain(): void {
-    this.mainCharacterId = null;
-    // Note: isMain is now determined by checking if character.eveId === characterGroup.mainCharacterId
-  }
-
-  /**
-   * Set this character as an alt of another character
-   * This is now handled at the CharacterGroup level
-   * @deprecated Use CharacterGroup.setMainCharacter instead
-   * @param mainCharacterId The EVE ID of the main character
-   */
-  setAsAltOf(mainCharacterId: string): void {
-    if (this.eveId === mainCharacterId) {
-      throw new Error("Character cannot be an alt of itself");
-    }
-    this.mainCharacterId = mainCharacterId;
-  }
-
-  /**
-   * Set this character's group
-   *
-   * @param groupId The character group ID
-   */
-  setGroup(groupId: string | null): void {
-    this.characterGroupId = groupId;
-  }
-
-  /**
-   * Update the lastBackfillAt timestamp to now
-   */
-  updateBackfillTimestamp(): void {
-    this.lastBackfillAt = new Date();
-  }
-
-  /**
-   * Check if backfill is needed based on days since last backfill
-   *
-   * @param maxAgeDays Maximum age in days before backfill is needed
-   * @returns True if backfill is needed, false otherwise
-   */
-  needsBackfill(maxAgeDays: number = 7): boolean {
-    if (!this.lastBackfillAt) {
-      return true;
-    }
-
-    const now = new Date();
-    const ageInMs = now.getTime() - this.lastBackfillAt.getTime();
-    const ageInDays = ageInMs / (1000 * 60 * 60 * 24);
-
-    return ageInDays > maxAgeDays;
-  }
-
-  /**
-   * Get character's affiliation string (corp ticker and alliance ticker if available)
-   *
-   * @returns Formatted affiliation string
-   */
-  getAffiliation(): string {
-    if (this.allianceTicker) {
-      return `[${this.corporationTicker}] <${this.allianceTicker}>`;
-    }
-    return `[${this.corporationTicker}]`;
-  }
-
-  /**
-   * Convert domain entity to a plain object (useful for persistence)
-   */
-  toObject() {
-    return {
-      eveId: this.eveId,
-      name: this.name,
-      allianceId: this.allianceId,
-      allianceTicker: this.allianceTicker,
-      corporationId: this.corporationId,
-      corporationTicker: this.corporationTicker,
-      characterGroupId: this.characterGroupId,
-      mainCharacterId: this.mainCharacterId,
-      lastBackfillAt: this.lastBackfillAt,
-    };
-  }
-
-  /**
-   * Create a Character domain entity from a database model
-   *
-   * @param model Database model object
-   * @returns Character domain entity
-   */
-  static fromModel(model: any): Character {
+  static fromPrisma(model: any): Character {
     return new Character({
       eveId: model.eveId,
       name: model.name,
@@ -192,7 +93,30 @@ export class Character {
       corporationTicker: model.corporationTicker,
       characterGroupId: model.characterGroupId,
       mainCharacterId: model.mainCharacterId,
+      createdAt: model.createdAt,
+      updatedAt: model.updatedAt,
       lastBackfillAt: model.lastBackfillAt,
+      lastKillmailAt: model.lastKillmailAt,
     });
+  }
+
+  /**
+   * Converts the character to a plain object
+   */
+  toJSON(): Record<string, any> {
+    return {
+      eveId: this.eveId,
+      name: this.name,
+      allianceId: this.allianceId,
+      allianceTicker: this.allianceTicker,
+      corporationId: this.corporationId,
+      corporationTicker: this.corporationTicker,
+      characterGroupId: this.characterGroupId,
+      mainCharacterId: this.mainCharacterId,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      lastBackfillAt: this.lastBackfillAt,
+      lastKillmailAt: this.lastKillmailAt,
+    };
   }
 }

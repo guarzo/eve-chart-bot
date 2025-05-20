@@ -1,18 +1,15 @@
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../lib/logger";
 import { DatabaseUtils } from "../../utils/DatabaseUtils";
 
 /**
  * Utility to check if required database tables exist and create them if needed
  */
-export async function ensureDatabaseTablesExist(
-  prisma: PrismaClient
-): Promise<void> {
+export async function ensureDatabaseTablesExist(): Promise<void> {
   try {
     logger.info("Checking database schema...");
 
     // Check for KillFact table
-    const killFactExists = await DatabaseUtils.tableExists(prisma, "KillFact");
+    const killFactExists = await DatabaseUtils.tableExists("KillFact");
     if (killFactExists) {
       logger.info("KillFact table exists");
     } else {
@@ -22,7 +19,7 @@ export async function ensureDatabaseTablesExist(
     }
 
     // Check for LossFact table
-    const lossFactExists = await DatabaseUtils.tableExists(prisma, "LossFact");
+    const lossFactExists = await DatabaseUtils.tableExists("LossFact");
     if (lossFactExists) {
       logger.info("LossFact table exists");
     } else {
@@ -32,10 +29,7 @@ export async function ensureDatabaseTablesExist(
     }
 
     // Check for MapActivity table - using the new utility that handles the mapping correctly
-    const mapActivityExists = await DatabaseUtils.tableExists(
-      prisma,
-      "MapActivity"
-    );
+    const mapActivityExists = await DatabaseUtils.tableExists("MapActivity");
     if (mapActivityExists) {
       logger.info("MapActivity table exists");
     } else {

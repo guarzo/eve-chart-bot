@@ -1,7 +1,8 @@
 import Redis from "ioredis";
 import { logger } from "../logger";
+import { CacheAdapter } from "../../infrastructure/cache/CacheAdapter";
 
-export class RedisCache {
+export class RedisCache implements CacheAdapter {
   private client: Redis;
   private readonly defaultTtl: number;
 
@@ -21,13 +22,15 @@ export class RedisCache {
     }
   }
 
-  async set(
+  async set<T>(
     key: string,
-    value: any,
-    ttl: number = this.defaultTtl
+    value: T,
+    ttlSeconds: number = this.defaultTtl
   ): Promise<void> {
     try {
-      await this.client.set(key, JSON.stringify(value), "EX", ttl);
+      const stringValue =
+        typeof value === "string" ? value : JSON.stringify(value);
+      await this.client.set(key, stringValue, "EX", ttlSeconds);
     } catch (error) {
       logger.error({ error, key }, "Failed to set data in Redis cache");
     }
@@ -38,6 +41,18 @@ export class RedisCache {
       await this.client.del(key);
     } catch (error) {
       logger.error({ error, key }, "Failed to delete data from Redis cache");
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    return this.del(key);
+  }
+
+  async clear(): Promise<void> {
+    try {
+      await this.client.flushall();
+    } catch (error) {
+      logger.error({ error }, "Failed to clear Redis cache");
     }
   }
 
