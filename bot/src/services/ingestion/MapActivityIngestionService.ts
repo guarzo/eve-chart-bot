@@ -1,4 +1,4 @@
-import { MapClient } from "../../lib/api/MapClient";
+import { MapClient } from "../../infrastructure/http/MapClient";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";

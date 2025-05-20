@@ -2,37 +2,67 @@ import { PrismaClient } from "@prisma/client";
 import { ChartService } from "../ChartService";
 import { ChartConfig, ChartData } from "../../types/chart";
 import { ChartRenderer } from "../ChartRenderer";
+import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
+import { KillRepository } from "../../infrastructure/repositories/KillRepository";
+import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 
 // Mock dependencies
 jest.mock("@prisma/client");
 jest.mock("../ChartRenderer");
+jest.mock("../../infrastructure/repositories/CharacterRepository");
+jest.mock("../../infrastructure/repositories/KillRepository");
+jest.mock("../../infrastructure/repositories/MapActivityRepository");
 
 describe("ChartService", () => {
   let service: ChartService;
   let mockPrisma: any;
+  let mockCharacterRepository: jest.Mocked<CharacterRepository>;
+  let mockKillRepository: jest.Mocked<KillRepository>;
+  let mockMapActivityRepository: jest.Mocked<MapActivityRepository>;
 
   beforeEach(() => {
     // Clear all mocks
     jest.clearAllMocks();
 
-    // Create mock Prisma instance
-    mockPrisma = {
-      character: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn().mockResolvedValue(null),
-        count: jest.fn().mockResolvedValue(0),
-      },
-      killFact: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn().mockResolvedValue(null),
-        count: jest.fn().mockResolvedValue(0),
-      },
-      mapActivity: {
-        findMany: jest.fn().mockResolvedValue([]),
-        findUnique: jest.fn().mockResolvedValue(null),
-        count: jest.fn().mockResolvedValue(0),
-      },
-    };
+    // Create mock repositories
+    mockCharacterRepository = {
+      getCharacter: jest.fn(),
+      getCharactersByGroup: jest.fn(),
+      getCharactersByEveIds: jest.fn(),
+      saveCharacter: jest.fn(),
+      updateCharacter: jest.fn(),
+      deleteCharacter: jest.fn(),
+      getAllCharacters: jest.fn(),
+      getCharacterGroup: jest.fn(),
+      getAllCharacterGroups: jest.fn(),
+      saveCharacterGroup: jest.fn(),
+      updateCharacterGroup: jest.fn(),
+      deleteCharacterGroup: jest.fn(),
+      upsertIngestionCheckpoint: jest.fn(),
+      updateIngestionCheckpoint: jest.fn(),
+      updateLastBackfillAt: jest.fn(),
+      upsertMapActivity: jest.fn(),
+      getMapActivityCount: jest.fn(),
+      deleteAllMapActivity: jest.fn(),
+    } as any;
+
+    mockKillRepository = {
+      getKillmail: jest.fn(),
+      saveKillmail: jest.fn(),
+      getKillsForCharacters: jest.fn(),
+      countKills: jest.fn(),
+      countLosses: jest.fn(),
+      getLoss: jest.fn(),
+      saveLoss: jest.fn(),
+      deleteAllKillmails: jest.fn(),
+    } as any;
+
+    mockMapActivityRepository = {
+      upsertMapActivity: jest.fn(),
+      getMapActivityCount: jest.fn(),
+      deleteAllMapActivity: jest.fn(),
+      getActivityForGroup: jest.fn(),
+    } as any;
 
     // Create mock renderer
     const mockRenderer = {
@@ -42,7 +72,9 @@ describe("ChartService", () => {
 
     // Create service instance
     service = new ChartService();
-    (service as any).prisma = mockPrisma;
+    (service as any).characterRepository = mockCharacterRepository;
+    (service as any).killRepository = mockKillRepository;
+    (service as any).mapActivityRepository = mockMapActivityRepository;
     (service as any).renderer = mockRenderer;
   });
 
@@ -100,12 +132,14 @@ describe("ChartService", () => {
     ];
 
     it("should generate kills chart", async () => {
-      // Mock database queries
-      mockPrisma.killFact.findMany.mockResolvedValue(mockKills);
-      mockPrisma.character.findMany.mockResolvedValue(mockCharacters);
-      mockPrisma.character.findUnique.mockImplementation(
-        (args: { where: { eveId: string } }) => {
-          const char = mockCharacters.find((c) => c.eveId === args.where.eveId);
+      // Mock repository methods
+      mockKillRepository.getKillsForCharacters.mockResolvedValue(mockKills);
+      mockCharacterRepository.getCharactersByGroup.mockResolvedValue(
+        mockCharacters
+      );
+      mockCharacterRepository.getCharacter.mockImplementation(
+        (eveId: string) => {
+          const char = mockCharacters.find((c) => c.eveId === eveId);
           return Promise.resolve(char || null);
         }
       );
@@ -119,12 +153,26 @@ describe("ChartService", () => {
 
       // Characters should be included in datasets
       expect(result.datasets.length).toBeGreaterThan(0);
-      expect(
-        result.datasets.some((ds) => ds.label.includes("Character 1"))
-      ).toBeTruthy();
-      expect(
-        result.datasets.some((ds) => ds.label.includes("Character 2"))
-      ).toBeTruthy();
+
+      // Debug logging
+      console.log(
+        "Dataset labels:",
+        result.datasets.map((ds) => ds.label)
+      );
+      console.log(
+        "Expected character names:",
+        mockCharacters.map((c) => c.name)
+      );
+
+      // Get character names from mock data
+      const characterNames = mockCharacters.map((c) => c.name);
+
+      // Check that each character name appears in a dataset label
+      characterNames.forEach((name) => {
+        expect(
+          result.datasets.some((ds) => ds.label.includes(name))
+        ).toBeTruthy();
+      });
     });
 
     it("should generate map activity chart", async () => {
@@ -156,12 +204,16 @@ describe("ChartService", () => {
         },
       ];
 
-      // Mock database queries
-      mockPrisma.mapActivity.findMany.mockResolvedValue(mockActivities);
-      mockPrisma.character.findMany.mockResolvedValue(mockCharacters);
-      mockPrisma.character.findUnique.mockImplementation(
-        (args: { where: { eveId: string } }) => {
-          const char = mockCharacters.find((c) => c.eveId === args.where.eveId);
+      // Mock repository methods
+      mockMapActivityRepository.getActivityForGroup.mockResolvedValue(
+        mockActivities
+      );
+      mockCharacterRepository.getCharactersByGroup.mockResolvedValue(
+        mockCharacters
+      );
+      mockCharacterRepository.getCharacter.mockImplementation(
+        (eveId: string) => {
+          const char = mockCharacters.find((c) => c.eveId === eveId);
           return Promise.resolve(char || null);
         }
       );
@@ -175,15 +227,37 @@ describe("ChartService", () => {
 
       // Characters should be included in datasets
       expect(result.datasets.length).toBeGreaterThan(0);
+
+      // Debug logging
+      console.log(
+        "Dataset labels:",
+        result.datasets.map((ds) => ds.label)
+      );
+      console.log(
+        "Expected character names:",
+        mockCharacters.map((c) => c.name)
+      );
+
+      // Get character names from mock data
+      const characterNames = mockCharacters.map((c) => c.name);
+
+      // Check that each character name appears in a dataset label
+      characterNames.forEach((name) => {
+        expect(
+          result.datasets.some((ds) => ds.label.includes(name))
+        ).toBeTruthy();
+      });
     });
 
     it("should handle empty data", async () => {
-      // Mock empty database queries
-      mockPrisma.killFact.findMany.mockResolvedValue([]);
-      mockPrisma.character.findMany.mockResolvedValue(mockCharacters);
-      mockPrisma.character.findUnique.mockImplementation(
-        (args: { where: { eveId: string } }) => {
-          const char = mockCharacters.find((c) => c.eveId === args.where.eveId);
+      // Mock empty repository responses
+      mockKillRepository.getKillsForCharacters.mockResolvedValue([]);
+      mockCharacterRepository.getCharactersByGroup.mockResolvedValue(
+        mockCharacters
+      );
+      mockCharacterRepository.getCharacter.mockImplementation(
+        (eveId: string) => {
+          const char = mockCharacters.find((c) => c.eveId === eveId);
           return Promise.resolve(char || null);
         }
       );

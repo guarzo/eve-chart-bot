@@ -399,19 +399,6 @@ async function processLossBackfill(characters: any[]): Promise<void> {
   );
 }
 
-// Add proper cleanup handling
-process.on("SIGTERM", async () => {
-  logger.info("SIGTERM received, starting cleanup...");
-  await cleanup();
-  process.exit(0);
-});
-
-process.on("SIGINT", async () => {
-  logger.info("SIGINT received, starting cleanup...");
-  await cleanup();
-  process.exit(0);
-});
-
 // Helper functions
 async function cleanup() {
   logger.info("Cleaning up resources...");
@@ -449,59 +436,40 @@ function startRedisQConsumer() {
   });
 }
 
-// Start server
-async function startServer() {
+export async function startServer() {
+  logger.info("Starting server...");
+
+  // Run database migrations
+  logger.info("Running database migrations...");
   try {
-    // Run Prisma migrations
-    logger.info("Running database migrations...");
-    try {
-      const { stdout, stderr } = await execAsync("npx prisma migrate deploy");
-      if (stderr) {
-        logger.warn("Migration warnings:", stderr);
-      }
-      logger.info("Migrations completed successfully:", stdout);
-    } catch (error) {
-      logger.error("Failed to run database migrations:", error);
-      process.exit(1);
+    const { stdout, stderr } = await execAsync("npx prisma migrate deploy");
+    if (stderr) {
+      logger.warn("Migration warnings:", stderr);
     }
-
-    // Initialize services
-    killmailService = new KillmailIngestionService(
-      process.env.ZKILLBOARD_API_URL || "https://zkillboard.com/api"
-    );
-    mapService = new MapActivityService(
-      process.env.MAP_API_URL || "",
-      process.env.MAP_API_KEY || "",
-      process.env.REDIS_URL || "redis://redis:6379",
-      parseInt(process.env.CACHE_TTL || "300"),
-      parseInt(process.env.MAX_RETRIES || "3"),
-      parseInt(process.env.RETRY_DELAY || "5000")
-    );
-    characterService = new CharacterSyncService(
-      process.env.MAP_API_URL || "",
-      process.env.MAP_API_KEY || ""
-    );
-    redisQService = new RedisQService(
-      process.env.REDIS_URL || "redis://redis:6379",
-      parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
-      parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
-    );
-
-    // Start RedisQ consumer
-    startRedisQConsumer();
-
-    // Start the server
-    app.listen(port, () => {
-      logger.info(`Server started on port ${port}`);
-      logger.info(`Uptime: ${Date.now() - appStartTime}ms`);
-    });
-
-    // Initialize Discord bot
-    await initializeDiscord();
   } catch (error) {
-    logger.error("Failed to start server:", error);
-    process.exit(1);
+    logger.error("Error running migrations:", error);
+    throw error;
   }
+
+  // Start server
+  const server = app.listen(port, () => {
+    logger.info(`Server listening on port ${port}`);
+  });
+
+  // Handle cleanup
+  process.on("SIGTERM", async () => {
+    logger.info("SIGTERM received, shutting down gracefully...");
+    await server.close();
+    process.exit(0);
+  });
+
+  process.on("SIGINT", async () => {
+    logger.info("SIGINT received, shutting down gracefully...");
+    await server.close();
+    process.exit(0);
+  });
+
+  return server;
 }
 
 // Initialize Discord functionality

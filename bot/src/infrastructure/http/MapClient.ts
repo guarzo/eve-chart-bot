@@ -1,19 +1,25 @@
-import axios from "axios";
+import { UnifiedESIClient } from "./UnifiedESIClient";
 import {
   MapActivityResponseSchema,
   UserCharactersResponseSchema,
 } from "../../types/ingestion";
-import { logger } from "../logger";
+import { logger } from "../../lib/logger";
 
 export class MapClient {
-  private baseUrl: string;
-  private apiKey: string;
+  private readonly client: UnifiedESIClient;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
   private lastRequestTime: number = 0;
   private readonly rateLimitMs: number = 200; // 5 requests per second
 
   constructor(baseUrl: string, apiKey: string) {
     this.baseUrl = baseUrl;
     this.apiKey = apiKey;
+    this.client = new UnifiedESIClient({
+      baseUrl,
+      userAgent: "EVE-Chart-Bot/1.0",
+      timeout: 10000,
+    });
   }
 
   /**
@@ -46,34 +52,25 @@ export class MapClient {
       // Respect rate limit
       await this.respectRateLimit();
 
-      // Use only the working endpoint
-      const url = `${this.baseUrl}/api/map/character-activity?slug=${slug}&days=${days}`;
-
-      logger.info(`Calling map API endpoint: ${url}`);
-      logger.debug(`API key starting with: ${this.apiKey.substring(0, 5)}...`);
-
-      const response = await axios.get(url, {
+      const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
+      const response = await this.client.fetch(url, {
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
         },
-        timeout: 10000, // 10 second timeout
       });
 
-      if (response.data) {
+      if (response) {
         // Log sample of the data to help debugging
-        const dataCount = Array.isArray(response.data)
+        const dataCount = Array.isArray(response)
+          ? response.length
+          : response.data
           ? response.data.length
-          : response.data.data
-          ? response.data.data.length
           : "unknown";
         logger.info(`Received ${dataCount} records in response`);
 
         // Log date range in the response
-        if (Array.isArray(response.data) && response.data.length > 0) {
-          const dates = response.data.map(
-            (item: any) => new Date(item.timestamp)
-          );
+        if (Array.isArray(response) && response.length > 0) {
+          const dates = response.map((item: any) => new Date(item.timestamp));
           const oldestDate = new Date(
             Math.min(...dates.map((d: Date) => d.getTime()))
           );
@@ -83,8 +80,8 @@ export class MapClient {
           logger.info(
             `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
           );
-        } else if (response.data.data && response.data.data.length > 0) {
-          const dates = response.data.data.map(
+        } else if (response.data && response.data.length > 0) {
+          const dates = response.data.map(
             (item: any) => new Date(item.timestamp)
           );
           const oldestDate = new Date(
@@ -100,7 +97,7 @@ export class MapClient {
 
         // Try to validate the response against our schema
         try {
-          const validated = MapActivityResponseSchema.parse(response.data);
+          const validated = MapActivityResponseSchema.parse(response);
           logger.info(
             `Successfully validated response with ${validated.data.length} activity records`
           );
@@ -111,7 +108,7 @@ export class MapClient {
             schemaError
           );
           // Return the raw data anyway to see what we're getting
-          return response.data;
+          return response;
         }
       }
 
@@ -127,21 +124,17 @@ export class MapClient {
     try {
       await this.respectRateLimit();
       logger.info(`Fetching user characters for slug: ${slug}`);
-      const response = await axios.get(
-        `${this.baseUrl}/api/map/user_characters`,
-        {
-          headers: {
-            Accept: "application/json",
-            "User-Agent": "EVE-Chart-Bot/1.0",
-            Authorization: `Bearer ${this.apiKey}`,
-          },
-          params: {
-            slug,
-          },
-        }
-      );
 
-      const parsedData = UserCharactersResponseSchema.parse(response.data);
+      const response = await this.client.fetch("/api/map/user_characters", {
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        params: {
+          slug,
+        },
+      });
+
+      const parsedData = UserCharactersResponseSchema.parse(response);
       logger.info(`Parsed ${parsedData.data.length} user entries`);
       logger.info(
         `Total characters: ${parsedData.data.reduce(

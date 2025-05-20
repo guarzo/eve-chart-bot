@@ -1,4 +1,4 @@
-import { MapClient } from "../../lib/api/MapClient";
+import { MapClient } from "../../infrastructure/http/MapClient";
 import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 import { retryOperation } from "../../utils/retry";
 import { logger } from "../../lib/logger";

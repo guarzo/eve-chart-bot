@@ -1,4 +1,4 @@
-import { ZkillClient } from "../../lib/api/ZkillClient";
+import { ZkillClient } from "../../infrastructure/http/ZkillClient";
 import { ESIService } from "../ESIService";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { LossRepository } from "../../infrastructure/repositories/LossRepository";

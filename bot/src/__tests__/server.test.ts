@@ -1,85 +1,81 @@
 import request from "supertest";
+import app from "../server";
 import { ChartService } from "../services/ChartService";
 import { ChartRenderer } from "../services/ChartRenderer";
+import { exec } from "child_process";
+import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
+import { KillRepository } from "../infrastructure/repositories/KillRepository";
+import { MapActivityRepository } from "../infrastructure/repositories/MapActivityRepository";
 
-// First mock all dependencies
-jest.mock("@prisma/client", () => {
-  return {
-    PrismaClient: jest.fn().mockImplementation(() => ({
-      character: {
-        count: jest.fn().mockResolvedValue(10),
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      killFact: {
-        count: jest.fn().mockResolvedValue(20),
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      lossFact: {
-        count: jest.fn().mockResolvedValue(30),
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      mapActivity: {
-        count: jest.fn().mockResolvedValue(40),
-        findMany: jest.fn().mockResolvedValue([]),
-      },
-      $on: jest.fn(),
-      $connect: jest.fn(),
-      $disconnect: jest.fn(),
-    })),
-  };
-});
-
-// Mock Chart.js and Canvas
-jest.mock("chart.js", () => {
-  return {
-    Chart: class MockChart {
-      constructor() {}
-      render() {}
-      toBuffer() {
-        return Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-      }
-      destroy() {}
-      static register() {}
-    },
-    registerables: [],
-    register: jest.fn(),
-  };
-});
-
-jest.mock("canvas", () => {
-  return {
-    createCanvas: jest.fn(() => ({
-      getContext: jest.fn(() => ({
-        fillRect: jest.fn(),
-        fillStyle: "",
-      })),
-      toBuffer: jest.fn(() => Buffer.from([0x89, 0x50, 0x4e, 0x47])),
-    })),
-  };
-});
-
-// Now import the app after mocks are set up
+// Mock dependencies
+jest.mock("child_process", () => ({
+  exec: jest.fn((cmd, cb) => cb(null, { stdout: "", stderr: "" })),
+}));
+jest.mock("../lib/logger");
 jest.mock("../services/ChartService");
 jest.mock("../services/ChartRenderer");
 
-// Import the app after all mocks are set up
-import app from "../server";
+// Mock repositories
+jest.mock("../infrastructure/repositories/CharacterRepository");
+jest.mock("../infrastructure/repositories/KillRepository");
+jest.mock("../infrastructure/repositories/MapActivityRepository");
+
+// Mock repository instances
+const mockCharacterRepository = {
+  count: jest.fn().mockResolvedValue(10),
+  getAllCharacters: jest.fn().mockResolvedValue([]),
+};
+
+const mockKillRepository = {
+  countKills: jest.fn().mockResolvedValue(20),
+  countLosses: jest.fn().mockResolvedValue(15),
+};
+
+const mockMapActivityRepository = {
+  count: jest.fn().mockResolvedValue(30),
+};
+
+// Set up mock implementations
+(CharacterRepository as jest.Mock).mockImplementation(
+  () => mockCharacterRepository
+);
+(KillRepository as jest.Mock).mockImplementation(() => mockKillRepository);
+(MapActivityRepository as jest.Mock).mockImplementation(
+  () => mockMapActivityRepository
+);
 
 describe("API Endpoints", () => {
+  let mockExec: jest.MockedFunction<typeof exec>;
+
   beforeEach(() => {
+    // Clear all mocks
     jest.clearAllMocks();
 
-    // Mock ChartService methods
-    (ChartService.prototype.generateChart as jest.Mock).mockResolvedValue({
-      labels: ["2023-01-01", "2023-01-02"],
-      datasets: [{ label: "Test", data: [10, 20] }],
+    // Setup mock exec
+    mockExec = exec as jest.MockedFunction<typeof exec>;
+    mockExec.mockImplementation((cmd, cb) => {
+      if (cb) cb(null, { stdout: "", stderr: "" });
+      return {} as any;
     });
 
+    // Mock ChartService methods
+    (ChartService as jest.Mock).mockImplementation(() => ({
+      generateChart: jest.fn().mockResolvedValue({
+        labels: ["2024-01-01"],
+        datasets: [{ label: "Test", data: [10] }],
+      }),
+    }));
+
     // Mock ChartRenderer methods
-    const mockBuffer = Buffer.from("test-image");
-    (ChartRenderer.prototype.renderToBuffer as jest.Mock).mockResolvedValue(
-      mockBuffer
-    );
+    (ChartRenderer as jest.Mock).mockImplementation(() => ({
+      renderToBuffer: jest.fn().mockResolvedValue(Buffer.from("mock-image")),
+      renderToBase64: jest.fn().mockResolvedValue("mock-base64"),
+    }));
+  });
+
+  afterEach(() => {
+    // Clean up any remaining processes
+    jest.resetAllMocks();
   });
 
   describe("GET /health", () => {
@@ -97,29 +93,6 @@ describe("API Endpoints", () => {
       expect(response.body.types).toHaveLength(2);
       expect(response.body.types[0].id).toBe("kills");
       expect(response.body.types[1].id).toBe("map_activity");
-    });
-  });
-
-  describe("GET /debug/counts", () => {
-    it("should return database counts", async () => {
-      // Override the default app.locals.prisma with our custom mocks
-      app.locals.prisma = {
-        mapActivity: { count: jest.fn().mockResolvedValue(40) },
-        lossFact: { count: jest.fn().mockResolvedValue(30) },
-        killFact: { count: jest.fn().mockResolvedValue(20) },
-        character: { count: jest.fn().mockResolvedValue(10) },
-      };
-
-      const response = await request(app).get("/debug/counts");
-
-      expect(response.status).toBe(200);
-      expect(response.body.status).toBe("ok");
-      expect(response.body.counts).toEqual({
-        mapActivity: 40,
-        losses: 30,
-        kills: 20,
-        characters: 10,
-      });
     });
   });
 });

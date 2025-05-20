@@ -1,19 +1,18 @@
 import { PrismaClient } from "@prisma/client";
 import { IngestionService } from "../IngestionService";
-import { ZkillClient } from "../../lib/api/ZkillClient";
-import { MapClient } from "../../lib/api/MapClient";
-import { RedisCache } from "../../lib/cache/RedisCache";
-import { Redis } from "ioredis";
+import { ZkillClient } from "../../infrastructure/http/ZkillClient";
+import { MapClient } from "../../infrastructure/http/MapClient";
 import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
+import { Redis } from "ioredis";
 
 // Make sure tests terminate quickly
 jest.setTimeout(5000);
 
 // Mock dependencies
 jest.mock("@prisma/client");
-jest.mock("../../lib/api/ZkillClient");
-jest.mock("../../lib/api/MapClient");
-jest.mock("../../lib/cache/RedisCache");
+jest.mock("../../infrastructure/http/ZkillClient");
+jest.mock("../../infrastructure/http/MapClient");
+jest.mock("../../cache/CacheRedisAdapter");
 jest.mock("ioredis");
 
 describe("IngestionService", () => {

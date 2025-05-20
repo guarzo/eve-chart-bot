@@ -9,7 +9,7 @@ import {
   KillmailVictim,
 } from "../../domain/killmail/Killmail";
 
-import { ZkillClient } from "../../lib/api/ZkillClient";
+import { ZkillClient } from "../../infrastructure/http/ZkillClient";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
@@ -22,9 +22,7 @@ export class KillmailIngestionService {
   private readonly esiService: ESIService;
   private readonly zkill: ZkillClient;
 
-  constructor(
-    zkillApiUrl: string = "https://zkillboard.com/api",
-  ) {
+  constructor(zkillApiUrl: string = "https://zkillboard.com/api") {
     this.killRepository = new KillRepository();
     this.characterRepository = new CharacterRepository();
     this.esiService = new ESIService();

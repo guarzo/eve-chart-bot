@@ -1,7 +1,7 @@
 import { logger } from "../../lib/logger";
 import { Character } from "../../domain/character/Character";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
-import { MapClient } from "../../lib/api/MapClient";
+import { MapClient } from "../../infrastructure/http/MapClient";
 import { ESIService } from "../ESIService";
 import { RetryService } from "./RetryService";
 

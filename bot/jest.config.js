@@ -20,4 +20,6 @@ module.exports = {
   testTimeout: 10000,
   // Clean up any remaining handles after tests
   detectOpenHandles: true,
+  // Ignore standard directories
+  testPathIgnorePatterns: ["/node_modules/", "/dist/", "/coverage/"],
 };
