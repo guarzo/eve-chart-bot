@@ -4,7 +4,7 @@
  */
 export class MapActivity {
   /** Character's EVE ID */
-  readonly characterId: string;
+  readonly characterId: bigint;
 
   /** Timestamp of the activity */
   readonly timestamp: Date;
@@ -30,7 +30,7 @@ export class MapActivity {
    * @param props MapActivity properties
    */
   constructor(props: {
-    characterId: string;
+    characterId: bigint;
     timestamp: Date;
     signatures: number;
     connections: number;
@@ -148,7 +148,7 @@ export class MapActivity {
    */
   static fromModel(model: any): MapActivity {
     return new MapActivity({
-      characterId: model.characterId,
+      characterId: BigInt(model.characterId),
       timestamp: model.timestamp,
       signatures: model.signatures,
       connections: model.connections,

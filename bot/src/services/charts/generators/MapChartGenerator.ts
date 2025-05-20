@@ -49,9 +49,9 @@ export class MapChartGenerator extends BaseChartGenerator {
 
     // Group activities by character group
     const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => c.eveId);
+      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
       const groupActivities = activities.filter((activity) =>
-        groupCharacterIds.includes(activity.characterId)
+        groupCharacterIds.includes(BigInt(activity.characterId))
       );
 
       // Calculate totals for each metric

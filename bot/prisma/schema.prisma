@@ -18,7 +18,7 @@ model IngestionCheckpoint {
 }
 
 model Character {
-  eveId              String          @id @map("eve_id")
+  eveId              BigInt          @id @map("eve_id")
   name               String
   allianceId         Int?            @map("alliance_id")
   allianceTicker     String?         @map("alliance_ticker")
@@ -45,7 +45,7 @@ model Character {
 model CharacterGroup {
   id              String      @id @default(uuid())
   slug            String      @unique
-  mainCharacterId String?     @unique @map("main_character_id")
+  mainCharacterId BigInt?     @unique @map("main_character_id")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
   mainCharacter   Character?  @relation("GroupMainCharacter", fields: [mainCharacterId], references: [eveId])
@@ -55,7 +55,7 @@ model CharacterGroup {
 }
 
 model MapActivity {
-  characterId   String   @map("character_id")
+  characterId   BigInt   @map("character_id")
   timestamp     DateTime
   signatures    Int
   connections   Int
@@ -90,7 +90,7 @@ model KillFact {
 
 model LossFact {
   killmail_id    BigInt   @id
-  character_id   String
+  character_id   BigInt
   kill_time      DateTime
   ship_type_id   Int
   system_id      Int
@@ -140,7 +140,7 @@ model KillVictim {
 
 model KillCharacter {
   killmail_id    BigInt
-  character_id   String
+  character_id   BigInt
   role           String   // "attacker" or "victim"
 
   // Relationships

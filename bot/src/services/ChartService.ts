@@ -22,7 +22,7 @@ interface KillData {
   totalValue: bigint;
   points: number;
   attackerCount: number;
-  characters: Array<{ characterId: string }>;
+  characters: Array<{ characterId: bigint }>;
 }
 
 interface ActivityData {
@@ -247,7 +247,7 @@ export class ChartService extends BaseRepository {
           totalValue: kill.total_value,
           points: kill.points || 0,
           attackerCount: kill.attacker_count || 1,
-          characters: [{ characterId: kill.character_id.toString() }],
+          characters: [{ characterId: BigInt(kill.character_id) }],
         };
       }) as KillData[];
 
@@ -604,14 +604,13 @@ export class ChartService extends BaseRepository {
 
           // Get all character IDs (main + alts)
           const allIds = [
-            character.eveId,
+            BigInt(character.eveId),
             ...alts.map((alt) => BigInt(alt.eveId)),
           ];
 
           // Filter activities for this character and all its alts
           const characterActivities = activities.filter(
-            (activity: ActivityData) =>
-              allIds.includes(BigInt(activity.characterId))
+            (activity: ActivityData) => allIds.includes(activity.characterId)
           );
 
           logger.info(
@@ -1449,7 +1448,13 @@ export class ChartService extends BaseRepository {
       startDate,
       endDate
     );
-    return activities.map((activity) => new MapActivity(activity));
+    return activities.map(
+      (activity) =>
+        new MapActivity({
+          ...activity,
+          characterId: BigInt(activity.characterId),
+        })
+    );
   }
 
   /**
@@ -1532,7 +1537,7 @@ export class ChartService extends BaseRepository {
       const activity = await this.prisma.mapActivity.findMany({
         where: {
           characterId: {
-            in: characterIds,
+            in: characterIds.map((id) => BigInt(id)),
           },
           timestamp: {
             gte: startDate,
@@ -1553,11 +1558,11 @@ export class ChartService extends BaseRepository {
         (item: {
           timestamp: Date;
           signatures: number;
-          characterId: string;
+          characterId: bigint;
         }): ActivityData => ({
           timestamp: item.timestamp,
           signatures: item.signatures,
-          characterId: BigInt(item.characterId),
+          characterId: item.characterId,
         })
       );
     });

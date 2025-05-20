@@ -333,7 +333,7 @@ export class MapActivityRepository extends BaseRepository {
     await this.prisma.mapActivity.upsert({
       where: {
         characterId_timestamp: {
-          characterId,
+          characterId: BigInt(characterId),
           timestamp,
         },
       },
@@ -345,7 +345,7 @@ export class MapActivityRepository extends BaseRepository {
         corporationId,
       },
       create: {
-        characterId,
+        characterId: BigInt(characterId),
         timestamp,
         signatures,
         connections,

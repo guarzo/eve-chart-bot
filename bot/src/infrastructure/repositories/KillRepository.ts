@@ -3,7 +3,6 @@ import { Killmail } from "../../domain/killmail/Killmail";
 import { PrismaMapper } from "../mapper/PrismaMapper";
 import { BaseRepository } from "./BaseRepository";
 import { buildWhereFilter } from "../../utils/query-helper";
-import { logger } from "../../lib/logger";
 
 /**
  * Repository for accessing kill-related data
@@ -190,14 +189,14 @@ export class KillRepository extends BaseRepository {
               ...(killmail.victim?.characterId
                 ? [
                     {
-                      character_id: killmail.victim.characterId.toString(),
+                      character_id: BigInt(killmail.victim.characterId),
                       role: "victim",
                     },
                   ]
                 : []),
               // Add all attackers
               ...(killmail.attackers?.map((a) => ({
-                character_id: a.characterId?.toString() || "",
+                character_id: a.characterId ? BigInt(a.characterId) : BigInt(0),
                 role: "attacker",
               })) || []),
             ],
@@ -254,14 +253,14 @@ export class KillRepository extends BaseRepository {
               ...(killmail.victim?.characterId
                 ? [
                     {
-                      character_id: killmail.victim.characterId.toString(),
+                      character_id: BigInt(killmail.victim.characterId),
                       role: "victim",
                     },
                   ]
                 : []),
               // Add all attackers
               ...(killmail.attackers?.map((a) => ({
-                character_id: a.characterId?.toString() || "",
+                character_id: a.characterId ? BigInt(a.characterId) : BigInt(0),
                 role: "attacker",
               })) || []),
             ],
@@ -402,7 +401,7 @@ export class KillRepository extends BaseRepository {
    * Get kills for a list of characters within a date range
    */
   async getKillsForCharacters(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date
   ): Promise<any[]> {
@@ -412,7 +411,7 @@ export class KillRepository extends BaseRepository {
           characters: {
             some: {
               character_id: {
-                in: characterIds,
+                in: characterIds.map((id) => BigInt(id)),
               },
             },
           },
@@ -421,18 +420,13 @@ export class KillRepository extends BaseRepository {
             lte: endDate,
           },
         }),
-        select: {
-          killmail_id: true,
-          kill_time: true,
-          solo: true,
-          attackers: {
-            select: {
-              character_id: true,
-            },
-          },
+        include: {
+          attackers: true,
+          victims: true,
+          characters: true,
         },
         orderBy: {
-          kill_time: "asc",
+          kill_time: "desc",
         },
       })
     );
@@ -447,7 +441,6 @@ export class KillRepository extends BaseRepository {
     endDate: Date
   ): Promise<any[]> {
     return this.executeQuery(async () => {
-      // First, get all characters in the group
       const group = await this.prisma.characterGroup.findUnique({
         where: { id: groupId },
         include: { characters: true },
@@ -457,10 +450,7 @@ export class KillRepository extends BaseRepository {
         return [];
       }
 
-      // Get character IDs
-      const characterIds = group.characters.map((c: any) => c.eveId);
-
-      // Get kills for all characters
+      const characterIds = group.characters.map((c) => c.eveId);
       return this.getKillsForCharacters(characterIds, startDate, endDate);
     });
   }
@@ -677,57 +667,33 @@ export class KillRepository extends BaseRepository {
     groupBy: "hour" | "day" | "week" = "day"
   ): Promise<Array<{ timestamp: Date; kills: number; value: bigint }>> {
     return this.executeQuery(async () => {
-      // Get all kills for the characters
       const kills = await this.getKillsForCharacters(
         characterIds,
         startDate,
         endDate
       );
-
-      // Group by time period
       const timeMap = new Map<
         string,
         { timestamp: Date; kills: number; value: bigint }
       >();
 
-      // Format string for grouping
-      const getTimeKey = (date: Date): string => {
-        switch (groupBy) {
-          case "hour":
-            return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}`;
-          case "week":
-            const d = new Date(date);
-            d.setDate(d.getDate() - d.getDay()); // Start of week (Sunday)
-            return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-          case "day":
-          default:
-            return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-        }
-      };
-
-      // Group the kills
       for (const kill of kills) {
-        const timeKey = getTimeKey(kill.kill_time);
-
+        const timeKey = this.getTimeKey(kill.kill_time, groupBy);
         if (!timeMap.has(timeKey)) {
           timeMap.set(timeKey, {
-            timestamp: new Date(kill.kill_time),
+            timestamp: kill.kill_time,
             kills: 0,
             value: BigInt(0),
           });
         }
 
         const group = timeMap.get(timeKey)!;
-        group.kills += 1;
+        group.kills++;
         group.value += kill.total_value;
       }
 
-      // Convert to array and sort by timestamp
       return Array.from(timeMap.values()).sort(
-        (
-          a: { timestamp: Date; kills: number; value: bigint },
-          b: { timestamp: Date; kills: number; value: bigint }
-        ) => a.timestamp.getTime() - b.timestamp.getTime()
+        (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
       );
     });
   }
@@ -736,57 +702,31 @@ export class KillRepository extends BaseRepository {
    * Get the top ship types destroyed within a date range
    */
   async getTopShipTypesDestroyed(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date,
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
     return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        select: {
-          killmail_id: true,
-          ship_type_id: true,
-        },
-      });
-
-      // Group kills by ship type
-      const shipTypeCounts = new Map<string, { id: string; count: number }>();
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
+      const shipTypeCounts = new Map<string, number>();
 
       for (const kill of kills) {
         const shipTypeId = kill.ship_type_id.toString();
-        if (shipTypeCounts.has(shipTypeId)) {
-          shipTypeCounts.get(shipTypeId)!.count++;
-        } else {
-          shipTypeCounts.set(shipTypeId, {
-            id: shipTypeId,
-            count: 1,
-          });
-        }
+        shipTypeCounts.set(
+          shipTypeId,
+          (shipTypeCounts.get(shipTypeId) || 0) + 1
+        );
       }
 
-      // Convert to array and sort by count
-      const result = Array.from(shipTypeCounts.values())
-        .map((item) => ({
-          shipTypeId: item.id,
-          count: item.count,
-        }))
+      return Array.from(shipTypeCounts.entries())
+        .map(([shipTypeId, count]) => ({ shipTypeId, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, limit);
-
-      return result;
     });
   }
 
@@ -794,36 +734,19 @@ export class KillRepository extends BaseRepository {
    * Get ship types destroyed over time within a date range
    */
   async getShipTypesOverTime(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date,
     limit: number = 5
   ): Promise<Record<string, Record<string, { count: number }>>> {
     return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        select: {
-          killmail_id: true,
-          kill_time: true,
-          ship_type_id: true,
-        },
-      });
-
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
       // First, find the top ship types overall
       const shipTypeCounts = new Map<string, { count: number }>();
-
       for (const kill of kills) {
         const shipTypeId = kill.ship_type_id.toString();
         if (shipTypeCounts.has(shipTypeId)) {
@@ -832,24 +755,20 @@ export class KillRepository extends BaseRepository {
           shipTypeCounts.set(shipTypeId, { count: 1 });
         }
       }
-
       // Get the top ship types
       const topShipTypes = Array.from(shipTypeCounts.entries())
         .sort((a, b) => b[1].count - a[1].count)
         .slice(0, limit)
         .map(([id]) => id);
-
       // Group kills by date and ship type
       const resultByDate: Record<
         string,
         Record<string, { count: number }>
       > = {};
-
       // Function to get the date key in YYYY-MM-DD format
       const getDateKey = (date: Date): string => {
         return date.toISOString().split("T")[0];
       };
-
       // Initialize all dates with zero counts for all ship types
       const days = Math.ceil(
         (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
@@ -858,36 +777,25 @@ export class KillRepository extends BaseRepository {
         const date = new Date(startDate);
         date.setDate(date.getDate() + i);
         const dateKey = getDateKey(date);
-
         resultByDate[dateKey] = {};
-
         for (const shipTypeId of topShipTypes) {
           resultByDate[dateKey][shipTypeId] = { count: 0 };
         }
       }
-
       // Fill in the actual counts
       for (const kill of kills) {
         const shipTypeId = kill.ship_type_id.toString();
-
-        // Only include top ship types
         if (topShipTypes.includes(shipTypeId)) {
           const dateKey = getDateKey(kill.kill_time);
-
           if (!resultByDate[dateKey]) {
             resultByDate[dateKey] = {};
           }
-
           if (!resultByDate[dateKey][shipTypeId]) {
-            resultByDate[dateKey][shipTypeId] = {
-              count: 0,
-            };
+            resultByDate[dateKey][shipTypeId] = { count: 0 };
           }
-
           resultByDate[dateKey][shipTypeId].count++;
         }
       }
-
       return resultByDate;
     });
   }
@@ -896,36 +804,16 @@ export class KillRepository extends BaseRepository {
    * Get kills with attacker count for distribution analysis
    */
   async getKillsWithAttackerCount(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
     return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        select: {
-          killmail_id: true,
-          attackers: {
-            select: {
-              id: true, // just need to count
-            },
-          },
-        },
-      });
-
-      // Transform the data
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
       return kills.map((kill: any) => ({
         killmailId: kill.killmail_id.toString(),
         attackerCount: kill.attackers.length,
@@ -1029,70 +917,26 @@ export class KillRepository extends BaseRepository {
    * Get kill activity grouped by hour and day of week for heatmap
    */
   async getKillActivityByTimeOfDay(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ dayOfWeek: number; hourOfDay: number; kills: number }>> {
     return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        select: {
-          killmail_id: true,
-          kill_time: true,
-        },
-      });
-
-      // Group kills by day of week and hour of day
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
       const activityMap = new Map<string, number>();
-
-      // Initialize all hour and day combinations to 0
-      for (let day = 0; day < 7; day++) {
-        for (let hour = 0; hour < 24; hour++) {
-          activityMap.set(`${day}-${hour}`, 0);
-        }
-      }
-
-      // Count kills for each day/hour combination
       for (const kill of kills) {
-        const killDate = new Date(kill.kill_time);
-        const dayOfWeek = killDate.getUTCDay(); // 0-6, where 0 is Sunday
-        const hourOfDay = killDate.getUTCHours(); // 0-23
-        const key = `${dayOfWeek}-${hourOfDay}`;
-
+        const date = new Date(kill.kill_time);
+        const key = `${date.getDay()}-${date.getHours()}`;
         activityMap.set(key, (activityMap.get(key) || 0) + 1);
       }
-
-      // Convert map to array of objects
-      const result: Array<{
-        dayOfWeek: number;
-        hourOfDay: number;
-        kills: number;
-      }> = [];
-
-      for (let day = 0; day < 7; day++) {
-        for (let hour = 0; hour < 24; hour++) {
-          const key = `${day}-${hour}`;
-          result.push({
-            dayOfWeek: day,
-            hourOfDay: hour,
-            kills: activityMap.get(key) || 0,
-          });
-        }
-      }
-
-      return result;
+      return Array.from(activityMap.entries()).map(([key, kills]) => {
+        const [dayOfWeek, hourOfDay] = key.split("-").map(Number);
+        return { dayOfWeek, hourOfDay, kills };
+      });
     });
   }
 
@@ -1100,35 +944,19 @@ export class KillRepository extends BaseRepository {
    * Get distribution data for a character
    */
   async getDistributionData(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
     return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        select: {
-          killmail_id: true,
-          solo: true,
-        },
-      });
-
-      // Map to expected format
-      return kills.map((kill) => ({
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
+      return kills.map((kill: any) => ({
         killmailId: kill.killmail_id.toString(),
-        attackerCount: kill.solo ? 1 : 2, // If not solo, assume at least 2 attackers
+        attackerCount: kill.attackers.length,
       }));
     });
   }
@@ -1137,68 +965,33 @@ export class KillRepository extends BaseRepository {
    * Get the top ship types used by characters within a date range
    */
   async getTopShipTypesUsed(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date,
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      // Get all kills where these characters were attackers
-      // First, get kills within the time range
-      const kills = await this.prisma.killFact.findMany({
-        where: buildWhereFilter({
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        }),
-        select: {
-          killmail_id: true,
-          attackers: {
-            where: {
-              character_id: {
-                in: bigIntIds,
-              },
-            },
-            select: {
-              ship_type_id: true,
-            },
-          },
-        },
-      });
-
-      // Extract all attackers and their ship types
-      const shipTypeCounts = new Map<string, { id: string; count: number }>();
-
+      const kills = await this.getKillsForCharacters(
+        characterIds,
+        startDate,
+        endDate
+      );
+      const shipTypeCounts = new Map<string, number>();
       for (const kill of kills) {
         for (const attacker of kill.attackers) {
-          if (attacker.ship_type_id === null) continue;
-
-          const shipTypeId = attacker.ship_type_id.toString();
-          if (shipTypeCounts.has(shipTypeId)) {
-            shipTypeCounts.get(shipTypeId)!.count++;
-          } else {
-            shipTypeCounts.set(shipTypeId, {
-              id: shipTypeId,
-              count: 1,
-            });
+          if (attacker.ship_type_id) {
+            const shipTypeId = attacker.ship_type_id.toString();
+            shipTypeCounts.set(
+              shipTypeId,
+              (shipTypeCounts.get(shipTypeId) || 0) + 1
+            );
           }
         }
       }
-
-      // Convert to array and sort by count
-      const result = Array.from(shipTypeCounts.values())
-        .map((item) => ({
-          shipTypeId: item.id,
-          count: item.count,
-        }))
+      return Array.from(shipTypeCounts.entries())
+        .map(([shipTypeId, count]) => ({ shipTypeId, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, limit);
-
-      return result;
     });
   }
 
@@ -1207,45 +1000,14 @@ export class KillRepository extends BaseRepository {
    * This ensures we don't miss kills where the character participated but wasn't the main character
    */
   async getAllKillsForCharacters(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date
   ): Promise<any[]> {
-    try {
-      // First get kills where the character is involved
-      const directKills = await this.prisma.killFact.findMany({
+    return this.executeQuery(() =>
+      this.prisma.killFact.findMany({
         where: buildWhereFilter({
           characters: {
-            some: {
-              character_id: {
-                in: characterIds,
-              },
-            },
-          },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        }),
-        select: {
-          killmail_id: true,
-          kill_time: true,
-          solo: true,
-          attackers: {
-            select: {
-              character_id: true,
-            },
-          },
-        },
-        orderBy: {
-          kill_time: "asc",
-        },
-      });
-
-      // Then find kills via the KillFact relation to find where they're in the attackers list
-      const killsAsAttacker = await this.prisma.killFact.findMany({
-        where: {
-          attackers: {
             some: {
               character_id: {
                 in: characterIds.map((id) => BigInt(id)),
@@ -1256,46 +1018,17 @@ export class KillRepository extends BaseRepository {
             gte: startDate,
             lte: endDate,
           },
-        },
-        select: {
-          killmail_id: true,
-          kill_time: true,
-          solo: true,
-          attackers: {
-            select: {
-              character_id: true,
-            },
-          },
+        }),
+        include: {
+          attackers: true,
+          victims: true,
+          characters: true,
         },
         orderBy: {
-          kill_time: "asc",
+          kill_time: "desc",
         },
-      });
-
-      // Combine, making sure to remove duplicates by killmail_id
-      const allKills = [...directKills];
-      const seen = new Set(directKills.map((k) => k.killmail_id.toString()));
-
-      for (const kill of killsAsAttacker) {
-        if (!seen.has(kill.killmail_id.toString())) {
-          allKills.push(kill);
-          seen.add(kill.killmail_id.toString());
-        }
-      }
-
-      // Sort by time
-      return allKills.sort(
-        (a, b) =>
-          (a.kill_time as Date).getTime() - (b.kill_time as Date).getTime()
-      );
-    } catch (error) {
-      logger.error(
-        `Error in getAllKillsForCharacters: ${
-          error instanceof Error ? error.message : String(error)
-        }`
-      );
-      throw error;
-    }
+      })
+    );
   }
 
   /**
@@ -1334,17 +1067,29 @@ export class KillRepository extends BaseRepository {
     characterId: bigint,
     shipTypeId: number
   ): Promise<void> {
-    await this.prisma.lossFact.create({
-      data: {
-        killmail_id: killmailId,
-        kill_time: killTime,
-        system_id: systemId,
-        total_value: BigInt(Math.round(totalValue)),
-        attacker_count: attackerCount,
-        labels,
-        character_id: characterId.toString(),
-        ship_type_id: shipTypeId,
-      },
+    return this.executeQuery(async () => {
+      await this.prisma.lossFact.upsert({
+        where: { killmail_id: killmailId },
+        update: {
+          kill_time: killTime,
+          system_id: systemId,
+          total_value: BigInt(totalValue),
+          attacker_count: attackerCount,
+          labels,
+          character_id: characterId,
+          ship_type_id: shipTypeId,
+        },
+        create: {
+          killmail_id: killmailId,
+          kill_time: killTime,
+          system_id: systemId,
+          total_value: BigInt(totalValue),
+          attacker_count: attackerCount,
+          labels,
+          character_id: characterId,
+          ship_type_id: shipTypeId,
+        },
+      });
     });
   }
 
@@ -1366,5 +1111,19 @@ export class KillRepository extends BaseRepository {
         },
       },
     });
+  }
+
+  private getTimeKey(date: Date, groupBy: "hour" | "day" | "week"): string {
+    switch (groupBy) {
+      case "hour":
+        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}`;
+      case "week":
+        const d = new Date(date);
+        d.setDate(d.getDate() - d.getDay()); // Start of week (Sunday)
+        return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      case "day":
+      default:
+        return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+    }
   }
 }

@@ -157,7 +157,7 @@ export class KillmailIngestionService {
   /**
    * Backfill kills for a character
    */
-  public async backfillKills(characterId: number): Promise<void> {
+  public async backfillKills(characterId: bigint): Promise<void> {
     try {
       logger.info(`Backfilling kills for character ${characterId}`);
 
@@ -186,7 +186,7 @@ export class KillmailIngestionService {
         try {
           // Fetch killmails from zKillboard
           const killmails = await this.retryService.retryOperation(
-            () => this.zkill.getCharacterKills(characterId, page),
+            () => this.zkill.getCharacterKills(Number(characterId), page),
             `Fetching killmails for character ${characterId} page ${page}`,
             3, // maxRetries
             5000, // retryDelay
@@ -282,7 +282,7 @@ export class KillmailIngestionService {
   }
 
   public async backfillLosses(
-    characterId: number,
+    characterId: bigint,
     maxAgeDays = 30
   ): Promise<void> {
     // Implementation will be moved from IngestionService

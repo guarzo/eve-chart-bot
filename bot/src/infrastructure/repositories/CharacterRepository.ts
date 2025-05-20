@@ -14,9 +14,9 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Get a character by their EVE ID
    */
-  async getCharacter(eveId: string): Promise<Character | null> {
+  async getCharacter(eveId: string | bigint): Promise<Character | null> {
     const character = await this.prisma.character.findUnique({
-      where: { eveId },
+      where: { eveId: BigInt(eveId) },
     });
     return character ? PrismaMapper.map(character, Character) : null;
   }
@@ -45,7 +45,7 @@ export class CharacterRepository extends BaseRepository {
   async saveCharacter(character: Character): Promise<Character> {
     return this.executeQuery(async () => {
       const createData = {
-        eveId: character.eveId,
+        eveId: BigInt(character.eveId),
         name: character.name,
         corporationId: character.corporationId,
         corporationTicker: character.corporationTicker,
@@ -63,7 +63,7 @@ export class CharacterRepository extends BaseRepository {
 
       const saved = await this.prisma.character.upsert({
         where: {
-          eveId: character.eveId,
+          eveId: BigInt(character.eveId),
         },
         create: createData,
         update: {
@@ -89,9 +89,9 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Delete a character
    */
-  async deleteCharacter(eveId: string): Promise<void> {
+  async deleteCharacter(eveId: string | bigint): Promise<void> {
     await this.prisma.character.delete({
-      where: { eveId },
+      where: { eveId: BigInt(eveId) },
     });
   }
 
@@ -148,15 +148,14 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Set a character as the main character of their group
    */
-  async setMainCharacter(eveId: string): Promise<CharacterGroup> {
+  async setMainCharacter(eveId: string | bigint): Promise<CharacterGroup> {
     const character = await this.getCharacter(eveId);
     if (!character || !character.characterGroupId) {
       throw new Error("Character not found or not in a group");
     }
-
     const updated = await this.prisma.characterGroup.update({
       where: { id: character.characterGroupId },
-      data: { mainCharacterId: eveId },
+      data: { mainCharacterId: BigInt(eveId) },
       include: { characters: true },
     });
     return PrismaMapper.map(updated, CharacterGroup);
@@ -165,9 +164,9 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Remove a character from their group
    */
-  async removeFromGroup(eveId: string): Promise<Character> {
+  async removeFromGroup(eveId: string | bigint): Promise<Character> {
     const updated = await this.prisma.character.update({
-      where: { eveId },
+      where: { eveId: BigInt(eveId) },
       data: { characterGroupId: null },
     });
     return PrismaMapper.map(updated, Character);
@@ -176,16 +175,17 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Get characters by their EVE IDs
    */
-  async getCharactersByEveIds(eveIds: string[]): Promise<Character[]> {
+  async getCharactersByEveIds(
+    eveIds: (string | bigint)[]
+  ): Promise<Character[]> {
     return this.executeQuery(async () => {
       const characters = await this.prisma.character.findMany({
         where: {
           eveId: {
-            in: eveIds.map((id) => id.toString()),
+            in: eveIds.map((id) => BigInt(id)),
           },
         },
       });
-
       return PrismaMapper.mapArray(characters, Character);
     });
   }
@@ -234,11 +234,10 @@ export class CharacterRepository extends BaseRepository {
     if (corporationId === null) {
       throw new Error("corporationId is required");
     }
-
     await this.prisma.mapActivity.upsert({
       where: {
         characterId_timestamp: {
-          characterId: characterId.toString(),
+          characterId,
           timestamp,
         },
       },
@@ -250,7 +249,7 @@ export class CharacterRepository extends BaseRepository {
         corporationId,
       },
       create: {
-        characterId: characterId.toString(),
+        characterId,
         timestamp,
         signatures,
         connections,
@@ -266,7 +265,7 @@ export class CharacterRepository extends BaseRepository {
    */
   async upsertIngestionCheckpoint(
     type: string,
-    characterId: number
+    characterId: bigint
   ): Promise<{ lastSeenId: bigint; lastSeenTime: Date }> {
     const checkpoint = await this.prisma.ingestionCheckpoint.upsert({
       where: { streamName: `${type}:${characterId}` },
@@ -288,11 +287,11 @@ export class CharacterRepository extends BaseRepository {
    */
   async updateIngestionCheckpoint(
     type: string,
-    characterId: number,
+    characterId: bigint,
     lastSeenId: bigint
   ): Promise<void> {
     await this.prisma.ingestionCheckpoint.update({
-      where: { streamName: `${type}:${characterId.toString()}` },
+      where: { streamName: `${type}:${characterId}` },
       data: {
         lastSeenId,
         lastSeenTime: new Date(),
@@ -303,9 +302,9 @@ export class CharacterRepository extends BaseRepository {
   /**
    * Update a character's last backfill timestamp
    */
-  async updateLastBackfillAt(characterId: number): Promise<void> {
+  async updateLastBackfillAt(characterId: bigint): Promise<void> {
     await this.prisma.character.update({
-      where: { eveId: characterId.toString() },
+      where: { eveId: characterId },
       data: { lastBackfillAt: new Date() },
     });
   }
@@ -342,18 +341,16 @@ export class CharacterRepository extends BaseRepository {
     return this.prisma.character.count();
   }
 
-  async getCharacterByEveId(eveId: string): Promise<Character | null> {
+  async getCharacterByEveId(eveId: string | bigint): Promise<Character | null> {
     return this.executeQuery(async () => {
       const character = await this.prisma.character.findUnique({
         where: {
-          eveId: eveId.toString(),
+          eveId: BigInt(eveId),
         },
       });
-
       if (!character) {
         return null;
       }
-
       return PrismaMapper.map(character, Character);
     });
   }

@@ -219,7 +219,7 @@ const backfillKillsHandler: RequestHandler<BackfillKillsParams> = async (
     logger.info(
       `Manually triggering kill backfill for character ${characterId}`
     );
-    await backfillKills(characterId);
+    await backfillKills(BigInt(characterId));
 
     res.json({
       success: true,
@@ -303,7 +303,7 @@ async function processCharacterBackfills(characters: any[]): Promise<void> {
       logger.info(
         `Backfilling kills for character ${character.name} (${character.eveId})`
       );
-      await backfillKills(parseInt(character.eveId));
+      await backfillKills(BigInt(character.eveId));
     } catch (error) {
       logger.error(
         `Error backfilling kills for character ${character.name}: ${error}`
@@ -379,7 +379,7 @@ async function processLossBackfill(characters: any[]): Promise<void> {
           character.eveId
         }) - ${i + 1}/${characters.length}`
       );
-      await backfillLosses(parseInt(character.eveId), 30);
+      await backfillLosses(BigInt(character.eveId), 30);
     } catch (error) {
       logger.error(
         `Error backfilling losses for character ${character.name}: ${error}`
@@ -407,11 +407,11 @@ async function cleanup() {
   await characterService.close();
 }
 
-async function backfillKills(characterId: number) {
+async function backfillKills(characterId: bigint) {
   await killmailService.backfillKills(characterId);
 }
 
-async function backfillLosses(characterId: number, days = 30) {
+async function backfillLosses(characterId: bigint, days = 30) {
   await killmailService.backfillLosses(characterId, days);
 }
 
@@ -477,7 +477,10 @@ async function startServer() {
       process.env.REDIS_URL!,
       parseInt(process.env.CACHE_TTL || "300")
     );
-    characterService = new CharacterSyncService();
+    characterService = new CharacterSyncService(
+      process.env.MAP_API_URL!,
+      process.env.MAP_API_KEY!
+    );
 
     // Now check database tables (after ingestion service is initialized)
     logger.info("Ensuring database tables exist...");
@@ -678,7 +681,7 @@ async function backfillCharacters() {
 
       try {
         // Backfill kills
-        await backfillKills(parseInt(character.eveId));
+        await backfillKills(BigInt(character.eveId));
       } catch (killsError) {
         const errorInfo = {
           character: character.name,
@@ -703,7 +706,7 @@ async function backfillCharacters() {
         logger.info(
           `Backfilling losses for character: ${character.name} (${character.eveId})`
         );
-        await backfillLosses(parseInt(character.eveId), 30); // 30 days max age
+        await backfillLosses(BigInt(character.eveId), 30); // 30 days max age
       } catch (lossesError) {
         const errorInfo = {
           character: character.name,
