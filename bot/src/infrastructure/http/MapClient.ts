@@ -3,17 +3,28 @@ import {
   MapActivityResponseSchema,
   UserCharactersResponseSchema,
 } from "../../types/ingestion";
+import { z } from "zod";
 import { logger } from "../../lib/logger";
+
+// Infer types from schemas
+type MapActivityResponse = z.infer<typeof MapActivityResponseSchema>;
+type UserCharactersResponse = z.infer<typeof UserCharactersResponseSchema>;
+
+// Define response type for raw API responses
+interface RawApiResponse {
+  data?: any[];
+  [key: string]: any;
+}
+
+type ApiResponse = any[] | RawApiResponse;
 
 export class MapClient {
   private readonly client: UnifiedESIClient;
-  private readonly baseUrl: string;
   private readonly apiKey: string;
   private lastRequestTime: number = 0;
   private readonly rateLimitMs: number = 200; // 5 requests per second
 
   constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = baseUrl;
     this.apiKey = apiKey;
     this.client = new UnifiedESIClient({
       baseUrl,
@@ -41,9 +52,22 @@ export class MapClient {
   }
 
   /**
+   * Get data array from response, handling both array and object responses
+   */
+  private getDataArray(response: ApiResponse): any[] {
+    if (Array.isArray(response)) {
+      return response;
+    }
+    return response.data || [];
+  }
+
+  /**
    * Fetch character activity data from the Map API
    */
-  async getCharacterActivity(slug: string, days: number = 7): Promise<any> {
+  async getCharacterActivity(
+    slug: string,
+    days: number = 7
+  ): Promise<MapActivityResponse> {
     try {
       logger.info(
         `Fetching character activity for map: ${slug}, days: ${days}`
@@ -53,37 +77,20 @@ export class MapClient {
       await this.respectRateLimit();
 
       const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
-      const response = await this.client.fetch(url, {
+      const response = await this.client.fetch<ApiResponse>(url, {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
         },
       });
 
       if (response) {
-        // Log sample of the data to help debugging
-        const dataCount = Array.isArray(response)
-          ? response.length
-          : response.data
-          ? response.data.length
-          : "unknown";
+        const dataArray = this.getDataArray(response);
+        const dataCount = dataArray.length;
         logger.info(`Received ${dataCount} records in response`);
 
         // Log date range in the response
-        if (Array.isArray(response) && response.length > 0) {
-          const dates = response.map((item: any) => new Date(item.timestamp));
-          const oldestDate = new Date(
-            Math.min(...dates.map((d: Date) => d.getTime()))
-          );
-          const newestDate = new Date(
-            Math.max(...dates.map((d: Date) => d.getTime()))
-          );
-          logger.info(
-            `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
-          );
-        } else if (response.data && response.data.length > 0) {
-          const dates = response.data.map(
-            (item: any) => new Date(item.timestamp)
-          );
+        if (dataArray.length > 0) {
+          const dates = dataArray.map((item: any) => new Date(item.timestamp));
           const oldestDate = new Date(
             Math.min(...dates.map((d: Date) => d.getTime()))
           );
@@ -107,8 +114,8 @@ export class MapClient {
             `Schema validation error for map activity response:`,
             schemaError
           );
-          // Return the raw data anyway to see what we're getting
-          return response;
+          // Return empty data array if validation fails
+          return { data: [] };
         }
       }
 
@@ -120,19 +127,22 @@ export class MapClient {
     }
   }
 
-  async getUserCharacters(slug: string) {
+  async getUserCharacters(slug: string): Promise<UserCharactersResponse> {
     try {
       await this.respectRateLimit();
       logger.info(`Fetching user characters for slug: ${slug}`);
 
-      const response = await this.client.fetch("/api/map/user_characters", {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        params: {
-          slug,
-        },
-      });
+      const response = await this.client.fetch<ApiResponse>(
+        "/api/map/user_characters",
+        {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          params: {
+            slug,
+          },
+        }
+      );
 
       const parsedData = UserCharactersResponseSchema.parse(response);
       logger.info(`Parsed ${parsedData.data.length} user entries`);

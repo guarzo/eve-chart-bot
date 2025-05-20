@@ -53,10 +53,22 @@ app.use(
 );
 
 // Initialize services
-let killmailService: KillmailIngestionService;
-let mapService: MapActivityService;
-let characterService: CharacterSyncService;
-let redisQService: RedisQService;
+const killmailService = new KillmailIngestionService(process.env.ZKILL_API_URL);
+const mapService = new MapActivityService(
+  process.env.MAP_API_URL || "https://api.eve-map.net",
+  process.env.MAP_API_KEY || "",
+  process.env.REDIS_URL,
+  parseInt(process.env.CACHE_TTL || "300"),
+  parseInt(process.env.MAX_RETRIES || "3"),
+  parseInt(process.env.RETRY_DELAY || "5000")
+);
+const characterService = new CharacterSyncService(
+  process.env.MAP_API_URL || "https://api.eve-map.net",
+  process.env.MAP_API_KEY || "",
+  parseInt(process.env.MAX_RETRIES || "3"),
+  parseInt(process.env.RETRY_DELAY || "5000")
+);
+let redisQService: RedisQService | null = null;
 const chartService = new ChartService();
 const chartRenderer = new ChartRenderer();
 
@@ -400,16 +412,6 @@ async function processLossBackfill(characters: any[]): Promise<void> {
 }
 
 // Helper functions
-async function cleanup() {
-  logger.info("Cleaning up resources...");
-  if (redisQService) {
-    await redisQService.stop();
-  }
-  await killmailService.close();
-  await mapService.close();
-  await characterService.close();
-}
-
 async function backfillKills(characterId: bigint) {
   await killmailService.backfillKills(characterId);
 }
@@ -418,37 +420,89 @@ async function backfillLosses(characterId: bigint, days = 30) {
   await killmailService.backfillLosses(characterId, days);
 }
 
-function startRedisQConsumer() {
-  const REDIS_URL = process.env.REDIS_URL;
-  if (!REDIS_URL) {
-    logger.error("REDIS_URL environment variable is required");
-    return;
-  }
-
-  redisQService = new RedisQService(
-    REDIS_URL,
-    parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
-    parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
-  );
-
-  redisQService.start().catch((error) => {
-    logger.error("Error starting RedisQ consumer:", error);
-  });
-}
-
 export async function startServer() {
   logger.info("Starting server...");
 
   // Run database migrations
   logger.info("Running database migrations...");
   try {
-    const { stdout, stderr } = await execAsync("npx prisma migrate deploy");
+    const { stderr } = await execAsync("npx prisma migrate deploy");
     if (stderr) {
       logger.warn("Migration warnings:", stderr);
     }
   } catch (error) {
     logger.error("Error running migrations:", error);
     throw error;
+  }
+
+  // Start RedisQ consumer
+  const REDIS_URL = process.env.REDIS_URL;
+  if (REDIS_URL) {
+    redisQService = new RedisQService(
+      REDIS_URL,
+      parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
+      parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
+    );
+    await redisQService.start();
+  } else {
+    logger.warn("REDIS_URL not set, RedisQ consumer not started");
+  }
+
+  // Initialize Discord if token is available
+  const discordToken = process.env.DISCORD_BOT_TOKEN;
+  if (discordToken) {
+    try {
+      const discordStartTime = Date.now();
+      logger.info(
+        `Discord initialization starting... (${
+          (discordStartTime - appStartTime) / 1000
+        }s after app start)`
+      );
+
+      logger.debug(
+        "Found Discord token:",
+        discordToken.substring(0, 10) + "..."
+      );
+
+      // Login to Discord
+      logger.info("Logging in to Discord...");
+      await discordClient.login(discordToken);
+      const loginTime = Date.now();
+      logger.info(
+        `Discord login successful - Client ready state: ${
+          discordClient.isReady() ? "Ready" : "Not Ready"
+        } (${(loginTime - discordStartTime) / 1000}s)`
+      );
+
+      // Register commands
+      logger.info("Registering Discord commands...");
+      await discordClient.registerCommands(commands);
+      const registerTime = Date.now();
+      logger.info(
+        `Discord commands registered successfully (${
+          (registerTime - loginTime) / 1000
+        }s)`
+      );
+
+      // Add specific Discord readiness log
+      setTimeout(() => {
+        const readyCheckTime = Date.now();
+        logger.info(
+          `Discord client status check after 5 seconds: (Total time since app start: ${
+            (readyCheckTime - appStartTime) / 1000
+          }s)`,
+          {
+            ready: discordClient.isReady() ? "Yes" : "No",
+            guilds: discordClient.getGuildsCount(),
+          }
+        );
+      }, 5000);
+    } catch (error) {
+      logger.error("Discord initialization failed:", error);
+      // Don't throw - allow server to start even if Discord fails
+    }
+  } else {
+    logger.warn("DISCORD_BOT_TOKEN not set, Discord bot not initialized");
   }
 
   // Start server
@@ -459,73 +513,29 @@ export async function startServer() {
   // Handle cleanup
   process.on("SIGTERM", async () => {
     logger.info("SIGTERM received, shutting down gracefully...");
+    if (redisQService) {
+      await redisQService.stop();
+    }
+    await killmailService.close();
+    await mapService.close();
+    await characterService.close();
     await server.close();
     process.exit(0);
   });
 
   process.on("SIGINT", async () => {
     logger.info("SIGINT received, shutting down gracefully...");
+    if (redisQService) {
+      await redisQService.stop();
+    }
+    await killmailService.close();
+    await mapService.close();
+    await characterService.close();
     await server.close();
     process.exit(0);
   });
 
   return server;
-}
-
-// Initialize Discord functionality
-async function initializeDiscord() {
-  try {
-    const discordStartTime = Date.now();
-    logger.info(
-      `Discord initialization starting... (${
-        (discordStartTime - appStartTime) / 1000
-      }s after app start)`
-    );
-
-    // Validate Discord token
-    const token = process.env.DISCORD_BOT_TOKEN;
-    if (!token) {
-      throw new Error("DISCORD_BOT_TOKEN environment variable is not set");
-    }
-    logger.debug("Found Discord token:", token.substring(0, 10) + "...");
-
-    // Login to Discord
-    logger.info("Logging in to Discord...");
-    await discordClient.login(token);
-    const loginTime = Date.now();
-    logger.info(
-      `Discord login successful - Client ready state: ${
-        discordClient.isReady() ? "Ready" : "Not Ready"
-      } (${(loginTime - discordStartTime) / 1000}s)`
-    );
-
-    // Register commands
-    logger.info("Registering Discord commands...");
-    await discordClient.registerCommands(commands);
-    const registerTime = Date.now();
-    logger.info(
-      `Discord commands registered successfully (${
-        (registerTime - loginTime) / 1000
-      }s)`
-    );
-
-    // Add specific Discord readiness log
-    setTimeout(() => {
-      const readyCheckTime = Date.now();
-      logger.info(
-        `Discord client status check after 5 seconds: (Total time since app start: ${
-          (readyCheckTime - appStartTime) / 1000
-        }s)`,
-        {
-          ready: discordClient.isReady() ? "Yes" : "No",
-          guilds: discordClient.getGuildsCount(),
-        }
-      );
-    }, 5000);
-  } catch (error) {
-    logger.error("Discord initialization failed:", error);
-    throw error;
-  }
 }
 
 // Refresh character tracking for RedisQ
