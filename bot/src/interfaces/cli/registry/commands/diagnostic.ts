@@ -1,6 +1,7 @@
 import { Command } from "commander";
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../../lib/logger";
+import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
+import { Killmail } from "../../../../domain/killmail/Killmail";
 
 export function registerDiagnosticCommands(program: Command) {
   const diagProgram = program
@@ -15,7 +16,9 @@ export function registerDiagnosticCommands(program: Command) {
     .option("-d, --days <number>", "Number of days to check", "7")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
+        const repositoryManager = new RepositoryManager();
+        const killRepo = repositoryManager.getKillRepository();
+        const characterRepo = repositoryManager.getCharacterRepository();
         const days = parseInt(options.days);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
@@ -24,40 +27,36 @@ export function registerDiagnosticCommands(program: Command) {
           `Checking kills for character ${options.character} in the last ${days} days...`
         );
 
-        const killmails = await prisma.killFact.findMany({
-          where: {
-            kill_time: {
-              gte: startDate,
-            },
-            characters: {
-              some: {
-                character_id: options.character,
-              },
-            },
-          },
-          include: {
-            characters: {
-              include: {
-                character: true,
-              },
-            },
-          },
-          orderBy: {
-            kill_time: "desc",
-          },
-        });
+        const character = await characterRepo.getCharacter(options.character);
+        if (!character) {
+          logger.error(`Character ${options.character} not found`);
+          process.exit(1);
+        }
+
+        const killmails = await killRepo.getKillsForCharacter(
+          options.character,
+          startDate,
+          new Date()
+        );
 
         logger.info(`Found ${killmails.length} killmails:`);
-        killmails.forEach((kill) => {
-          logger.info(`- Killmail ${kill.killmail_id} (${kill.kill_time})`);
-          logger.info(
-            `  Characters: ${kill.characters
-              .map((c) => c.character.name)
-              .join(", ")}`
-          );
+        killmails.forEach((kill: Killmail) => {
+          logger.info(`- Killmail ${kill.killmailId} (${kill.killTime})`);
+          if (kill.attackers) {
+            logger.info(
+              `  Attackers: ${kill.attackers
+                .map((a) => a.characterId?.toString() || "Unknown")
+                .join(", ")}`
+            );
+          }
+          if (kill.victim) {
+            logger.info(
+              `  Victim: ${kill.victim.characterId?.toString() || "Unknown"}`
+            );
+          }
         });
 
-        await prisma.$disconnect();
+        await killRepo.disconnect();
       } catch (error) {
         logger.error("Error checking character kills:", error);
         process.exit(1);
@@ -72,7 +71,9 @@ export function registerDiagnosticCommands(program: Command) {
     .option("-d, --days <number>", "Number of days to check", "30")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
+        const repositoryManager = new RepositoryManager();
+        const killRepo = repositoryManager.getKillRepository();
+        const characterRepo = repositoryManager.getCharacterRepository();
         const days = parseInt(options.days);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
@@ -81,26 +82,22 @@ export function registerDiagnosticCommands(program: Command) {
           `Checking kills chart data for character ${options.character} in the last ${days} days...`
         );
 
-        const killmails = await prisma.killFact.findMany({
-          where: {
-            kill_time: {
-              gte: startDate,
-            },
-            characters: {
-              some: {
-                character_id: options.character,
-              },
-            },
-          },
-          orderBy: {
-            kill_time: "asc",
-          },
-        });
+        const character = await characterRepo.getCharacter(options.character);
+        if (!character) {
+          logger.error(`Character ${options.character} not found`);
+          process.exit(1);
+        }
+
+        const killmails = await killRepo.getKillsForCharacter(
+          options.character,
+          startDate,
+          new Date()
+        );
 
         // Group kills by day
         const killsByDay = new Map<string, number>();
-        killmails.forEach((kill) => {
-          const date = kill.kill_time.toISOString().split("T")[0];
+        killmails.forEach((kill: Killmail) => {
+          const date = kill.killTime.toISOString().split("T")[0];
           killsByDay.set(date, (killsByDay.get(date) || 0) + 1);
         });
 
@@ -109,7 +106,7 @@ export function registerDiagnosticCommands(program: Command) {
           logger.info(`- ${date}: ${count} kills`);
         }
 
-        await prisma.$disconnect();
+        await killRepo.disconnect();
       } catch (error) {
         logger.error("Error checking kills chart:", error);
         process.exit(1);
@@ -123,30 +120,27 @@ export function registerDiagnosticCommands(program: Command) {
     .option("-d, --days <number>", "Number of days to check", "7")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
+        const repositoryManager = new RepositoryManager();
+        const killRepo = repositoryManager.getKillRepository();
         const days = parseInt(options.days);
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
         logger.info(`Checking killmail ingestion for the last ${days} days...`);
 
-        const killmails = await prisma.killFact.findMany({
-          where: {
-            kill_time: {
-              gte: startDate,
-            },
-          },
-          include: {
-            characters: true,
-          },
-          orderBy: {
-            kill_time: "desc",
-          },
-        });
+        const killmails = await killRepo.getKillsInDateRange(
+          startDate,
+          new Date()
+        );
 
         const totalKills = killmails.length;
         const uniqueCharacters = new Set(
-          killmails.flatMap((k) => k.characters.map((c) => c.character_id))
+          killmails
+            .flatMap((k: Killmail) => [
+              ...(k.attackers?.map((a) => a.characterId?.toString()) || []),
+              k.victim?.characterId?.toString(),
+            ])
+            .filter(Boolean)
         ).size;
 
         logger.info(`Total killmails: ${totalKills}`);
@@ -155,7 +149,7 @@ export function registerDiagnosticCommands(program: Command) {
 
         // Check for any gaps in ingestion
         const daysWithKills = new Set(
-          killmails.map((k) => k.kill_time.toISOString().split("T")[0])
+          killmails.map((k: Killmail) => k.killTime.toISOString().split("T")[0])
         );
         const missingDays = [];
         for (let i = 0; i < days; i++) {
@@ -172,7 +166,7 @@ export function registerDiagnosticCommands(program: Command) {
           missingDays.forEach((date) => logger.warn(`- ${date}`));
         }
 
-        await prisma.$disconnect();
+        await killRepo.disconnect();
       } catch (error) {
         logger.error("Error checking killmail ingestion:", error);
         process.exit(1);

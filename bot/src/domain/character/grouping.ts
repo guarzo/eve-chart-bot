@@ -1,16 +1,16 @@
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../lib/logger";
+import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 
 /**
  * Create a character group only if we have characters to associate with it
- * @param prisma Prisma client instance
+ * @param characterRepository Character repository instance
  * @param slug The group slug
  * @param characterIds Array of character IDs to associate with the group
  * @param mainCharacterId Optional main character ID for the group
  * @returns The created group ID or null if no group was created
  */
 export async function createCharacterGroupSafely(
-  prisma: PrismaClient,
+  characterRepository: CharacterRepository,
   slug: string,
   characterIds: string[],
   mainCharacterId?: string
@@ -28,94 +28,69 @@ export async function createCharacterGroupSafely(
     }
 
     // First, check if any of these characters already belong to a group
-    const existingCharacters = await prisma.character.findMany({
-      where: {
-        eveId: {
-          in: characterIds,
-        },
-        characterGroupId: {
-          not: null,
-        },
-      },
-      include: {
-        characterGroup: true,
-      },
-    });
+    const existingCharacters = await characterRepository.getCharactersByEveIds(
+      characterIds
+    );
+    const charactersWithGroups = existingCharacters.filter(
+      (char) => char.characterGroupId
+    );
 
     // If some characters already belong to a group, use that group instead of creating a new one
-    if (existingCharacters.length > 0 && existingCharacters[0].characterGroup) {
+    if (
+      charactersWithGroups.length > 0 &&
+      charactersWithGroups[0].characterGroup
+    ) {
       // Use the first character's group as the target group for all characters
-      const existingGroup = existingCharacters[0].characterGroup;
+      const existingGroup = charactersWithGroups[0].characterGroup;
       logger.info(
-        `Found existing group ${existingGroup.id} (${existingGroup.slug}) for ${existingCharacters.length} characters`
+        `Found existing group ${existingGroup.id} (${existingGroup.slug}) for ${charactersWithGroups.length} characters`
       );
 
       // Update all provided characters to use this group
       await Promise.all(
         characterIds.map((charId) =>
-          prisma.character.updateMany({
-            where: { eveId: charId },
-            data: { characterGroupId: existingGroup.id },
-          })
+          characterRepository.updateCharacterGroup(charId, existingGroup.id)
         )
       );
 
       // Update main character if provided
       if (mainCharacterId) {
-        await prisma.characterGroup.update({
-          where: { id: existingGroup.id },
-          data: { mainCharacterId },
-        });
+        await characterRepository.updateGroupMainCharacter(
+          existingGroup.id,
+          mainCharacterId
+        );
       }
 
       return existingGroup.id;
     }
 
     // Check if characters exist in the database
-    const charactersInDb = await prisma.character.findMany({
-      where: {
-        eveId: {
-          in: characterIds,
-        },
-      },
-    });
-
-    if (charactersInDb.length === 0) {
+    if (existingCharacters.length === 0) {
       logger.warn(`Cannot create group '${slug}': no valid characters found`);
       return null;
     }
 
     logger.info(
-      `Creating character group '${slug}' with ${charactersInDb.length} characters`
+      `Creating character group '${slug}' with ${existingCharacters.length} characters`
     );
 
-    // Use a transaction to ensure atomicity
-    const result = await prisma.$transaction(async (tx) => {
-      // Create the group first
-      const group = await tx.characterGroup.create({
-        data: {
-          slug,
-          mainCharacterId: mainCharacterId || null,
-        },
-      });
+    // Create the group and associate characters
+    const group = await characterRepository.createCharacterGroup(
+      slug,
+      mainCharacterId
+    );
 
-      // Associate characters with the group
-      await Promise.all(
-        charactersInDb.map((char) =>
-          tx.character.update({
-            where: { eveId: char.eveId },
-            data: { characterGroupId: group.id },
-          })
-        )
-      );
-
-      return group;
-    });
+    // Associate characters with the group
+    await Promise.all(
+      existingCharacters.map((char) =>
+        characterRepository.updateCharacterGroup(char.eveId, group.id)
+      )
+    );
 
     logger.info(
-      `Successfully created character group ${result.id} with ${charactersInDb.length} characters`
+      `Successfully created character group ${group.id} with ${existingCharacters.length} characters`
     );
-    return result.id;
+    return group.id;
   } catch (error) {
     logger.error(
       {
@@ -130,14 +105,14 @@ export async function createCharacterGroupSafely(
 
 /**
  * A safer version of the upsert operation that ensures groups always have characters
- * @param prisma Prisma client instance
+ * @param characterRepository Character repository instance
  * @param slug The group slug
  * @param characterIds Array of character IDs to associate with the group
  * @param mainCharacterId Optional main character ID for the group
  * @returns The created/updated group ID or null if no group was created/updated
  */
 export async function upsertCharacterGroupSafely(
-  prisma: PrismaClient,
+  characterRepository: CharacterRepository,
   slug: string,
   characterIds: string[],
   mainCharacterId?: string
@@ -145,39 +120,28 @@ export async function upsertCharacterGroupSafely(
   try {
     // First, check if any of these characters already belong to a group
     if (characterIds && characterIds.length > 0) {
-      const existingCharacters = await prisma.character.findMany({
-        where: {
-          eveId: {
-            in: characterIds,
-          },
-          characterGroupId: {
-            not: null,
-          },
-        },
-        include: {
-          characterGroup: true,
-        },
-      });
+      const existingCharacters =
+        await characterRepository.getCharactersByEveIds(characterIds);
+      const charactersWithGroups = existingCharacters.filter(
+        (char) => char.characterGroupId
+      );
 
       // If some characters already belong to a group, use that group instead of creating a new one
       if (
-        existingCharacters.length > 0 &&
-        existingCharacters[0].characterGroup
+        charactersWithGroups.length > 0 &&
+        charactersWithGroups[0].characterGroup
       ) {
         // Use the first character's group as the target group for all characters
-        const existingGroup = existingCharacters[0].characterGroup;
+        const existingGroup = charactersWithGroups[0].characterGroup;
         logger.info(
-          `Found existing group ${existingGroup.id} (${existingGroup.slug}) for ${existingCharacters.length} characters`
+          `Found existing group ${existingGroup.id} (${existingGroup.slug}) for ${charactersWithGroups.length} characters`
         );
 
         // Update all provided characters to use this group
         await Promise.all(
           characterIds.map((charId) =>
-            prisma.character
-              .update({
-                where: { eveId: charId },
-                data: { characterGroupId: existingGroup.id },
-              })
+            characterRepository
+              .updateCharacterGroup(charId, existingGroup.id)
               .catch((e) => {
                 logger.warn(
                   `Could not update character ${charId}: ${e.message}`
@@ -189,10 +153,10 @@ export async function upsertCharacterGroupSafely(
 
         // Update main character if provided
         if (mainCharacterId) {
-          await prisma.characterGroup.update({
-            where: { id: existingGroup.id },
-            data: { mainCharacterId },
-          });
+          await characterRepository.updateGroupMainCharacter(
+            existingGroup.id,
+            mainCharacterId
+          );
         }
 
         return existingGroup.id;
@@ -201,7 +165,7 @@ export async function upsertCharacterGroupSafely(
 
     // If no existing group was found, create a new one
     return createCharacterGroupSafely(
-      prisma,
+      characterRepository,
       slug,
       characterIds,
       mainCharacterId
@@ -220,43 +184,23 @@ export async function upsertCharacterGroupSafely(
 
 /**
  * Remove empty character groups to keep the database clean
- * @param prisma Prisma client instance
+ * @param characterRepository Character repository instance
  * @returns The number of groups that were removed
  */
 export async function cleanupEmptyCharacterGroups(
-  prisma: PrismaClient
+  characterRepository: CharacterRepository
 ): Promise<number> {
   try {
-    // Find groups with no characters
-    const emptyGroups = await prisma.characterGroup.findMany({
-      where: {
-        characters: {
-          none: {},
-        },
-      },
-      include: {
-        _count: {
-          select: {
-            characters: true,
-          },
-        },
-      },
-    });
+    const emptyGroups = await characterRepository.getEmptyGroups();
 
     if (emptyGroups.length === 0) {
       logger.info("No empty character groups found");
       return 0;
     }
 
-    logger.info(`Found ${emptyGroups.length} empty character groups to remove`);
-
     // Delete each empty group
     await Promise.all(
-      emptyGroups.map((group) =>
-        prisma.characterGroup.delete({
-          where: { id: group.id },
-        })
-      )
+      emptyGroups.map((group) => characterRepository.deleteGroup(group.id))
     );
 
     logger.info(`Removed ${emptyGroups.length} empty character groups`);

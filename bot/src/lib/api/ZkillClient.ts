@@ -5,11 +5,11 @@ import {
 } from "../../types/ingestion";
 import { logger } from "../logger";
 import { fetchESIKillmail } from "../../lib/esi";
+import { retryOperation, RateLimiter } from "../../utils/retry";
 
 export class ZkillClient {
   private client: AxiosInstance;
-  private lastRequestTime: number = 0;
-  private readonly rateLimitMs: number = 200; // 5 requests per second to be more conservative
+  private readonly rateLimiter: RateLimiter;
 
   constructor(baseUrl: string) {
     this.client = axios.create({
@@ -20,28 +20,29 @@ export class ZkillClient {
       },
       timeout: 30000, // 30 second timeout
     });
+    this.rateLimiter = new RateLimiter(200); // 5 requests per second to be more conservative
     logger.info(`ZkillClient initialized with base URL: ${baseUrl}`);
-  }
-
-  /**
-   * Pause between requests to respect rate limit
-   */
-  private async rateLimit() {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    if (elapsed < this.rateLimitMs) {
-      const delay = this.rateLimitMs - elapsed;
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-    this.lastRequestTime = Date.now();
   }
 
   async getKillmail(killId: number) {
     try {
-      await this.rateLimit();
+      await this.rateLimiter.wait();
       logger.info(`Fetching killmail ${killId} from zKillboard API...`);
 
-      const response = await this.client.get(`/killID/${killId}/`);
+      const response = await retryOperation(
+        () => this.client.get(`/killID/${killId}/`),
+        `zKillboard killmail ${killId}`,
+        {
+          maxRetries: 3,
+          initialRetryDelay: 1000,
+          timeout: 30000,
+        }
+      );
+
+      if (!response) {
+        logger.warn(`No killmail found for ID ${killId}`);
+        return null;
+      }
 
       // The response is an array with a single item
       const kill = response.data[0];
@@ -140,17 +141,23 @@ export class ZkillClient {
       logger.info(
         `Fetching kills for character ${characterId}, page ${page} from zKillboard API...`
       );
-      await this.rateLimit();
+      await this.rateLimiter.wait();
 
       // Use the endpoint that we've found to work in diagnostics
       const url = `/api/characterID/${characterId}/page/${page}/`;
       logger.debug(`Making zKillboard request to: ${url}`);
 
-      const response = await this.client.get(url, {
-        timeout: 30000, // 30 second timeout
-      });
+      const response = await retryOperation(
+        () => this.client.get(url, { timeout: 30000 }),
+        `zKillboard character kills ${characterId} page ${page}`,
+        {
+          maxRetries: 3,
+          initialRetryDelay: 1000,
+          timeout: 30000,
+        }
+      );
 
-      if (!response.data) {
+      if (!response || !response.data) {
         logger.warn(
           `Empty response from zKillboard for character ${characterId}`
         );
@@ -169,7 +176,7 @@ export class ZkillClient {
           const basicKill = BasicKillmailSchema.parse(kill);
 
           // Then fetch complete killmail data from ESI
-          await this.rateLimit(); // Add rate limiting before ESI request
+          await this.rateLimiter.wait(); // Add rate limiting before ESI request
           const esiData = await fetchESIKillmail(
             basicKill.killmail_id,
             basicKill.zkb.hash
@@ -248,12 +255,10 @@ export class ZkillClient {
           errorMessage: error?.message,
           errorStack: error?.stack,
           url: `/api/characterID/${characterId}/page/${page}/`,
-          statusCode: error?.response?.status,
-          statusText: error?.response?.statusText,
         },
         "Failed to fetch character kills from zKillboard"
       );
-      return []; // Return empty array instead of throwing
+      return [];
     }
   }
 
@@ -262,7 +267,7 @@ export class ZkillClient {
    */
   async getCharacterLosses(characterId: number, page: number = 1) {
     try {
-      await this.rateLimit();
+      await this.rateLimiter.wait();
       logger.info(
         `Fetching losses for character ${characterId}, page ${page} from zKillboard API...`
       );

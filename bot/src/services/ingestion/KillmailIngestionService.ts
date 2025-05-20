@@ -1,7 +1,7 @@
 import { KillRepository } from "../../infrastructure/repositories/KillRepository";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { ESIService } from "../ESIService";
-import { RetryService } from "./RetryService";
+import { retryOperation } from "../../utils/retry";
 import { logger } from "../../lib/logger";
 import {
   Killmail,
@@ -20,18 +20,14 @@ export class KillmailIngestionService {
   private readonly killRepository: KillRepository;
   private readonly characterRepository: CharacterRepository;
   private readonly esiService: ESIService;
-  private readonly retryService: RetryService;
   private readonly zkill: ZkillClient;
 
   constructor(
     zkillApiUrl: string = "https://zkillboard.com/api",
-    maxRetries: number = 3,
-    retryDelay: number = 5000
   ) {
     this.killRepository = new KillRepository();
     this.characterRepository = new CharacterRepository();
     this.esiService = new ESIService();
-    this.retryService = new RetryService(maxRetries, retryDelay);
     this.zkill = new ZkillClient(zkillApiUrl);
   }
 
@@ -60,12 +56,14 @@ export class KillmailIngestionService {
       }
 
       // 2) Fetch from zKillboard with retry (15s timeout for zKill)
-      const zk = await this.retryService.retryOperation(
+      const zk = await retryOperation(
         () => this.zkill.getKillmail(killId),
         `Fetching zKill data for killmail ${killId}`,
-        3, // maxRetries
-        5000, // retryDelay
-        15000 // timeout
+        {
+          maxRetries: 3,
+          initialRetryDelay: 5000,
+          timeout: 15000,
+        }
       );
       if (!zk) {
         logger.warn(`No zKill data for killmail ${killId}`);
@@ -73,12 +71,14 @@ export class KillmailIngestionService {
       }
 
       // 3) Fetch from ESI with caching and retry (30s timeout for ESI)
-      const esi = await this.retryService.retryOperation(
+      const esi = await retryOperation(
         () => this.esiService.getKillmail(zk.killmail_id, zk.zkb.hash),
         `Fetching ESI data for killmail ${killId}`,
-        3, // maxRetries
-        5000, // retryDelay
-        30000 // timeout
+        {
+          maxRetries: 3,
+          initialRetryDelay: 5000,
+          timeout: 30000,
+        }
       );
       if (!esi?.victim) {
         logger.warn(`Invalid ESI data for killmail ${killId}`);
@@ -121,6 +121,19 @@ export class KillmailIngestionService {
       );
       if (tracked.length === 0) {
         logger.debug(`No tracked characters in killmail ${killId}`);
+        return { success: false, skipped: true };
+      }
+
+      // 6) Ensure all characters exist in our database
+      const missingIds = allIds.filter(
+        (id) => !tracked.some((c) => c.eveId === id)
+      );
+      if (missingIds.length > 0) {
+        logger.debug(
+          `Skipping killmail ${killId} - missing characters: ${missingIds.join(
+            ", "
+          )}`
+        );
         return { success: false, skipped: true };
       }
 
@@ -185,12 +198,14 @@ export class KillmailIngestionService {
       while (hasMore) {
         try {
           // Fetch killmails from zKillboard
-          const killmails = await this.retryService.retryOperation(
+          const killmails = await retryOperation(
             () => this.zkill.getCharacterKills(Number(characterId), page),
             `Fetching killmails for character ${characterId} page ${page}`,
-            3, // maxRetries
-            5000, // retryDelay
-            30000 // timeout
+            {
+              maxRetries: 3,
+              initialRetryDelay: 5000,
+              timeout: 30000,
+            }
           );
 
           if (!killmails || killmails.length === 0) {
@@ -293,5 +308,19 @@ export class KillmailIngestionService {
 
   public async close(): Promise<void> {
     // No resources to clean up at the moment
+  }
+
+  /**
+   * Deletes all killmail data from the database
+   */
+  public async cleanup(): Promise<void> {
+    try {
+      logger.info("Deleting all killmail data...");
+      await this.killRepository.deleteAllKillmails();
+      logger.info("Killmail data cleanup complete");
+    } catch (error: any) {
+      logger.error(`Error cleaning up killmail data: ${error.message}`);
+      throw error;
+    }
   }
 }

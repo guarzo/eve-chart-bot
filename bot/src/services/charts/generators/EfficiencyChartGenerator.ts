@@ -48,10 +48,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
         startDate,
         endDate
       ),
-      this.lossRepository.getLossesByTimeRange(
-        characterIds.map((id) => id.toString()),
-        { start: startDate, end: endDate }
-      ),
+      this.lossRepository.getLossesByTimeRange(startDate, endDate),
     ]);
 
     // Group data by character group
@@ -61,7 +58,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
         groupCharacterIds.includes(BigInt(kill.character_id))
       );
       const groupLosses = losses.filter((loss) =>
-        groupCharacterIds.includes(BigInt(loss.character_id))
+        groupCharacterIds.includes(BigInt(loss.characterId))
       );
 
       const totalKills = groupKills.length;

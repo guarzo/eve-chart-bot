@@ -4,7 +4,7 @@ import { logger } from "../../../lib/logger";
 import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
 import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 import { subDays } from "date-fns";
-import { CacheAdapter } from "../../../infrastructure/cache/CacheAdapter";
+import { CacheAdapter } from "../../../cache/CacheAdapter";
 
 async function checkCharacterKills() {
   const prisma = new PrismaClient();

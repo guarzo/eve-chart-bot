@@ -9,7 +9,6 @@ import { ChartFactory } from "../../../../services/charts";
  * Handler for the /charts loss command
  */
 export class LossHandler extends BaseChartHandler {
-
   constructor() {
     super();
   }
@@ -62,6 +61,7 @@ export class LossHandler extends BaseChartHandler {
 
       logger.info("Successfully sent loss chart");
     } catch (error) {
+      logger.error("Error generating loss chart:", error);
       await this.handleError(interaction, error);
     }
   }
@@ -78,10 +78,26 @@ export class LossHandler extends BaseChartHandler {
         title: {
           display: true,
           text: chartData.title || "Losses by Character Group",
+          font: {
+            size: 40,
+            weight: "bold",
+          },
         },
         legend: {
           display: true,
           position: "top" as const,
+        },
+        tooltip: {
+          callbacks: {
+            label: (context: any) => {
+              const label = context.dataset.label || "";
+              const value = context.parsed.y;
+              if (label.includes("ISK")) {
+                return `${label}: ${value.toLocaleString()} B`;
+              }
+              return `${label}: ${value.toLocaleString()}`;
+            },
+          },
         },
       },
       scales: {
@@ -90,6 +106,12 @@ export class LossHandler extends BaseChartHandler {
           title: {
             display: true,
             text: "ISK Lost",
+            font: {
+              size: 20,
+            },
+          },
+          ticks: {
+            callback: (value: number) => value.toLocaleString(),
           },
         },
         y: {
@@ -98,6 +120,9 @@ export class LossHandler extends BaseChartHandler {
           title: {
             display: true,
             text: "Character",
+            font: {
+              size: 20,
+            },
           },
         },
       },

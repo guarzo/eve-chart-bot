@@ -1,6 +1,7 @@
 import { Command } from "commander";
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../../lib/logger";
+import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
+import { DatabaseUtils } from "../../../../utils/DatabaseUtils";
 
 export function registerDatabaseCommands(program: Command) {
   const dbProgram = program
@@ -14,7 +15,10 @@ export function registerDatabaseCommands(program: Command) {
     .option("-f, --force", "Force reset without confirmation")
     .action(async (options) => {
       try {
-        const prisma = new PrismaClient();
+        const repositoryManager = new RepositoryManager();
+        const characterRepo = repositoryManager.getCharacterRepository();
+        const killRepo = repositoryManager.getKillRepository();
+        const mapActivityRepo = repositoryManager.getMapActivityRepository();
 
         if (!options.force) {
           logger.warn(
@@ -24,13 +28,17 @@ export function registerDatabaseCommands(program: Command) {
         }
 
         logger.info("Resetting database...");
-        await prisma.$executeRaw`TRUNCATE TABLE "Killmail" CASCADE`;
-        await prisma.$executeRaw`TRUNCATE TABLE "Character" CASCADE`;
-        await prisma.$executeRaw`TRUNCATE TABLE "CharacterGroup" CASCADE`;
-        await prisma.$executeRaw`TRUNCATE TABLE "MapActivity" CASCADE`;
+
+        // Use repositories to delete data
+        await characterRepo.executeQuery(async () => {
+          // Delete all data
+          await killRepo.deleteAllKillmails();
+          await characterRepo.deleteAllCharacters();
+          await characterRepo.deleteAllCharacterGroups();
+        });
 
         logger.info("Database reset complete");
-        await prisma.$disconnect();
+        await characterRepo.disconnect();
       } catch (error) {
         logger.error("Error resetting database:", error);
         process.exit(1);
@@ -67,13 +75,40 @@ export function registerDatabaseCommands(program: Command) {
     .description("Migrate map activity data")
     .action(async () => {
       try {
-        const prisma = new PrismaClient();
+        const repositoryManager = new RepositoryManager();
+        const mapActivityRepo = repositoryManager.getMapActivityRepository();
+
         logger.info("Starting map activity migration...");
 
         // Add your map activity migration logic here
+        await mapActivityRepo.executeQuery(async () => {
+          // Create table if it doesn't exist
+          await mapActivityRepo.prisma.$executeRaw`
+            CREATE TABLE IF NOT EXISTS map_activities (
+              id SERIAL PRIMARY KEY,
+              character_id BIGINT NOT NULL,
+              timestamp TIMESTAMP NOT NULL,
+              signatures INTEGER NOT NULL DEFAULT 0,
+              connections INTEGER NOT NULL DEFAULT 0,
+              passages INTEGER NOT NULL DEFAULT 0,
+              alliance_id BIGINT,
+              corporation_id BIGINT,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+          `;
+
+          // Create indexes
+          await mapActivityRepo.prisma.$executeRaw`
+            CREATE INDEX IF NOT EXISTS map_activities_character_id_idx ON map_activities(character_id);
+            CREATE INDEX IF NOT EXISTS map_activities_timestamp_idx ON map_activities(timestamp);
+            CREATE INDEX IF NOT EXISTS map_activities_alliance_id_idx ON map_activities(alliance_id);
+            CREATE INDEX IF NOT EXISTS map_activities_corporation_id_idx ON map_activities(corporation_id);
+          `;
+        });
 
         logger.info("Map activity migration complete");
-        await prisma.$disconnect();
+        await mapActivityRepo.disconnect();
       } catch (error) {
         logger.error("Error migrating map activity:", error);
         process.exit(1);

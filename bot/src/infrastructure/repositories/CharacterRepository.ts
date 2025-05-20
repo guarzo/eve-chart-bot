@@ -354,4 +354,74 @@ export class CharacterRepository extends BaseRepository {
       return PrismaMapper.map(character, Character);
     });
   }
+
+  /**
+   * Update a character's group
+   */
+  async updateCharacterGroup(
+    eveId: string | bigint,
+    groupId: string
+  ): Promise<Character> {
+    const updated = await this.prisma.character.update({
+      where: { eveId: BigInt(eveId) },
+      data: { characterGroupId: groupId },
+    });
+    return PrismaMapper.map(updated, Character);
+  }
+
+  /**
+   * Update a group's main character
+   */
+  async updateGroupMainCharacter(
+    groupId: string,
+    mainCharacterId: string | bigint
+  ): Promise<CharacterGroup> {
+    const updated = await this.prisma.characterGroup.update({
+      where: { id: groupId },
+      data: { mainCharacterId: BigInt(mainCharacterId) },
+      include: { characters: true },
+    });
+    return PrismaMapper.map(updated, CharacterGroup);
+  }
+
+  /**
+   * Create a new character group
+   */
+  async createCharacterGroup(
+    slug: string,
+    mainCharacterId?: string | bigint
+  ): Promise<CharacterGroup> {
+    const created = await this.prisma.characterGroup.create({
+      data: {
+        slug,
+        mainCharacterId: mainCharacterId ? BigInt(mainCharacterId) : null,
+      },
+      include: { characters: true },
+    });
+    return PrismaMapper.map(created, CharacterGroup);
+  }
+
+  /**
+   * Get empty character groups (groups with no characters)
+   */
+  async getEmptyGroups(): Promise<CharacterGroup[]> {
+    const groups = await this.prisma.characterGroup.findMany({
+      where: {
+        characters: {
+          none: {},
+        },
+      },
+      include: { characters: true },
+    });
+    return groups.map((group: any) => PrismaMapper.map(group, CharacterGroup));
+  }
+
+  /**
+   * Delete a group
+   */
+  async deleteGroup(groupId: string): Promise<void> {
+    await this.prisma.characterGroup.delete({
+      where: { id: groupId },
+    });
+  }
 }

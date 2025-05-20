@@ -1,7 +1,6 @@
-import prisma from "../../infrastructure/persistence/client";
 import { logger } from "../../lib/logger";
-import { CacheAdapter } from "../../infrastructure/cache/CacheAdapter";
-import { RedisCache } from "../../lib/cache/RedisCache";
+import { CacheAdapter } from "../../cache/CacheAdapter";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 import { flags } from "../../utils/feature-flags";
 
 /**
@@ -53,7 +52,8 @@ export class ChartService {
    */
   constructor(cache?: CacheAdapter) {
     this.cache =
-      cache || new RedisCache(process.env.REDIS_URL || "redis://redis:6379");
+      cache ||
+      new CacheRedisAdapter(process.env.REDIS_URL || "redis://redis:6379");
   }
 
   /**

@@ -1,24 +1,13 @@
 import { BaseChartGenerator } from "../BaseChartGenerator";
 import {
   ChartData,
-  ChartDisplayType,
-  SimpleTimeRange,
+  ChartDisplayType
 } from "../../../types/chart";
 import { LossChartConfig } from "../config";
 import { logger } from "../../../lib/logger";
 import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
 import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
-
-interface Loss {
-  killmail_id: bigint;
-  labels: string[];
-  character_id: bigint;
-  kill_time: Date;
-  ship_type_id: number;
-  system_id: number;
-  total_value: bigint;
-  attacker_count: number;
-}
+import { LossFact } from "../../../domain/killmail/LossFact";
 
 /**
  * Generator for loss charts
@@ -65,10 +54,9 @@ export class LossChartGenerator extends BaseChartGenerator {
     );
 
     // Get losses for all characters
-    const timeRange: SimpleTimeRange = { start: startDate, end: endDate };
     const losses = await this.lossRepository.getLossesByTimeRange(
-      characterIds.map((id) => id.toString()),
-      timeRange
+      startDate,
+      endDate
     );
 
     // Debug: Log total number of losses returned
@@ -78,15 +66,12 @@ export class LossChartGenerator extends BaseChartGenerator {
 
     // Remove duplicate killmail_ids from losses
     const seenKillmails = new Set<bigint>();
-    const dedupedLosses: Loss[] = [];
+    const dedupedLosses: LossFact[] = [];
     let duplicateCount = 0;
     for (const loss of losses) {
-      if (!seenKillmails.has(loss.killmail_id)) {
-        seenKillmails.add(loss.killmail_id);
-        dedupedLosses.push({
-          ...loss,
-          character_id: BigInt(loss.character_id),
-        });
+      if (!seenKillmails.has(loss.killmailId)) {
+        seenKillmails.add(loss.killmailId);
+        dedupedLosses.push(loss);
       } else {
         duplicateCount++;
       }
@@ -102,8 +87,8 @@ export class LossChartGenerator extends BaseChartGenerator {
     // Group losses by character group
     const groupData = characterGroups.map((group) => {
       const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
-      const groupLosses = dedupedLosses.filter((loss: Loss) =>
-        groupCharacterIds.includes(loss.character_id)
+      const groupLosses = dedupedLosses.filter((loss: LossFact) =>
+        groupCharacterIds.includes(loss.characterId)
       );
 
       // Debug: Log number of losses for this group
@@ -114,11 +99,11 @@ export class LossChartGenerator extends BaseChartGenerator {
       // Calculate total losses and value
       const totalLosses = groupLosses.length;
       const totalValue = groupLosses.reduce(
-        (sum: bigint, loss: Loss) => sum + loss.total_value,
+        (sum: bigint, loss: LossFact) => sum + loss.totalValue,
         BigInt(0)
       );
       const highValueLosses = groupLosses.filter(
-        (loss) => loss.total_value >= BigInt(100000000)
+        (loss) => loss.totalValue >= BigInt(100000000)
       ).length;
 
       return {
@@ -265,6 +250,128 @@ export class LossChartGenerator extends BaseChartGenerator {
         totalHighValueLosses,
         formatIsk(totalIskLost)
       ),
+    };
+  }
+
+  /**
+   * Generate a chart showing daily losses over time
+   * @param start Start date for the chart
+   * @param end End date for the chart
+   */
+  async generateDailyLossesChart(
+    start: string,
+    end: string
+  ): Promise<ChartData> {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    // Get losses for the time range
+    const losses = await this.lossRepository.getLossesByTimeRange(
+      startDate,
+      endDate
+    );
+
+    // Group losses by day
+    const groupedLosses = losses.reduce((acc, loss) => {
+      const date = loss.killTime.toISOString().split("T")[0];
+      if (!acc[date]) {
+        acc[date] = [];
+      }
+      acc[date].push(loss);
+      return acc;
+    }, {} as Record<string, LossFact[]>);
+
+    // Calculate daily totals
+    const data = Object.entries(groupedLosses).map(([date, dayLosses]) => ({
+      date,
+      value: dayLosses.reduce((sum, loss) => sum + Number(loss.totalValue), 0),
+      count: dayLosses.length,
+    }));
+
+    // Sort by date
+    data.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      title: "Daily Losses",
+      labels: data.map((d) => d.date),
+      datasets: [
+        {
+          label: "Total Value Lost (ISK)",
+          data: data.map((d) => d.value),
+          backgroundColor: "rgba(255, 99, 132, 0.5)",
+          borderColor: "rgb(255, 99, 132)",
+        },
+        {
+          label: "Number of Losses",
+          data: data.map((d) => d.count),
+          backgroundColor: "rgba(54, 162, 235, 0.5)",
+          borderColor: "rgb(54, 162, 235)",
+        },
+      ],
+      displayType: "line" as ChartDisplayType,
+    };
+  }
+
+  /**
+   * Generate a chart showing losses by ship type
+   * @param start Start date for the chart
+   * @param end End date for the chart
+   */
+  async generateShipTypeLossesChart(
+    start: string,
+    end: string
+  ): Promise<ChartData> {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+
+    // Get losses for the time range
+    const losses = await this.lossRepository.getLossesByTimeRange(
+      startDate,
+      endDate
+    );
+
+    // Group losses by ship type
+    const groupedLosses = losses.reduce((acc, loss) => {
+      if (!acc[loss.shipTypeId]) {
+        acc[loss.shipTypeId] = [];
+      }
+      acc[loss.shipTypeId].push(loss);
+      return acc;
+    }, {} as Record<number, LossFact[]>);
+
+    // Calculate totals by ship type
+    const data = Object.entries(groupedLosses).map(
+      ([shipTypeId, shipLosses]) => ({
+        shipTypeId: Number(shipTypeId),
+        value: shipLosses.reduce(
+          (sum, loss) => sum + Number(loss.totalValue),
+          0
+        ),
+        count: shipLosses.length,
+      })
+    );
+
+    // Sort by value
+    data.sort((a, b) => b.value - a.value);
+
+    return {
+      title: "Losses by Ship Type",
+      labels: data.map((d) => `Ship Type ${d.shipTypeId}`),
+      datasets: [
+        {
+          label: "Total Value Lost (ISK)",
+          data: data.map((d) => d.value),
+          backgroundColor: "rgba(255, 99, 132, 0.5)",
+          borderColor: "rgb(255, 99, 132)",
+        },
+        {
+          label: "Number of Losses",
+          data: data.map((d) => d.count),
+          backgroundColor: "rgba(54, 162, 235, 0.5)",
+          borderColor: "rgb(54, 162, 235)",
+        },
+      ],
+      displayType: "bar" as ChartDisplayType,
     };
   }
 }

@@ -59,6 +59,7 @@ export class ShipLossHandler extends BaseChartHandler {
 
       logger.info("Successfully sent ship loss chart");
     } catch (error) {
+      logger.error("Error generating ship loss chart:", error);
       await this.handleError(interaction, error);
     }
   }
@@ -84,6 +85,18 @@ export class ShipLossHandler extends BaseChartHandler {
           display: true,
           position: "top" as const,
         },
+        tooltip: {
+          callbacks: {
+            label: (context: any) => {
+              const label = context.dataset.label || "";
+              const value = context.parsed.y;
+              if (label.includes("ISK")) {
+                return `${label}: ${value.toLocaleString()} B`;
+              }
+              return `${label}: ${value.toLocaleString()}`;
+            },
+          },
+        },
       },
       scales: {
         x: {
@@ -91,6 +104,12 @@ export class ShipLossHandler extends BaseChartHandler {
           title: {
             display: true,
             text: "Count",
+            font: {
+              size: 20,
+            },
+          },
+          ticks: {
+            callback: (value: number) => value.toLocaleString(),
           },
         },
         y: {
@@ -99,6 +118,9 @@ export class ShipLossHandler extends BaseChartHandler {
           title: {
             display: true,
             text: "Ship Type",
+            font: {
+              size: 20,
+            },
           },
         },
       },

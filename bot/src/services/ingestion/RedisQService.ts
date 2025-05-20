@@ -2,7 +2,7 @@ import Redis from "ioredis";
 import { KillmailIngestionService } from "./KillmailIngestionService";
 import { logger } from "../../lib/logger";
 import { CircuitBreaker } from "../../lib/circuit-breaker/CircuitBreaker";
-import { RetryService } from "./RetryService";
+import { retryOperation } from "../../utils/retry";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 
 interface RedisQKillmail {
@@ -57,7 +57,6 @@ export class RedisQService {
   private killmailService: KillmailIngestionService;
   private characterRepository: CharacterRepository;
   private circuitBreaker: CircuitBreaker;
-  private retryService: RetryService;
   private isRunning = false;
   private refreshInterval: NodeJS.Timeout | null = null;
   private metrics = {
@@ -70,8 +69,6 @@ export class RedisQService {
 
   constructor(
     redisUrl: string,
-    maxRetries: number = 3,
-    retryDelay: number = 5000,
     circuitBreakerThreshold: number = 5,
     circuitBreakerTimeout: number = 30000
   ) {
@@ -82,7 +79,6 @@ export class RedisQService {
       circuitBreakerThreshold,
       circuitBreakerTimeout
     );
-    this.retryService = new RetryService(maxRetries, retryDelay);
   }
 
   /**
@@ -156,12 +152,14 @@ export class RedisQService {
       }
 
       // Process the killmail
-      const result = await this.retryService.retryOperation(
+      const result = await retryOperation(
         () => this.killmailService.ingestKillmail(killmail.killID),
         `Processing killmail ${killmail.killID}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: 3,
+          initialRetryDelay: 5000,
+          timeout: 30000,
+        }
       );
 
       if (!result) {
@@ -220,15 +218,17 @@ export class RedisQService {
     if (!this.isRunning) return;
 
     try {
-      const response = await this.retryService.retryOperation(
+      const response = await retryOperation(
         () =>
           fetch(
             "https://redisq.zkillboard.com/listen.php?queueID=eve-chart-bot"
           ),
         "Polling RedisQ",
-        3,
-        5000,
-        30000
+        {
+          maxRetries: 3,
+          initialRetryDelay: 5000,
+          timeout: 30000,
+        }
       );
 
       if (!response) {

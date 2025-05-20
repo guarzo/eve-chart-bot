@@ -1,124 +1,77 @@
 import { Command } from "commander";
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../lib/logger";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 interface TableInfo {
   table_name: string;
 }
 
-interface ColumnInfo {
-  column_name: string;
-  data_type: string;
-  is_nullable: string;
-}
-
-interface ExistsResult {
-  exists: boolean;
-}
-
 async function migrateMapActivity() {
-  const prisma = new PrismaClient();
+  const repositoryManager = new RepositoryManager();
+  const mapActivityRepo = repositoryManager.getMapActivityRepository();
 
   try {
-    console.log("Starting MapActivity migration...");
+    logger.info("Starting map activity migration...");
 
-    // First verify database connection
-    console.log("Verifying database connection...");
-    await prisma.$connect();
-    console.log("Database connection successful");
+    // Get current tables
+    const tables = await mapActivityRepo.executeQuery(async () => {
+      return mapActivityRepo.prisma.$queryRaw<TableInfo[]>`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+        AND table_name = 'map_activities';
+      `;
+    });
 
-    // Begin transaction
-    console.log("Starting migration transaction...");
-    try {
-      await prisma.$transaction(async (tx) => {
-        // Drop existing tables one at a time
-        console.log("Dropping existing tables...");
-        try {
-          await tx.$executeRaw`DROP TABLE IF EXISTS map_activities CASCADE;`;
-          await tx.$executeRaw`DROP TABLE IF EXISTS map_activities_new CASCADE;`;
-          console.log("Tables dropped successfully");
-        } catch (error) {
-          console.error("Error dropping tables:", error);
-          throw error;
-        }
+    // Check if table exists
+    const tableExists = tables.length > 0;
+    logger.info(`Map activities table exists: ${tableExists}`);
 
-        // Create new table
-        console.log("Creating new table...");
-        try {
-          await tx.$executeRaw`
-            CREATE TABLE map_activities (
-              character_id TEXT NOT NULL,
-              timestamp TIMESTAMP(3) NOT NULL,
-              signatures INTEGER NOT NULL,
-              connections INTEGER NOT NULL,
-              passages INTEGER NOT NULL,
-              alliance_id INTEGER,
-              corporation_id INTEGER NOT NULL
-            );
-          `;
-          console.log("New table created successfully");
-        } catch (error) {
-          console.error("Error creating new table:", error);
-          throw error;
-        }
-
-        // Add primary key
-        console.log("Adding primary key...");
-        try {
-          await tx.$executeRaw`
-            ALTER TABLE map_activities
-            ADD PRIMARY KEY (character_id, timestamp);
-          `;
-          console.log("Primary key added successfully");
-        } catch (error) {
-          console.error("Error adding primary key:", error);
-          throw error;
-        }
-
-        // Add foreign key
-        console.log("Adding foreign key...");
-        try {
-          await tx.$executeRaw`
-            ALTER TABLE map_activities
-            ADD CONSTRAINT map_activities_character_id_fkey
-            FOREIGN KEY (character_id)
-            REFERENCES characters(eve_id)
-            ON DELETE CASCADE;
-          `;
-          console.log("Foreign key added successfully");
-        } catch (error) {
-          console.error("Error adding foreign key:", error);
-          throw error;
-        }
-
-        // Create indexes one at a time
-        console.log("Creating indexes...");
-        try {
-          await tx.$executeRaw`
-            CREATE INDEX IF NOT EXISTS map_activities_character_id_timestamp_idx 
-            ON map_activities(character_id, timestamp);
-          `;
-          await tx.$executeRaw`
-            CREATE INDEX IF NOT EXISTS map_activities_corporation_id_timestamp_idx 
-            ON map_activities(corporation_id, timestamp);
-          `;
-          console.log("Indexes created successfully");
-        } catch (error) {
-          console.error("Error creating indexes:", error);
-          throw error;
-        }
+    if (tableExists) {
+      // Drop existing table
+      logger.info("Dropping existing map_activities table...");
+      await mapActivityRepo.executeQuery(async () => {
+        await mapActivityRepo.prisma
+          .$executeRaw`DROP TABLE IF EXISTS map_activities CASCADE`;
       });
-    } catch (txError) {
-      console.error("Transaction failed:", txError);
-      throw txError;
     }
 
-    console.log("Migration completed successfully");
+    // Create new table
+    logger.info("Creating new map_activities table...");
+    await mapActivityRepo.executeQuery(async () => {
+      await mapActivityRepo.prisma.$executeRaw`
+        CREATE TABLE map_activities (
+          id SERIAL PRIMARY KEY,
+          character_id BIGINT NOT NULL,
+          timestamp TIMESTAMP NOT NULL,
+          signatures INTEGER NOT NULL DEFAULT 0,
+          connections INTEGER NOT NULL DEFAULT 0,
+          passages INTEGER NOT NULL DEFAULT 0,
+          alliance_id BIGINT,
+          corporation_id BIGINT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `;
+    });
+
+    // Create indexes
+    logger.info("Creating indexes...");
+    await mapActivityRepo.executeQuery(async () => {
+      await mapActivityRepo.prisma.$executeRaw`
+        CREATE INDEX IF NOT EXISTS map_activities_character_id_idx ON map_activities(character_id);
+        CREATE INDEX IF NOT EXISTS map_activities_timestamp_idx ON map_activities(timestamp);
+        CREATE INDEX IF NOT EXISTS map_activities_alliance_id_idx ON map_activities(alliance_id);
+        CREATE INDEX IF NOT EXISTS map_activities_corporation_id_idx ON map_activities(corporation_id);
+      `;
+    });
+
+    logger.info("Map activity migration complete");
   } catch (error) {
-    console.error("Migration failed:", error);
-    throw error;
+    logger.error("Error migrating map activity:", error);
+    process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    await mapActivityRepo.disconnect();
   }
 }
 

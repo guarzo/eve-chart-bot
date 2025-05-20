@@ -14,6 +14,7 @@ import {
   KillmailVictim,
 } from "../domain/killmail/Killmail";
 import { Character } from "../domain/character/Character";
+import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */

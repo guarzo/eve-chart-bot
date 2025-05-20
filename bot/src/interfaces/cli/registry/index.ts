@@ -9,6 +9,8 @@ import { registerCharacterCommands } from "./commands/character";
 import { registerKillmailCommands } from "./commands/killmail";
 import { registerDiscordCommands } from "./commands/discord";
 import { registerDiagnosticCommands } from "./commands/diagnostic";
+import { registerMapActivityCommands } from "./commands/map-activity";
+import { registerLossCommands } from "./commands/loss";
 
 // Create the main program
 const program = new Command();
@@ -25,6 +27,8 @@ registerCharacterCommands(program);
 registerKillmailCommands(program);
 registerDiscordCommands(program);
 registerDiagnosticCommands(program);
+registerMapActivityCommands(program);
+registerLossCommands(program);
 
 // Add global error handler
 program.configureOutput({
@@ -41,3 +45,5 @@ try {
   logger.error("Error executing command:", error);
   process.exit(1);
 }
+
+export default program;

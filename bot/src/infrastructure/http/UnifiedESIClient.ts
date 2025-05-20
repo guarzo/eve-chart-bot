@@ -1,8 +1,9 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
 import { logger } from "../../lib/logger";
-import { CacheAdapter } from "../cache/CacheAdapter";
-import { RedisCache } from "../../lib/cache/RedisCache";
+import { CacheAdapter } from "../../cache/CacheAdapter";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 import { ESIClientConfig, IESIClient } from "./ESIClient";
+import { retryOperation } from "../../utils/retry";
 
 /**
  * Unified client for interacting with EVE Online's ESI API
@@ -37,7 +38,9 @@ export class UnifiedESIClient implements IESIClient {
       },
     });
 
-    this.cache = cache || new RedisCache("esi:");
+    this.cache =
+      cache ||
+      new CacheRedisAdapter("redis://redis:6379", this.config.cacheTtl);
   }
 
   /**
@@ -62,7 +65,22 @@ export class UnifiedESIClient implements IESIClient {
 
       // Not in cache, fetch from API with retry logic
       logger.debug(`ESI cache miss for ${url}, fetching from API`);
-      const data = await this.fetchWithRetry<T>(url, options);
+      const data = await retryOperation(
+        () =>
+          this.client.get<T>(url, options).then((response) => response.data),
+        `ESI request to ${url}`,
+        {
+          maxRetries: this.config.maxRetries,
+          initialRetryDelay: this.config.initialRetryDelay,
+          timeout: this.config.timeout,
+        }
+      );
+
+      if (!data) {
+        throw new Error(
+          `Failed to fetch data from ESI after ${this.config.maxRetries} retries`
+        );
+      }
 
       // Cache the response
       await this.cache.set(cacheKey, data, this.config.cacheTtl);
@@ -71,49 +89,6 @@ export class UnifiedESIClient implements IESIClient {
     } catch (error) {
       logger.error(`Error fetching from ESI ${url}:`, error);
       throw error;
-    }
-  }
-
-  /**
-   * Fetch data with retry logic
-   */
-  private async fetchWithRetry<T>(
-    url: string,
-    options: AxiosRequestConfig,
-    retryCount = 0
-  ): Promise<T> {
-    try {
-      const response = await this.client.get<T>(url, options);
-      return response.data;
-    } catch (error) {
-      if (retryCount >= this.config.maxRetries) {
-        throw error;
-      }
-
-      // Check if we should retry based on error type
-      const shouldRetry =
-        error instanceof Error &&
-        (error.message.includes("429") || // Rate limit
-          error.message.includes("503") || // Service unavailable
-          error.message.includes("504") || // Gateway timeout
-          error.message.includes("ECONNRESET") || // Connection reset
-          error.message.includes("ETIMEDOUT")); // Connection timeout
-
-      if (!shouldRetry) {
-        throw error;
-      }
-
-      // Calculate exponential backoff delay
-      const delay = this.config.initialRetryDelay * Math.pow(2, retryCount);
-      logger.warn("ESI request failed, retrying...", {
-        url,
-        retryCount: retryCount + 1,
-        delay,
-        error: error instanceof Error ? error.message : error,
-      });
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      return this.fetchWithRetry<T>(url, options, retryCount + 1);
     }
   }
 

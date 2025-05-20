@@ -9,7 +9,7 @@ CREATE TABLE "ingestion_checkpoints" (
 
 -- CreateTable
 CREATE TABLE "characters" (
-    "eve_id" TEXT NOT NULL,
+    "eve_id" BIGINT NOT NULL,
     "name" TEXT NOT NULL,
     "alliance_id" INTEGER,
     "alliance_ticker" TEXT,
@@ -27,7 +27,7 @@ CREATE TABLE "characters" (
 CREATE TABLE "character_groups" (
     "id" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
-    "main_character_id" TEXT,
+    "main_character_id" BIGINT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 

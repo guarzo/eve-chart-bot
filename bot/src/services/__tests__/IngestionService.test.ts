@@ -4,6 +4,7 @@ import { ZkillClient } from "../../lib/api/ZkillClient";
 import { MapClient } from "../../lib/api/MapClient";
 import { RedisCache } from "../../lib/cache/RedisCache";
 import { Redis } from "ioredis";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 
 // Make sure tests terminate quickly
 jest.setTimeout(5000);

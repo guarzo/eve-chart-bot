@@ -44,22 +44,6 @@ export class CharacterGroup {
   }
 
   /**
-   * Creates a new CharacterGroup instance from a Prisma model
-   */
-  static fromPrisma(model: any): CharacterGroup {
-    return new CharacterGroup({
-      id: model.id,
-      name: model.name,
-      slug: model.slug,
-      mainCharacterId: model.mainCharacterId,
-      characters:
-        model.characters?.map((char: any) => Character.fromPrisma(char)) || [],
-      createdAt: model.createdAt,
-      updatedAt: model.updatedAt,
-    });
-  }
-
-  /**
    * Converts the character group to a plain object
    */
   toJSON(): Record<string, any> {

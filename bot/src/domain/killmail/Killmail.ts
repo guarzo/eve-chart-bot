@@ -28,19 +28,6 @@ export class KillmailVictim {
   }
 
   /**
-   * Creates a new KillmailVictim instance from a Prisma model
-   */
-  static fromPrisma(model: any): KillmailVictim {
-    return new KillmailVictim({
-      characterId: model.characterId,
-      corporationId: model.corporationId,
-      allianceId: model.allianceId,
-      shipTypeId: model.shipTypeId,
-      damageTaken: model.damageTaken,
-    });
-  }
-
-  /**
    * Converts the victim to a plain object
    */
   toJSON(): Record<string, any> {
@@ -88,22 +75,6 @@ export class KillmailAttacker {
 
   constructor(data: Partial<KillmailAttacker>) {
     Object.assign(this, data);
-  }
-
-  /**
-   * Creates a new KillmailAttacker instance from a Prisma model
-   */
-  static fromPrisma(model: any): KillmailAttacker {
-    return new KillmailAttacker({
-      characterId: model.characterId,
-      corporationId: model.corporationId,
-      allianceId: model.allianceId,
-      damageDone: model.damageDone,
-      finalBlow: model.finalBlow,
-      securityStatus: model.securityStatus,
-      shipTypeId: model.shipTypeId,
-      weaponTypeId: model.weaponTypeId,
-    });
   }
 
   /**
@@ -170,30 +141,6 @@ export class Killmail {
 
   constructor(data: Partial<Killmail>) {
     Object.assign(this, data);
-  }
-
-  /**
-   * Creates a new Killmail instance from a Prisma model
-   */
-  static fromPrisma(model: any): Killmail {
-    return new Killmail({
-      killmailId: model.killmailId,
-      killTime: model.killTime,
-      npc: model.npc,
-      solo: model.solo,
-      awox: model.awox,
-      shipTypeId: model.shipTypeId,
-      systemId: model.systemId,
-      labels: model.labels,
-      totalValue: model.totalValue,
-      points: model.points,
-      attackers: model.attackers?.map((a: any) =>
-        KillmailAttacker.fromPrisma(a)
-      ),
-      victim: model.victim
-        ? KillmailVictim.fromPrisma(model.victim)
-        : undefined,
-    });
   }
 
   /**

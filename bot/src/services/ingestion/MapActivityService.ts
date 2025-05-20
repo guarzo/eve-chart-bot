@@ -1,6 +1,6 @@
 import { MapClient } from "../../lib/api/MapClient";
-import { RedisCache } from "../../lib/cache/RedisCache";
-import { RetryService } from "./RetryService";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
+import { retryOperation } from "../../utils/retry";
 import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
@@ -8,9 +8,10 @@ import { MapActivity } from "../../domain/activity/MapActivity";
 
 export class MapActivityService {
   private readonly map: MapClient;
-  private readonly cache: RedisCache;
-  private readonly retryService: RetryService;
+  private readonly cache: CacheRedisAdapter;
   private readonly mapActivityRepository: MapActivityRepository;
+  private readonly maxRetries: number;
+  private readonly retryDelay: number;
 
   constructor(
     mapApiUrl: string,
@@ -21,15 +22,16 @@ export class MapActivityService {
     retryDelay: number = 5000
   ) {
     this.map = new MapClient(mapApiUrl, mapApiKey);
-    this.cache = new RedisCache(redisUrl, cacheTtl);
-    this.retryService = new RetryService(maxRetries, retryDelay);
+    this.cache = new CacheRedisAdapter(redisUrl, cacheTtl);
     this.mapActivityRepository = new MapActivityRepository();
+    this.maxRetries = maxRetries;
+    this.retryDelay = retryDelay;
   }
 
   public async ingestMapActivity(slug: string, days = 7): Promise<void> {
     try {
       // Get map data with retry
-      const mapData = await this.retryService.retryOperation<{ data: any[] }>(
+      const mapData = await retryOperation(
         async () => {
           const result = await this.map.getCharacterActivity(slug, days);
           if (!result) {
@@ -38,9 +40,11 @@ export class MapActivityService {
           return result;
         },
         `Fetching map data for ${slug}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 30000,
+        }
       );
 
       if (!mapData || !mapData.data || !Array.isArray(mapData.data)) {

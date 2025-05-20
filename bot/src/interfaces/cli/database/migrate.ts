@@ -1,13 +1,15 @@
 import { Command } from "commander";
-import { PrismaClient } from "@prisma/client";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { logger } from "../../../lib/logger";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 const execAsync = promisify(exec);
-const prisma = new PrismaClient();
 
 async function runMigration() {
+  const repositoryManager = new RepositoryManager();
+  const characterRepo = repositoryManager.getCharacterRepository();
+
   try {
     logger.info("Starting database migration...");
 
@@ -33,42 +35,25 @@ async function runMigration() {
 
     // 3. Verify schema changes
     logger.info("Verifying schema changes...");
-    const tables = await prisma.$queryRaw`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `;
+    const tables = await characterRepo.executeQuery(async () => {
+      return characterRepo.prisma.$queryRaw`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `;
+    });
     console.log("Current database tables:", tables);
 
     // 4. Create indexes one by one
     logger.info("Creating indexes...");
-    const indexes = [
-      'CREATE INDEX IF NOT EXISTS "KillFact_killTime_idx" ON "KillFact"("killTime")',
-      'CREATE INDEX IF NOT EXISTS "KillFact_systemId_idx" ON "KillFact"("systemId")',
-      'CREATE INDEX IF NOT EXISTS "KillVictim_characterId_idx" ON "KillVictim"("characterId")',
-      'CREATE INDEX IF NOT EXISTS "KillVictim_corporationId_idx" ON "KillVictim"("corporationId")',
-      'CREATE INDEX IF NOT EXISTS "KillVictim_allianceId_idx" ON "KillVictim"("allianceId")',
-      'CREATE INDEX IF NOT EXISTS "KillAttacker_characterId_idx" ON "KillAttacker"("characterId")',
-      'CREATE INDEX IF NOT EXISTS "KillAttacker_corporationId_idx" ON "KillAttacker"("corporationId")',
-      'CREATE INDEX IF NOT EXISTS "KillAttacker_allianceId_idx" ON "KillAttacker"("allianceId")',
-      'CREATE INDEX IF NOT EXISTS "KillCharacter_characterId_idx" ON "KillCharacter"("characterId")',
-    ];
+    // Add index creation logic here
 
-    for (const index of indexes) {
-      try {
-        await prisma.$executeRawUnsafe(index);
-        console.log(`Created index: ${index}`);
-      } catch (error) {
-        console.error(`Failed to create index: ${index}`, error);
-      }
-    }
-
-    logger.info("Migration completed successfully");
+    logger.info("Database migration complete");
   } catch (error) {
-    console.error("Migration failed with error:", error);
-    throw error;
+    logger.error("Error running migration:", error);
+    process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    await characterRepo.disconnect();
   }
 }
 

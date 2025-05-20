@@ -1,13 +1,11 @@
 import { BaseRepository } from "./BaseRepository";
 import { logger } from "../../lib/logger";
-import { LossFact } from "@prisma/client";
-import { CharacterSummary } from "../../types/discord";
-import { SimpleTimeRange } from "../../types/chart";
+import { LossFact } from "../../domain/killmail/LossFact";
+import { PrismaMapper } from "../mapper/PrismaMapper";
 import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for accessing ship loss data
- * This is a placeholder implementation that will be fully implemented in Phase 4
  */
 export class LossRepository extends BaseRepository {
   constructor() {
@@ -150,14 +148,15 @@ export class LossRepository extends BaseRepository {
       });
 
       const losses = await this.prisma.lossFact.findMany({ where });
+      const lossFacts = PrismaMapper.mapArray(losses, LossFact);
 
       // Calculate summary
-      const totalLosses = losses.length;
-      const highValueLosses = losses.filter(
-        (loss) => loss.total_value >= BigInt(100000000)
+      const totalLosses = lossFacts.length;
+      const highValueLosses = lossFacts.filter(
+        (loss) => loss.totalValue >= BigInt(100000000)
       ).length;
-      const totalValueLost = losses.reduce(
-        (sum, loss) => sum + loss.total_value,
+      const totalValueLost = lossFacts.reduce(
+        (sum, loss) => sum + loss.totalValue,
         BigInt(0)
       );
 
@@ -169,165 +168,126 @@ export class LossRepository extends BaseRepository {
     });
   }
 
-  async countByTimeRange(
-    characterIds: string[],
-    timeRange: SimpleTimeRange
-  ): Promise<number> {
+  /**
+   * Get a loss by killmail ID
+   * @param killmailId Killmail ID to look up
+   */
+  async getLoss(killmailId: bigint): Promise<LossFact | null> {
     return this.executeQuery(async () => {
-      // Convert string character IDs to BigInt for comparison
-      const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
-
-      const where = buildWhereFilter({
-        character_id: {
-          in: bigIntCharacterIds,
-        },
-        kill_time: {
-          gte: timeRange.start,
-          lte: timeRange.end,
-        },
+      const loss = await this.prisma.lossFact.findUnique({
+        where: { killmail_id: killmailId },
       });
 
-      const result = await this.prisma.lossFact.count({ where });
-
-      return result;
-    });
-  }
-
-  async countByShipType(
-    characterIds: string[],
-    timeRange: SimpleTimeRange
-  ): Promise<Record<number, number>> {
-    return this.executeQuery(async () => {
-      // Convert string character IDs to BigInt for comparison
-      const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
-
-      const where = buildWhereFilter({
-        character_id: {
-          in: bigIntCharacterIds,
-        },
-        kill_time: {
-          gte: timeRange.start,
-          lte: timeRange.end,
-        },
-      });
-
-      const result = await this.prisma.lossFact.groupBy({
-        by: ["ship_type_id"],
-        where,
-        _count: true,
-      });
-
-      // Convert result to Record<number, number> as expected
-      const shipTypeCounts: Record<number, number> = {};
-      for (const item of result) {
-        if (item.ship_type_id !== null) {
-          shipTypeCounts[item.ship_type_id] = item._count;
-        }
+      if (!loss) {
+        return null;
       }
 
-      return shipTypeCounts;
+      return PrismaMapper.map(loss, LossFact);
     });
   }
 
-  async getLossesByTimeRange(
-    characterIds: string[],
-    timeRange: SimpleTimeRange
+  /**
+   * Get all losses for a character
+   * @param characterId Character EVE ID
+   * @param startDate Start date for query range
+   * @param endDate End date for query range
+   */
+  async getLossesForCharacter(
+    characterId: bigint,
+    startDate: Date,
+    endDate: Date
   ): Promise<LossFact[]> {
     return this.executeQuery(async () => {
-      // Convert string character IDs to BigInt for comparison
-      const bigIntCharacterIds = characterIds.map((id) => BigInt(id));
-
-      const where = buildWhereFilter({
-        character_id: {
-          in: bigIntCharacterIds,
+      const losses = await this.prisma.lossFact.findMany({
+        where: {
+          character_id: characterId,
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
-        kill_time: {
-          gte: timeRange.start,
-          lte: timeRange.end,
-        },
-      });
-
-      const results = await this.prisma.lossFact.findMany({
-        where,
         orderBy: {
           kill_time: "desc",
         },
       });
 
-      return results;
+      return PrismaMapper.mapArray(losses, LossFact);
     });
   }
 
-  async getLossesByTimeRangeGrouped(
-    characters: CharacterSummary[],
-    timeRange: SimpleTimeRange,
-    timeGrouping: "day" | "week" | "month"
-  ): Promise<{ time: Date; losses: number }[]> {
+  /**
+   * Save a loss record
+   * @param loss LossFact domain entity to save
+   */
+  async saveLoss(loss: LossFact): Promise<void> {
     return this.executeQuery(async () => {
-      // Convert character IDs to BigInt for comparison
-      const characterIds = characters.map((c) => BigInt(c.eveId));
-
-      const where = buildWhereFilter({
-        character_id: {
-          in: characterIds,
+      const data = loss.toObject();
+      await this.prisma.lossFact.upsert({
+        where: { killmail_id: loss.killmailId },
+        update: {
+          kill_time: data.killTime,
+          system_id: data.systemId,
+          total_value: data.totalValue,
+          attacker_count: data.attackerCount,
+          labels: data.labels,
+          character_id: data.characterId,
+          ship_type_id: data.shipTypeId,
         },
-        kill_time: {
-          gte: timeRange.start,
-          lte: timeRange.end,
+        create: {
+          killmail_id: data.killmailId,
+          kill_time: data.killTime,
+          system_id: data.systemId,
+          total_value: data.totalValue,
+          attacker_count: data.attackerCount,
+          labels: data.labels,
+          character_id: data.characterId,
+          ship_type_id: data.shipTypeId,
         },
       });
+    });
+  }
 
+  /**
+   * Delete all loss records
+   */
+  async deleteAllLosses(): Promise<void> {
+    await this.executeQuery(async () => {
+      await this.prisma.lossFact.deleteMany();
+    });
+  }
+
+  /**
+   * Get losses within a time range
+   * @param startDate Start date for query range
+   * @param endDate End date for query range
+   */
+  async getLossesByTimeRange(
+    startDate: Date,
+    endDate: Date
+  ): Promise<LossFact[]> {
+    return this.executeQuery(async () => {
       const losses = await this.prisma.lossFact.findMany({
-        where,
-        select: {
-          kill_time: true,
+        where: {
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
         orderBy: {
-          kill_time: "asc",
+          kill_time: "desc",
         },
       });
 
-      // Group by time period
-      const groupedLosses = new Map<string, number>();
+      return PrismaMapper.mapArray(losses, LossFact);
+    });
+  }
 
-      for (const loss of losses) {
-        const time = loss.kill_time;
-        if (!time) continue;
-
-        let timeKey: string;
-
-        if (timeGrouping === "day") {
-          timeKey = time.toISOString().substring(0, 10); // YYYY-MM-DD
-        } else if (timeGrouping === "week") {
-          // Get the week start (Sunday)
-          const weekStart = new Date(time);
-          const day = weekStart.getDay();
-          weekStart.setDate(weekStart.getDate() - day);
-          timeKey = weekStart.toISOString().substring(0, 10);
-        } else if (timeGrouping === "month") {
-          timeKey = time.toISOString().substring(0, 7); // YYYY-MM
-        } else {
-          timeKey = time.toISOString().substring(0, 10); // Default to day
-        }
-
-        groupedLosses.set(timeKey, (groupedLosses.get(timeKey) || 0) + 1);
-      }
-
-      // Convert to array for chart data
-      const result: { time: Date; losses: number }[] = [];
-
-      for (const [timeKey, count] of groupedLosses.entries()) {
-        let time: Date;
-        if (timeGrouping === "month") {
-          time = new Date(`${timeKey}-01T00:00:00Z`);
-        } else {
-          time = new Date(`${timeKey}T00:00:00Z`);
-        }
-        result.push({ time, losses: count });
-      }
-
-      // Sort by timestamp
-      return result.sort((a, b) => a.time.getTime() - b.time.getTime());
+  /**
+   * Count total loss records
+   */
+  async count(): Promise<number> {
+    return this.executeQuery(async () => {
+      return this.prisma.lossFact.count();
     });
   }
 
@@ -335,59 +295,40 @@ export class LossRepository extends BaseRepository {
    * Get the top ship types lost within a date range
    */
   async getTopShipTypesLost(
-    characterIds: string[],
+    characterIds: (string | bigint)[],
     startDate: Date,
     endDate: Date,
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
     return this.executeQuery(async () => {
-      // Convert strings to BigInts for query
-      const bigIntIds = characterIds.map((id) => BigInt(id));
-
-      const where = buildWhereFilter({
-        character_id: {
-          in: bigIntIds,
-        },
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      });
-
-      // Get all losses for the characters in the specified date range
+      // Find all losses for these characters in the date range
       const losses = await this.prisma.lossFact.findMany({
-        where,
+        where: {
+          character_id: {
+            in: characterIds.map((id) => BigInt(id)),
+          },
+          kill_time: {
+            gte: startDate,
+            lte: endDate,
+          },
+        },
         select: {
-          killmail_id: true,
           ship_type_id: true,
         },
       });
-
-      // Group losses by ship type
-      const shipTypeCounts = new Map<string, { id: string; count: number }>();
-
+      // Count occurrences of each ship type
+      const shipTypeCounts = new Map<string, number>();
       for (const loss of losses) {
         const shipTypeId = loss.ship_type_id.toString();
-        if (shipTypeCounts.has(shipTypeId)) {
-          shipTypeCounts.get(shipTypeId)!.count++;
-        } else {
-          shipTypeCounts.set(shipTypeId, {
-            id: shipTypeId,
-            count: 1,
-          });
-        }
+        shipTypeCounts.set(
+          shipTypeId,
+          (shipTypeCounts.get(shipTypeId) || 0) + 1
+        );
       }
-
-      // Convert to array and sort by count
-      const result = Array.from(shipTypeCounts.values())
-        .map((item) => ({
-          shipTypeId: item.id,
-          count: item.count,
-        }))
+      return Array.from(shipTypeCounts.entries())
+        .map(([shipTypeId, count]) => ({ shipTypeId, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, limit);
-
-      return result;
     });
   }
 }

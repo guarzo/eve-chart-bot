@@ -81,26 +81,6 @@ export class Character {
   }
 
   /**
-   * Creates a new Character instance from a Prisma model
-   */
-  static fromPrisma(model: any): Character {
-    return new Character({
-      eveId: model.eveId,
-      name: model.name,
-      allianceId: model.allianceId,
-      allianceTicker: model.allianceTicker,
-      corporationId: model.corporationId,
-      corporationTicker: model.corporationTicker,
-      characterGroupId: model.characterGroupId,
-      mainCharacterId: model.mainCharacterId,
-      createdAt: model.createdAt,
-      updatedAt: model.updatedAt,
-      lastBackfillAt: model.lastBackfillAt,
-      lastKillmailAt: model.lastKillmailAt,
-    });
-  }
-
-  /**
    * Converts the character to a plain object
    */
   toJSON(): Record<string, any> {

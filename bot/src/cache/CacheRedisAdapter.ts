@@ -1,8 +1,8 @@
 import Redis from "ioredis";
-import { logger } from "../logger";
-import { CacheAdapter } from "../../infrastructure/cache/CacheAdapter";
+import { logger } from "../lib/logger";
+import { CacheAdapter } from "./CacheAdapter";
 
-export class RedisCache implements CacheAdapter {
+export class CacheRedisAdapter implements CacheAdapter {
   private client: Redis;
   private readonly defaultTtl: number;
 

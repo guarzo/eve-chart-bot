@@ -1,123 +1,90 @@
 import { Command } from "commander";
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../../lib/logger";
+import { KillmailIngestionService } from "../../../../services/ingestion/KillmailIngestionService";
 
-const prisma = new PrismaClient();
-
+/**
+ * Register killmail commands
+ */
 export function registerKillmailCommands(program: Command) {
-  const killProgram = program
+  const killmailProgram = program
     .command("killmail")
-    .description("Manage killmails");
+    .description("Killmail management commands");
 
-  // List killmails command
-  killProgram
-    .command("list")
-    .description("List all killmails")
-    .option("-c, --character <id>", "Filter by character ID")
-    .option("-s, --system <id>", "Filter by system ID")
-    .action(async (options) => {
+  // Sync killmails command
+  killmailProgram
+    .command("sync")
+    .description("Sync killmails for a character")
+    .argument("<characterId>", "Character ID")
+    .option("-d, --days <number>", "Number of days to backfill", "30")
+    .action(async (characterId, options) => {
+      const killmailService = new KillmailIngestionService();
+
       try {
-        const where = {
-          ...(options.character && {
-            characters: {
-              some: {
-                characterId: options.character,
-              },
-            },
-          }),
-          ...(options.system && {
-            systemId: parseInt(options.system),
-          }),
-        };
-
-        const killmails = await prisma.killFact.findMany({
-          where,
-          include: {
-            characters: {
-              include: {
-                character: true,
-              },
-            },
-            victims: true,
-            attackers: true,
-          },
-        });
-
-        logger.info(`Found ${killmails.length} killmails:`);
-        for (const kill of killmails) {
-          logger.info(`- Killmail ID: ${kill.killmail_id}`);
-          logger.info(`  Time: ${kill.kill_time}`);
-          logger.info(`  System: ${kill.system_id}`);
-          logger.info(
-            `  Characters: ${kill.characters
-              .map((c) => c.character.name)
-              .join(", ")}`
-          );
-        }
-      } catch (error) {
-        logger.error("Error listing killmails:", error);
+        await killmailService.backfillKills(BigInt(characterId));
+        logger.info("Killmail sync completed successfully");
+      } catch (error: any) {
+        logger.error(`Error syncing killmails: ${error.message}`);
         process.exit(1);
-      } finally {
-        await prisma.$disconnect();
       }
     });
 
-  // Get killmail command
-  killProgram
-    .command("get <id>")
+  // Get killmail details command
+  killmailProgram
+    .command("get")
     .description("Get killmail details")
-    .action(async (id) => {
+    .argument("<killmailId>", "Killmail ID")
+    .action(async (killmailId) => {
+      const killmailService = new KillmailIngestionService();
+
       try {
-        const killmail = await prisma.killFact.findUnique({
-          where: { killmail_id: BigInt(id) },
-          include: {
-            characters: {
-              include: {
-                character: true,
-              },
-            },
-            victims: true,
-            attackers: true,
-          },
-        });
-
-        if (!killmail) {
-          logger.error(`Killmail with ID ${id} not found`);
-          process.exit(1);
+        const result = await killmailService.ingestKillmail(
+          parseInt(killmailId)
+        );
+        if (!result.success) {
+          if (result.existing) {
+            logger.info(`Killmail ${killmailId} already exists in database`);
+          } else {
+            logger.error(
+              `Failed to get killmail ${killmailId}: ${result.error}`
+            );
+            process.exit(1);
+          }
+        } else {
+          logger.info("Killmail details:");
+          logger.info(`- Time: ${result.timestamp}`);
+          logger.info(`- Age: ${result.age} hours`);
         }
-
-        logger.info("Killmail details:");
-        logger.info(`- ID: ${killmail.killmail_id}`);
-        logger.info(`- Time: ${killmail.kill_time}`);
-        logger.info(`- System: ${killmail.system_id}`);
-        logger.info(`- Value: ${killmail.total_value}`);
-        logger.info(`- Points: ${killmail.points}`);
-        logger.info(`- NPC: ${killmail.npc}`);
-        logger.info(`- Solo: ${killmail.solo}`);
-        logger.info(`- AWOX: ${killmail.awox}`);
-
-        logger.info("\nCharacters involved:");
-        for (const char of killmail.characters) {
-          logger.info(`- ${char.character.name} (${char.role})`);
-        }
-
-        logger.info("\nVictim:");
-        for (const victim of killmail.victims) {
-          logger.info(`- Ship: ${victim.ship_type_id}`);
-          logger.info(`  Damage taken: ${victim.damage_taken}`);
-        }
-
-        logger.info("\nAttackers:");
-        for (const attacker of killmail.attackers) {
-          logger.info(`- Ship: ${attacker.ship_type_id}`);
-          logger.info(`  Damage done: ${attacker.damage_done}`);
-          logger.info(`  Final blow: ${attacker.final_blow}`);
-        }
-      } catch (error) {
-        logger.error("Error getting killmail:", error);
+      } catch (error: any) {
+        logger.error(`Error getting killmail: ${error.message}`);
         process.exit(1);
-      } finally {
-        await prisma.$disconnect();
+      }
+    });
+
+  // Cleanup command
+  killmailProgram
+    .command("cleanup")
+    .description("Clean up killmail data")
+    .option("-f, --force", "Skip confirmation prompt")
+    .action(async (options) => {
+      const killmailService = new KillmailIngestionService();
+
+      try {
+        if (!options.force) {
+          logger.warn("WARNING: This will delete all killmail data.");
+          logger.warn("Press Ctrl+C to cancel or Enter to continue...");
+
+          // Wait for user input
+          await new Promise<void>((resolve) => {
+            process.stdin.once("data", () => {
+              resolve();
+            });
+          });
+        }
+
+        await killmailService.cleanup();
+      } catch (error: any) {
+        logger.error(`Error cleaning up killmail data: ${error.message}`);
+        process.exit(1);
       }
     });
 }

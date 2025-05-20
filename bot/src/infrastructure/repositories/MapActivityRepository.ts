@@ -1,7 +1,7 @@
 import { BaseRepository } from "./BaseRepository";
-import { MapActivity } from "@prisma/client";
+import { MapActivity } from "../../domain/activity/MapActivity";
+import { PrismaMapper } from "../mapper/PrismaMapper";
 import { logger } from "../../lib/logger";
-import { buildWhereFilter } from "../../utils/query-helper";
 
 /**
  * Repository for map activity data access
@@ -12,65 +12,55 @@ export class MapActivityRepository extends BaseRepository {
   }
 
   /**
-   * Get map activity for a specific character within a date range
+   * Get map activity for a character within a date range
    */
   async getActivityForCharacter(
     characterId: string,
     startDate: Date,
     endDate: Date
   ): Promise<MapActivity[]> {
-    logger.info(
-      `Getting map activity for character ${characterId} from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
-
     return this.executeQuery(async () => {
-      // Using buildWhereFilter for consistent query building
-      const where = buildWhereFilter({
-        characterId: BigInt(characterId),
-        timestamp: {
-          gte: startDate,
-          lte: endDate,
+      const activities = await this.prisma.mapActivity.findMany({
+        where: {
+          characterId: BigInt(characterId),
+          timestamp: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
-      });
-
-      let activities = await this.prisma.mapActivity.findMany({
-        where,
         orderBy: {
-          timestamp: "asc",
+          timestamp: "desc",
         },
       });
-
-      logger.info(
-        `Found ${activities.length} map activities for character ${characterId}`
-      );
-      return activities;
+      return PrismaMapper.mapArray(activities, MapActivity);
     });
   }
 
   /**
-   * Get map activity for all characters within a date range
+   * Get map activity for multiple characters within a date range
    */
   async getActivityForCharacters(
     characterIds: string[],
     startDate: Date,
     endDate: Date
   ): Promise<MapActivity[]> {
-    return this.executeQuery(() =>
-      this.prisma.mapActivity.findMany({
-        where: buildWhereFilter({
+    return this.executeQuery(async () => {
+      const activities = await this.prisma.mapActivity.findMany({
+        where: {
           characterId: {
-            in: characterIds.map((id) => BigInt(id)),
+            in: characterIds.map(BigInt),
           },
           timestamp: {
             gte: startDate,
             lte: endDate,
           },
-        }),
-        orderBy: {
-          timestamp: "asc",
         },
-      })
-    );
+        orderBy: {
+          timestamp: "desc",
+        },
+      });
+      return PrismaMapper.mapArray(activities, MapActivity);
+    });
   }
 
   /**
@@ -92,8 +82,8 @@ export class MapActivityRepository extends BaseRepository {
         return [];
       }
 
-      // Get character IDs
-      const characterIds = group.characters.map((c: any) => c.eveId);
+      // Get character IDs and convert to strings
+      const characterIds = group.characters.map((c) => c.eveId.toString());
 
       // Get activity for all characters
       return this.getActivityForCharacters(characterIds, startDate, endDate);
@@ -181,7 +171,7 @@ export class MapActivityRepository extends BaseRepository {
       }
 
       // Get character IDs
-      const characterIds = group.characters.map((c: any) => c.eveId);
+      const characterIds = group.characters.map((c) => c.eveId);
       logger.info(
         `Group ${groupId} has ${
           characterIds.length
@@ -228,10 +218,6 @@ export class MapActivityRepository extends BaseRepository {
       // Calculate average
       const averageSignaturesPerSystem =
         uniqueSystems > 0 ? totalSignatures / uniqueSystems : 0;
-
-      logger.info(
-        `Group ${groupId} stats: ${uniqueSystems} systems, ${totalSignatures} signatures, ${averageSignaturesPerSystem} avg`
-      );
 
       return {
         totalSystems: uniqueSystems,
@@ -303,12 +289,12 @@ export class MapActivityRepository extends BaseRepository {
         );
       }
 
-      // Convert to array, transform systems set to count, and sort by timestamp
-      return Array.from(timeMap.values())
-        .map((item) => ({
-          timestamp: item.timestamp,
-          signatures: item.signatures,
-          systems: item.systems.size,
+      // Convert to array and sort by timestamp
+      return Array.from(timeMap.entries())
+        .map(([_, group]) => ({
+          timestamp: group.timestamp,
+          signatures: group.signatures,
+          systems: group.systems.size,
         }))
         .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
     });
@@ -330,33 +316,49 @@ export class MapActivityRepository extends BaseRepository {
       throw new Error("corporationId is required");
     }
 
-    await this.prisma.mapActivity.upsert({
-      where: {
-        characterId_timestamp: {
+    await this.executeQuery(async () => {
+      await this.prisma.mapActivity.upsert({
+        where: {
+          characterId_timestamp: {
+            characterId: BigInt(characterId),
+            timestamp,
+          },
+        },
+        update: {
+          signatures,
+          connections,
+          passages,
+          allianceId,
+          corporationId,
+        },
+        create: {
           characterId: BigInt(characterId),
           timestamp,
+          signatures,
+          connections,
+          passages,
+          allianceId,
+          corporationId,
         },
-      },
-      update: {
-        signatures,
-        connections,
-        passages,
-        allianceId,
-        corporationId,
-      },
-      create: {
-        characterId: BigInt(characterId),
-        timestamp,
-        signatures,
-        connections,
-        passages,
-        allianceId,
-        corporationId,
-      },
+      });
     });
   }
 
-  public async count(): Promise<number> {
-    return this.prisma.mapActivity.count();
+  /**
+   * Delete all map activity records
+   */
+  async deleteAllMapActivity(): Promise<void> {
+    await this.executeQuery(async () => {
+      await this.prisma.mapActivity.deleteMany();
+    });
+  }
+
+  /**
+   * Count total map activity records
+   */
+  async count(): Promise<number> {
+    return this.executeQuery(async () => {
+      return this.prisma.mapActivity.count();
+    });
   }
 }

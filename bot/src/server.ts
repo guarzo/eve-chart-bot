@@ -12,7 +12,6 @@ import { ChartService } from "./services/ChartService";
 import { ChartRenderer } from "./services/ChartRenderer";
 import { ChartOptions } from "./types/chart";
 import { z } from "zod";
-import { ensureDatabaseTablesExist as checkDatabaseTables } from "./application/ingestion/DatabaseCheck";
 import { initSentry } from "./lib/sentry";
 import { KillmailIngestionService } from "./services/ingestion/KillmailIngestionService";
 import { MapActivityService } from "./services/ingestion/MapActivityService";
@@ -20,6 +19,10 @@ import { CharacterSyncService } from "./services/ingestion/CharacterSyncService"
 import { CharacterRepository } from "./infrastructure/repositories/CharacterRepository";
 import { KillRepository } from "./infrastructure/repositories/KillRepository";
 import { MapActivityRepository } from "./infrastructure/repositories/MapActivityRepository";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 // Load environment variables
 dotenvConfig();
@@ -396,6 +399,19 @@ async function processLossBackfill(characters: any[]): Promise<void> {
   );
 }
 
+// Add proper cleanup handling
+process.on("SIGTERM", async () => {
+  logger.info("SIGTERM received, starting cleanup...");
+  await cleanup();
+  process.exit(0);
+});
+
+process.on("SIGINT", async () => {
+  logger.info("SIGINT received, starting cleanup...");
+  await cleanup();
+  process.exit(0);
+});
+
 // Helper functions
 async function cleanup() {
   logger.info("Cleaning up resources...");
@@ -415,12 +431,6 @@ async function backfillLosses(characterId: bigint, days = 30) {
   await killmailService.backfillLosses(characterId, days);
 }
 
-async function refreshMapActivity(mapName: string) {
-  await mapService.refreshMapActivityData(mapName, 7);
-  const count = await mapActivityRepository.count();
-  logger.info(`Map activity count: ${count}`);
-}
-
 function startRedisQConsumer() {
   const REDIS_URL = process.env.REDIS_URL;
   if (!REDIS_URL) {
@@ -430,8 +440,6 @@ function startRedisQConsumer() {
 
   redisQService = new RedisQService(
     REDIS_URL,
-    parseInt(process.env.MAX_RETRIES || "3"),
-    parseInt(process.env.RETRY_DELAY || "5000"),
     parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
     parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
   );
@@ -444,148 +452,55 @@ function startRedisQConsumer() {
 // Start server
 async function startServer() {
   try {
-    logger.info("Starting server...");
-
-    // Log key environment variables (masked for security)
-    logger.info("Environment variables check:");
-    logger.info(`MAP_NAME: ${process.env.MAP_NAME ? "✓ Set" : "❌ Not set"}`);
-    logger.info(
-      `MAP_API_URL: ${process.env.MAP_API_URL ? "✓ Set" : "❌ Not set"}`
-    );
-    logger.info(
-      `MAP_API_KEY: ${
-        process.env.MAP_API_KEY
-          ? "✓ Set (starts with: " +
-            process.env.MAP_API_KEY?.substring(0, 3) +
-            "...)"
-          : "❌ Not set"
-      }`
-    );
-    logger.info(
-      `ZKILLBOARD_API_URL: ${
-        process.env.ZKILLBOARD_API_URL ? "✓ Set" : "❌ Not set"
-      }`
-    );
-    logger.info(`REDIS_URL: ${process.env.REDIS_URL ? "✓ Set" : "❌ Not set"}`);
-
-    // Start ingestion service first
-    logger.info("Starting ingestion service...");
-    killmailService = new KillmailIngestionService();
-    mapService = new MapActivityService(
-      process.env.MAP_API_URL!,
-      process.env.MAP_API_KEY!,
-      process.env.REDIS_URL!,
-      parseInt(process.env.CACHE_TTL || "300")
-    );
-    characterService = new CharacterSyncService(
-      process.env.MAP_API_URL!,
-      process.env.MAP_API_KEY!
-    );
-
-    // Now check database tables (after ingestion service is initialized)
-    logger.info("Ensuring database tables exist...");
-    const dbCheckStartTime = Date.now();
-    await checkDatabaseTables();
-    logger.info(
-      `Database tables checked/created (${
-        (Date.now() - dbCheckStartTime) / 1000
-      }s)`
-    );
-
-    // Start HTTP server
-    const serverStartTime = Date.now();
-    app.listen(port, () => {
-      const serverReadyTime = Date.now();
-      logger.info(
-        `Server listening on port ${port} (${
-          (serverReadyTime - serverStartTime) / 1000
-        }s)`
-      );
-    });
-
-    // Initialize Discord after DB is ready and HTTP server has started
-    logger.info("Starting Discord initialization...");
-    initializeDiscord().catch((error) => {
-      logger.error("Discord initialization failed:", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    });
-
-    // Start RedisQ consumer
-    logger.info("Starting RedisQ consumer...");
-    startRedisQConsumer();
-
-    // Sync characters from map
-    const mapName = process.env.MAP_NAME;
-    if (mapName) {
-      logger.info(`Syncing characters from map: ${mapName}`);
-      await syncCharacters(mapName);
-    } else {
-      logger.warn("No MAP_NAME configured, skipping character sync");
-    }
-
-    // Refresh character tracking
-    await refreshCharacters();
-
-    // Backfill characters with zkillboard data
-    await backfillCharacters();
-
-    // Ingest map activity data
-    if (mapName) {
-      logger.info(`Syncing map activity data from map: ${mapName}`);
-      try {
-        // Use the new refresh method which handles duplicates
-        await refreshMapActivity(mapName);
-      } catch (error) {
-        logger.error(`Error ingesting map activity: ${error}`);
+    // Run Prisma migrations
+    logger.info("Running database migrations...");
+    try {
+      const { stdout, stderr } = await execAsync("npx prisma migrate deploy");
+      if (stderr) {
+        logger.warn("Migration warnings:", stderr);
       }
-    } else {
-      logger.warn("No MAP_NAME configured, skipping map activity ingestion");
-    }
-
-    // Set up scheduled tasks
-    logger.info("Setting up scheduled tasks");
-
-    // Schedule map activity sync every hour
-    setInterval(async () => {
-      try {
-        logger.info("Running scheduled map activity refresh...");
-
-        // Use the simpler approach - completely refresh map activity data every hour
-        await refreshMapActivity(process.env.MAP_NAME!);
-
-        // Log current count for monitoring
-        const mapActivityCount = await mapActivityRepository.count();
-        logger.info(
-          `Map activity count after scheduled refresh: ${mapActivityCount}`
-        );
-      } catch (error) {
-        logger.error("Scheduled map activity refresh failed:", error);
-      }
-    }, 60 * 60 * 1000); // Every hour
-
-    // Handle graceful shutdown
-    process.on("SIGTERM", async () => {
-      logger.info("Shutting down server...");
-      await cleanup();
-      process.exit(0);
-    });
-  } catch (error) {
-    logger.error("Failed to start server:", {
-      error:
-        error instanceof Error
-          ? {
-              message: error.message,
-              name: error.name,
-              stack: error.stack,
-            }
-          : error,
-    });
-
-    // Don't exit the process when running tests
-    if (process.env.NODE_ENV !== "test") {
+      logger.info("Migrations completed successfully:", stdout);
+    } catch (error) {
+      logger.error("Failed to run database migrations:", error);
       process.exit(1);
     }
+
+    // Initialize services
+    killmailService = new KillmailIngestionService(
+      process.env.ZKILLBOARD_API_URL || "https://zkillboard.com/api"
+    );
+    mapService = new MapActivityService(
+      process.env.MAP_API_URL || "",
+      process.env.MAP_API_KEY || "",
+      process.env.REDIS_URL || "redis://redis:6379",
+      parseInt(process.env.CACHE_TTL || "300"),
+      parseInt(process.env.MAX_RETRIES || "3"),
+      parseInt(process.env.RETRY_DELAY || "5000")
+    );
+    characterService = new CharacterSyncService(
+      process.env.MAP_API_URL || "",
+      process.env.MAP_API_KEY || ""
+    );
+    redisQService = new RedisQService(
+      process.env.REDIS_URL || "redis://redis:6379",
+      parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
+      parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
+    );
+
+    // Start RedisQ consumer
+    startRedisQConsumer();
+
+    // Start the server
+    app.listen(port, () => {
+      logger.info(`Server started on port ${port}`);
+      logger.info(`Uptime: ${Date.now() - appStartTime}ms`);
+    });
+
+    // Initialize Discord bot
+    await initializeDiscord();
+  } catch (error) {
+    logger.error("Failed to start server:", error);
+    process.exit(1);
   }
 }
 
@@ -642,140 +557,6 @@ async function initializeDiscord() {
   } catch (error) {
     logger.error("Discord initialization failed:", error);
     throw error;
-  }
-}
-
-// Run backfill process
-async function backfillCharacters() {
-  try {
-    // Re-enable backfill now that we've fixed the database structure
-    logger.info("Backfilling kills and losses for all characters...");
-    const characters = await characterRepository.getAllCharacters();
-    const totalCharacters = characters.length;
-    logger.info(`Found ${totalCharacters} characters to backfill`);
-
-    // Check if we have any loss data before starting
-    const initialLossCount = await killRepository.countLosses();
-    const initialKillCount = await killRepository.countKills();
-    logger.info(
-      `Initial counts - Losses: ${initialLossCount}, Kills: ${initialKillCount}`
-    );
-
-    // Keep track of errors for reporting
-    const backfillErrors = [];
-
-    // Process all characters
-    logger.info(
-      `Will process all ${characters.length} characters for backfill`
-    );
-
-    for (let i = 0; i < characters.length; i++) {
-      const character = characters[i];
-      logger.info(
-        `Backfilling kills for character: ${character.name} (${
-          character.eveId
-        }) - ${i + 1}/${characters.length} (${Math.round(
-          ((i + 1) / characters.length) * 100
-        )}%)`
-      );
-
-      try {
-        // Backfill kills
-        await backfillKills(BigInt(character.eveId));
-      } catch (killsError) {
-        const errorInfo = {
-          character: character.name,
-          characterId: character.eveId,
-          errorType: "kills_backfill",
-          errorMessage:
-            killsError instanceof Error
-              ? killsError.message
-              : String(killsError),
-          errorStack:
-            killsError instanceof Error ? killsError.stack : undefined,
-        };
-        backfillErrors.push(errorInfo);
-        logger.error(
-          errorInfo,
-          `Error backfilling kills for character ${character.name}`
-        );
-      }
-
-      try {
-        // Now also backfill losses using our new method
-        logger.info(
-          `Backfilling losses for character: ${character.name} (${character.eveId})`
-        );
-        await backfillLosses(BigInt(character.eveId), 30); // 30 days max age
-      } catch (lossesError) {
-        const errorInfo = {
-          character: character.name,
-          characterId: character.eveId,
-          errorType: "losses_backfill",
-          errorMessage:
-            lossesError instanceof Error
-              ? lossesError.message
-              : String(lossesError),
-          errorStack:
-            lossesError instanceof Error ? lossesError.stack : undefined,
-        };
-        backfillErrors.push(errorInfo);
-        logger.error(
-          errorInfo,
-          `Error backfilling losses for character ${character.name}`
-        );
-      }
-    }
-
-    // Check our progress
-    const finalLossCount = await killRepository.countLosses();
-    const finalKillCount = await killRepository.countKills();
-
-    logger.info(
-      `Final counts - Losses: ${finalLossCount} (+${
-        finalLossCount - initialLossCount
-      }), Kills: ${finalKillCount} (+${finalKillCount - initialKillCount})`
-    );
-
-    if (backfillErrors.length > 0) {
-      logger.warn(
-        `Completed character backfill with ${backfillErrors.length} errors. See logs for details.`
-      );
-    } else {
-      logger.info(
-        "Character backfill process completed successfully with no errors"
-      );
-    }
-  } catch (error) {
-    logger.error(
-      {
-        error,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-      },
-      "Character backfill process failed"
-    );
-    throw error;
-  }
-}
-
-// Sync characters from map
-async function syncCharacters(mapName: string) {
-  try {
-    logger.info(`Syncing user characters from map ${mapName}`);
-    await characterService.syncUserCharacters(mapName);
-
-    // Check how many characters we got
-    const characterCount = await characterRepository.count();
-    logger.info(`Character count after sync: ${characterCount}`);
-
-    if (characterCount === 0) {
-      logger.warn(
-        `No characters found after sync. This will cause no data to be collected.`
-      );
-    }
-  } catch (error) {
-    logger.error(`Error syncing characters: ${error}`);
   }
 }
 

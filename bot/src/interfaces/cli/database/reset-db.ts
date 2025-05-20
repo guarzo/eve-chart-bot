@@ -1,13 +1,16 @@
-import { PrismaClient } from "@prisma/client";
 import { logger } from "../../../lib/logger";
 import * as readline from "readline";
+import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 /**
  * Reset the database (delete all data)
  * @param force If true, skip confirmation prompt
  */
 export async function resetDatabase(force = false): Promise<void> {
-  const prisma = new PrismaClient();
+  const repositoryManager = new RepositoryManager();
+  const characterRepo = repositoryManager.getCharacterRepository();
+  const killRepo = repositoryManager.getKillRepository();
+  const mapActivityRepo = repositoryManager.getMapActivityRepository();
 
   try {
     if (!force) {
@@ -23,13 +26,15 @@ export async function resetDatabase(force = false): Promise<void> {
     logger.info("Resetting database...");
 
     // Delete all records from tables in a specific order to avoid foreign key constraints
-    await prisma.killAttacker.deleteMany();
-    await prisma.killVictim.deleteMany();
-    await prisma.killFact.deleteMany();
-    await prisma.lossFact.deleteMany();
-    await prisma.mapActivity.deleteMany();
-    await prisma.character.deleteMany();
-    await prisma.characterGroup.deleteMany();
+    await characterRepo.executeQuery(async () => {
+      await characterRepo.prisma.killAttacker.deleteMany();
+      await characterRepo.prisma.killVictim.deleteMany();
+      await characterRepo.prisma.killFact.deleteMany();
+      await characterRepo.prisma.lossFact.deleteMany();
+      await characterRepo.prisma.mapActivity.deleteMany();
+      await characterRepo.prisma.character.deleteMany();
+      await characterRepo.prisma.characterGroup.deleteMany();
+    });
 
     logger.info("Database reset complete");
   } catch (error) {
@@ -42,7 +47,7 @@ export async function resetDatabase(force = false): Promise<void> {
     );
     process.exit(1);
   } finally {
-    await prisma.$disconnect();
+    await characterRepo.disconnect();
   }
 }
 
