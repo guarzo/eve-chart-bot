@@ -1,6 +1,6 @@
 import { config } from "dotenv";
 import { IngestionService } from "../services/IngestionService";
-import { RedisQConsumer } from "./redisq-ingest";
+import { RedisQService } from "../services/ingestion/RedisQService";
 import { logger } from "../lib/logger";
 import { PrismaClient } from "@prisma/client";
 
@@ -21,18 +21,22 @@ async function main() {
     maxRetries: parseInt(process.env.MAX_RETRIES || "3"),
   });
 
-  const redisQConsumer = new RedisQConsumer(process.env.REDIS_URL!);
+  const redisQService = new RedisQService(
+    process.env.REDIS_URL!,
+    parseInt(process.env.MAX_RETRIES || "3"),
+    parseInt(process.env.RETRY_DELAY || "5000")
+  );
 
   try {
     // Start RedisQ consumer
-    await redisQConsumer.start();
+    await redisQService.start();
 
     logger.info("All ingestion services started successfully");
 
     // Handle graceful shutdown
     process.on("SIGTERM", async () => {
       logger.info("Shutting down ingestion services");
-      await redisQConsumer.stop();
+      await redisQService.stop();
       await ingestionService.close();
       process.exit(0);
     });

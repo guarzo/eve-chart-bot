@@ -11,8 +11,6 @@ async function main() {
     REDIS_URL as string,
     parseInt(process.env.MAX_RETRIES || "3"),
     parseInt(process.env.RETRY_DELAY || "5000"),
-    parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
-    parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
   );
 
   try {

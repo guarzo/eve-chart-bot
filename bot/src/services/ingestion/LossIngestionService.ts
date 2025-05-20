@@ -4,7 +4,7 @@ import { CharacterRepository } from "../../infrastructure/repositories/Character
 import { LossRepository } from "../../infrastructure/repositories/LossRepository";
 import { LossFact } from "../../domain/killmail/LossFact";
 import { logger } from "../../lib/logger";
-import { RetryService } from "./RetryService";
+import { retryOperation } from "../../utils/retry";
 import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 
 /**
@@ -15,7 +15,8 @@ export class LossIngestionService {
   private readonly esiService: ESIService;
   private readonly characterRepository: CharacterRepository;
   private readonly lossRepository: LossRepository;
-  private readonly retryService: RetryService;
+  private readonly maxRetries: number;
+  private readonly retryDelay: number;
 
   constructor(
     zkillApiUrl: string = "https://zkillboard.com/api",
@@ -28,7 +29,8 @@ export class LossIngestionService {
     this.esiService = new ESIService(new CacheRedisAdapter(redisUrl, cacheTtl));
     this.characterRepository = new CharacterRepository();
     this.lossRepository = new LossRepository();
-    this.retryService = new RetryService(maxRetries, retryDelay);
+    this.maxRetries = maxRetries;
+    this.retryDelay = retryDelay;
   }
 
   /**
@@ -56,12 +58,14 @@ export class LossIngestionService {
       }
 
       // 2) Fetch from zKillboard with retry
-      const zk = await this.retryService.retryOperation(
+      const zk = await retryOperation(
         () => this.zkill.getKillmail(killId),
         `Fetching zKill data for loss ${killId}`,
-        3,
-        5000,
-        15000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 15000,
+        }
       );
       if (!zk) {
         logger.warn(`No zKill data for loss ${killId}`);
@@ -69,12 +73,14 @@ export class LossIngestionService {
       }
 
       // 3) Fetch from ESI with retry
-      const esi = await this.retryService.retryOperation(
+      const esi = await retryOperation(
         () => this.esiService.getKillmail(zk.killmail_id, zk.zkb.hash),
         `Fetching ESI data for loss ${killId}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 30000,
+        }
       );
       if (!esi?.victim) {
         logger.warn(`Invalid ESI data for loss ${killId}`);
@@ -144,12 +150,14 @@ export class LossIngestionService {
       startDate.setDate(startDate.getDate() - maxAgeDays);
 
       // Get losses from zKillboard
-      const losses = await this.retryService.retryOperation(
+      const losses = await retryOperation(
         () => this.zkill.getCharacterLosses(Number(characterId)),
         `Fetching losses for character ${characterId}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 30000,
+        }
       );
 
       if (!losses || !Array.isArray(losses)) {

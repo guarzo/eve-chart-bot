@@ -3,7 +3,7 @@ import { CharacterRepository } from "../../infrastructure/repositories/Character
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
 import { logger } from "../../lib/logger";
-import { RetryService } from "./RetryService";
+import { retryOperation } from "../../utils/retry";
 
 /**
  * Service for ingesting map activity data from the Map API
@@ -12,7 +12,8 @@ export class MapActivityIngestionService {
   private readonly map: MapClient;
   private readonly characterRepository: CharacterRepository;
   private readonly mapActivityRepository: MapActivityRepository;
-  private readonly retryService: RetryService;
+  private readonly maxRetries: number;
+  private readonly retryDelay: number;
 
   constructor(
     mapApiUrl: string,
@@ -23,7 +24,8 @@ export class MapActivityIngestionService {
     this.map = new MapClient(mapApiUrl, mapApiKey);
     this.characterRepository = new CharacterRepository();
     this.mapActivityRepository = new MapActivityRepository();
-    this.retryService = new RetryService(maxRetries, retryDelay);
+    this.maxRetries = maxRetries;
+    this.retryDelay = retryDelay;
   }
 
   /**
@@ -51,13 +53,25 @@ export class MapActivityIngestionService {
         throw new Error(`Character ${characterId} not found`);
       }
 
+      // Get character's group
+      const group = character.characterGroupId
+        ? await this.characterRepository.getCharacterGroup(
+            character.characterGroupId
+          )
+        : null;
+      if (!group) {
+        throw new Error(`Character ${characterId} is not in a group`);
+      }
+
       // Fetch from Map API with retry
-      const mapData = await this.retryService.retryOperation(
-        () => this.map.getCharacterActivity(character.slug, days),
+      const mapData = await retryOperation(
+        () => this.map.getCharacterActivity(group.slug, days),
         `Fetching map data for character ${characterId}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 30000,
+        }
       );
 
       if (!mapData || !mapData.data || !Array.isArray(mapData.data)) {
@@ -140,18 +154,30 @@ export class MapActivityIngestionService {
         throw new Error(`Character ${characterId} not found`);
       }
 
+      // Get character's group
+      const group = character.characterGroupId
+        ? await this.characterRepository.getCharacterGroup(
+            character.characterGroupId
+          )
+        : null;
+      if (!group) {
+        throw new Error(`Character ${characterId} is not in a group`);
+      }
+
       // Calculate date range
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - maxAgeDays);
 
       // Fetch from Map API with retry
-      const mapData = await this.retryService.retryOperation(
-        () => this.map.getCharacterActivity(character.slug, maxAgeDays),
+      const mapData = await retryOperation(
+        () => this.map.getCharacterActivity(group.slug, maxAgeDays),
         `Fetching map data for character ${characterId}`,
-        3,
-        5000,
-        30000
+        {
+          maxRetries: this.maxRetries,
+          initialRetryDelay: this.retryDelay,
+          timeout: 30000,
+        }
       );
 
       if (!mapData || !mapData.data || !Array.isArray(mapData.data)) {
@@ -160,10 +186,12 @@ export class MapActivityIngestionService {
       }
 
       // Filter activities by date range
-      const filteredActivities = mapData.data.filter((activity) => {
-        const activityTime = new Date(activity.timestamp);
-        return activityTime >= startDate && activityTime <= endDate;
-      });
+      const filteredActivities = mapData.data.filter(
+        (activity: { timestamp: string | number | Date }) => {
+          const activityTime = new Date(activity.timestamp);
+          return activityTime >= startDate && activityTime <= endDate;
+        }
+      );
 
       logger.info(
         `Found ${filteredActivities.length} map activities to process for character ${characterId}`

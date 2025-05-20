@@ -1,7 +1,7 @@
 // services/IngestionService.ts
 import { ZkillClient } from "../lib/api/ZkillClient";
 import { MapClient } from "../lib/api/MapClient";
-import { RedisCache } from "../lib/cache/RedisCache";
+import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
 import { IngestionConfig } from "../types/ingestion";
 import { logger } from "../lib/logger";
 import { ESIService } from "./ESIService";
@@ -14,7 +14,6 @@ import {
   KillmailVictim,
 } from "../domain/killmail/Killmail";
 import { Character } from "../domain/character/Character";
-import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
@@ -25,7 +24,7 @@ const toBigInt = (val?: number | string | null): bigint | null =>
 export class IngestionService {
   private readonly zkill: ZkillClient;
   private readonly map: MapClient;
-  private readonly cache: RedisCache;
+  private readonly cache: CacheRedisAdapter;
   private readonly esiService: ESIService;
   private readonly characterService: CharacterService;
   private readonly killRepository: KillRepository;
@@ -56,7 +55,7 @@ export class IngestionService {
 
     this.zkill = new ZkillClient(this.cfg.zkillApiUrl);
     this.map = new MapClient(this.cfg.mapApiUrl, this.cfg.mapApiKey);
-    this.cache = new RedisCache(this.cfg.redisUrl, this.cfg.cacheTtl);
+    this.cache = new CacheRedisAdapter(this.cfg.redisUrl, this.cfg.cacheTtl);
     this.esiService = new ESIService();
     this.characterService = new CharacterService();
     this.killRepository = new KillRepository();
@@ -203,20 +202,9 @@ export class IngestionService {
         logger.debug(`No tracked characters in killmail ${killId}`);
         return { success: false, skipped: true };
       }
-      const trackedSet = new Set(tracked.map((c: Character) => c.eveId));
-
-      // 6) Create and save killmail
-      const mainChar =
-        attackers.find(
-          (a) =>
-            a.characterId != null && trackedSet.has(a.characterId.toString())
-        )?.characterId ??
-        victim.characterId ??
-        BigInt(0);
 
       const killmail = new Killmail({
         killmailId: BigInt(killId),
-        characterId: mainChar,
         killTime: new Date(esi.killmail_time),
         systemId: esi.solar_system_id,
         totalValue: BigInt(Math.round(zk.zkb.totalValue)),
@@ -514,8 +502,8 @@ export class IngestionService {
     // Get current count for this character
     const currentCount =
       type === "kills"
-        ? await this.killRepository.countKills(characterId)
-        : await this.killRepository.countLosses(characterId);
+        ? await this.killRepository.countKills()
+        : await this.killRepository.countLosses();
 
     logger.info(
       `Character ${char.name} has ${currentCount} ${type} in database before backfill`
@@ -524,7 +512,7 @@ export class IngestionService {
     // Get or create checkpoint
     const checkpoint = await this.characterRepository.upsertIngestionCheckpoint(
       type,
-      characterId
+      BigInt(characterId)
     );
 
     let page = 1;
@@ -698,7 +686,7 @@ export class IngestionService {
         if (lastProcessedId > checkpoint.lastSeenId) {
           await this.characterRepository.updateIngestionCheckpoint(
             type,
-            characterId,
+            BigInt(characterId),
             lastProcessedId
           );
           logger.info(`Updated checkpoint to ID ${lastProcessedId}`);
@@ -733,13 +721,13 @@ export class IngestionService {
     }
 
     // Update the backfill timestamp
-    await this.characterRepository.updateLastBackfillAt(characterId);
+    await this.characterRepository.updateLastBackfillAt(BigInt(characterId));
 
     // Get the new count
     const newCount =
       type === "kills"
-        ? await this.killRepository.countKills(characterId)
-        : await this.killRepository.countLosses(characterId);
+        ? await this.killRepository.countKills()
+        : await this.killRepository.countLosses();
 
     // Log detailed summary
     logger.info(
