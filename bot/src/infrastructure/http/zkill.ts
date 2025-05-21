@@ -3,30 +3,33 @@
  *
  * API Documentation: https://zkillboard.com/api/
  *
+ * Features:
+ * - Rate limiting with exponential backoff
+ * - Automatic retries with increasing timeouts
+ * - Pagination support for all list endpoints
+ * - Detailed error logging
+ * - Response validation
+ *
+ * Rate Limiting:
+ * - 20 requests per minute
+ * - Minimum 3s delay between requests
+ * - Exponential backoff on errors
+ * - Maximum 60s delay between requests
+ * - Maximum 3 retries per request
+ * - Timeout starts at 15s, increases with retries up to 45s
+ *
  * Example URLs:
- * - Character Kills: https://zkillboard.com/api/kills/characterID/268946627/
- * - Character Losses: https://zkillboard.com/api/losses/characterID/268946627/
+ * - Character Kills: https://zkillboard.com/api/kills/characterID/268946627/page/1/
+ * - Character Losses: https://zkillboard.com/api/losses/characterID/268946627/page/1/
  * - Corporation Kills: https://zkillboard.com/api/kills/corporationID/123456789/
  * - System Kills: https://zkillboard.com/api/kills/systemID/30000142/
  *
- * Note: The API does not support the 'limit' parameter anymore due to abuse.
- * All endpoints return the most recent kills/losses.
+ * Note: The API returns results in reverse chronological order (newest first).
+ * Each page typically contains 100 results.
  */
 
 import axios, { AxiosInstance } from "axios";
 import { logger } from "../../lib/logger";
-
-/**
- * Configuration for the ZKillboard client
- */
-export interface ZKillboardClientConfig {
-  /** Base URL for the ZKillboard API */
-  baseUrl?: string;
-  /** Default timeout in milliseconds */
-  timeout?: number;
-  /** User-Agent string to identify the client */
-  userAgent?: string;
-}
 
 // Rate limiting configuration
 const RATE_LIMIT = {
@@ -44,29 +47,22 @@ const RATE_LIMIT = {
  */
 export class ZKillboardClient {
   private readonly client: AxiosInstance;
+  private readonly baseUrl: string;
   private lastRequestTime: number = 0;
   private currentDelay: number = RATE_LIMIT.minDelay;
   private consecutiveErrors: number = 0;
   private currentTimeout: number = RATE_LIMIT.initialTimeout;
 
-  /**
-   * Create a new ZKillboard client
-   * @param config Optional configuration for the client
-   */
-  constructor(config: ZKillboardClientConfig = {}) {
+  constructor() {
+    this.baseUrl = "https://zkillboard.com/api";
+
     this.client = axios.create({
-      baseURL: config.baseUrl || "https://zkillboard.com/api/",
+      baseURL: this.baseUrl,
       timeout: RATE_LIMIT.initialTimeout,
       headers: {
-        "User-Agent": config.userAgent || "EVE-Chart-Bot/1.0",
+        "User-Agent": "EVE-Chart-Bot/1.0",
+        Accept: "application/json",
       },
-    });
-
-    // Log the client configuration
-    logger.debug("ZKillboardClient initialized with config:", {
-      baseUrl: this.client.defaults.baseURL,
-      timeout: this.client.defaults.timeout,
-      userAgent: this.client.defaults.headers["User-Agent"],
     });
   }
 
@@ -104,7 +100,9 @@ export class ZKillboardClient {
   }
 
   private async fetch<T>(endpoint: string, retryCount = 0): Promise<T> {
-    const startTime = Date.now();
+    const url = `${this.baseUrl}/${endpoint}`;
+    logger.debug(`Making request to zKillboard: ${url}`);
+
     try {
       await this.rateLimit();
 
@@ -113,38 +111,51 @@ export class ZKillboardClient {
 
       const response = await this.client.get<T>(endpoint);
       this.consecutiveErrors = 0; // Reset error count on success
-
-      const duration = Date.now() - startTime;
-      logger.debug(
-        `ZKillboard request to ${endpoint} completed in ${duration}ms`
-      );
-
       return response.data;
     } catch (error: any) {
       this.consecutiveErrors++;
-      const duration = Date.now() - startTime;
+      const errorDetails = {
+        url,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers,
+        timeout:
+          error.code === "ECONNABORTED" ? this.currentTimeout : undefined,
+        error: error.message,
+        consecutiveErrors: this.consecutiveErrors,
+        currentDelay: this.currentDelay,
+        currentTimeout: this.currentTimeout,
+        retryCount,
+        isTimeout: error.code === "ECONNABORTED",
+        isNetworkError:
+          error.code === "ECONNREFUSED" || error.code === "ECONNRESET",
+        isRateLimit: error.response?.status === 429,
+        isServerError: error.response?.status >= 500,
+        isClientError:
+          error.response?.status >= 400 && error.response?.status < 500,
+      };
 
-      // Log the error with essential context
-      logger.error(
-        `ZKillboard request to ${endpoint} failed after ${duration}ms:`,
-        {
-          error: error.message,
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          headers: error.response?.headers,
-          consecutiveErrors: this.consecutiveErrors,
-          currentDelay: this.currentDelay,
-          currentTimeout: this.currentTimeout,
-          retryCount,
-        }
-      );
+      // Log different error types with appropriate severity
+      if (error.response?.status === 429) {
+        logger.warn(`ZKillboard rate limit hit:`, errorDetails);
+      } else if (error.response?.status >= 500) {
+        logger.error(`ZKillboard server error:`, errorDetails);
+      } else if (error.code === "ECONNABORTED") {
+        logger.error(`ZKillboard request timeout:`, errorDetails);
+      } else if (error.code === "ECONNREFUSED" || error.code === "ECONNRESET") {
+        logger.error(`ZKillboard connection error:`, errorDetails);
+      } else {
+        logger.error(`ZKillboard request failed:`, errorDetails);
+      }
 
       // Retry logic
       if (retryCount < RATE_LIMIT.maxRetries) {
         const nextRetry = retryCount + 1;
         logger.info(
-          `Retrying request to ${endpoint} (attempt ${nextRetry}/${RATE_LIMIT.maxRetries})`
+          `Retrying request to ${endpoint} (attempt ${nextRetry}/${
+            RATE_LIMIT.maxRetries
+          }) - Last error: ${error.response?.status || error.code}`
         );
         return this.fetch(endpoint, nextRetry);
       }
@@ -155,6 +166,11 @@ export class ZKillboardClient {
 
   /**
    * Get a single killmail by ID
+   * @param killId - The killmail ID to fetch
+   * @returns The killmail data or null if not found
+   *
+   * Note: This method will retry up to 3 times with exponential backoff
+   * if the request fails.
    */
   public async getKillmail(killId: number): Promise<any> {
     try {
@@ -165,82 +181,56 @@ export class ZKillboardClient {
 
       // Handle both array and object responses
       if (Array.isArray(response)) {
-        return response[0] || {};
+        return response[0] || null;
       }
 
       // The response might be wrapped in an object with the killID as the key
       const killData = response[killId.toString()] || response;
       if (!killData || typeof killData !== "object") {
-        logger.warn(`Invalid kill data format for killmail ${killId}`);
+        logger.warn(`Invalid kill data format for killmail ${killId}`, {
+          responseType: typeof response,
+          isArray: Array.isArray(response),
+          responseKeys: Object.keys(response),
+        });
         return null;
       }
 
       return killData;
     } catch (error: any) {
-      logger.error(
-        `ZKillboard request to killID/${killId}/ failed after ${
-          error.response?.config?.timeout || "unknown"
-        }ms:`,
-        {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          headers: error.response?.headers,
-        }
-      );
+      // The fetch method already handles retries and logging
+      // Just rethrow the error to be handled by the caller
       throw error;
     }
   }
 
   /**
    * Get kills for a character
+   * @param characterId - The EVE character ID
+   * @param page - The page number to fetch (default: 1)
+   * @returns Array of killmails for the character
+   *
+   * Note: The API returns kills in reverse chronological order (newest first).
+   * Each page typically contains 100 killmails.
+   *
+   * Example URL: https://zkillboard.com/api/kills/characterID/268946627/page/1/
    */
-  public async getCharacterKills(characterId: number): Promise<any[]> {
+  public async getCharacterKills(
+    characterId: number,
+    page: number = 1
+  ): Promise<any[]> {
     try {
-      const response = await this.fetch<Record<string, any>>(
-        `kills/characterID/${characterId}/`
+      const response = await this.fetch<any[]>(
+        `kills/characterID/${characterId}/page/${page}/`
       );
       logger.debug(
-        `ZKillboard response for character ${characterId}:`,
+        `ZKillboard response for character ${characterId} page ${page}:`,
         response
       );
-
-      // Handle both array and object responses
-      if (Array.isArray(response)) {
-        return response;
-      }
-
-      // Convert object response to array
-      const kills = Object.values(response).filter((kill) => {
-        const isValid =
-          kill &&
-          typeof kill === "object" &&
-          kill.killmail_id &&
-          kill.zkb &&
-          kill.zkb.hash;
-        if (!isValid) {
-          logger.debug(`Invalid kill entry:`, {
-            hasKillmailId: !!kill?.killmail_id,
-            hasZkb: !!kill?.zkb,
-            hasHash: !!kill?.zkb?.hash,
-            keys: kill ? Object.keys(kill) : [],
-          });
-        }
-        return isValid;
-      });
-
-      return kills;
-    } catch (error: any) {
+      return response;
+    } catch (error) {
       logger.error(
-        `ZKillboard request to kills/characterID/${characterId}/ failed after ${
-          error.response?.config?.timeout || "unknown"
-        }ms:`,
-        {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          headers: error.response?.headers,
-        }
+        `Error fetching kills for character ${characterId} page ${page}:`,
+        error
       );
       throw error;
     }
@@ -248,53 +238,32 @@ export class ZKillboardClient {
 
   /**
    * Get losses for a character
+   * @param characterId - The EVE character ID
+   * @param page - The page number to fetch (default: 1)
+   * @returns Array of losses for the character
+   *
+   * Note: The API returns losses in reverse chronological order (newest first).
+   * Each page typically contains 100 losses.
+   *
+   * Example URL: https://zkillboard.com/api/losses/characterID/268946627/page/1/
    */
-  public async getCharacterLosses(characterId: number): Promise<any[]> {
+  public async getCharacterLosses(
+    characterId: number,
+    page: number = 1
+  ): Promise<any[]> {
     try {
-      const response = await this.fetch<Record<string, any>>(
-        `losses/characterID/${characterId}/`
+      const response = await this.fetch<any[]>(
+        `losses/characterID/${characterId}/page/${page}/`
       );
       logger.debug(
-        `ZKillboard response for character ${characterId} losses:`,
+        `ZKillboard response for character ${characterId} page ${page}:`,
         response
       );
-
-      // Handle both array and object responses
-      if (Array.isArray(response)) {
-        return response;
-      }
-
-      // Convert object response to array
-      const losses = Object.values(response).filter((loss) => {
-        const isValid =
-          loss &&
-          typeof loss === "object" &&
-          loss.killmail_id &&
-          loss.zkb &&
-          loss.zkb.hash;
-        if (!isValid) {
-          logger.debug(`Invalid loss entry:`, {
-            hasKillmailId: !!loss?.killmail_id,
-            hasZkb: !!loss?.zkb,
-            hasHash: !!loss?.zkb?.hash,
-            keys: loss ? Object.keys(loss) : [],
-          });
-        }
-        return isValid;
-      });
-
-      return losses;
-    } catch (error: any) {
+      return response;
+    } catch (error) {
       logger.error(
-        `ZKillboard request to losses/characterID/${characterId}/ failed after ${
-          error.response?.config?.timeout || "unknown"
-        }ms:`,
-        {
-          status: error.response?.status,
-          statusText: error.response?.statusText,
-          data: error.response?.data,
-          headers: error.response?.headers,
-        }
+        `Error fetching losses for character ${characterId} page ${page}:`,
+        error
       );
       throw error;
     }

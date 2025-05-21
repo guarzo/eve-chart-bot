@@ -250,10 +250,15 @@ export class KillmailIngestionService {
   /**
    * Backfill kills for a character
    */
-  public async backfillKills(characterId: bigint): Promise<void> {
+  public async backfillKills(
+    characterId: bigint,
+    maxAgeDays: number = 30
+  ): Promise<void> {
     const startTime = Date.now();
     try {
-      logger.info(`Starting backfill for character ${characterId}`);
+      logger.info(
+        `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
+      );
 
       // Get character from repository
       const character = await this.characterRepository.getCharacter(
@@ -262,6 +267,11 @@ export class KillmailIngestionService {
       if (!character) {
         throw new Error(`Character ${characterId} not found`);
       }
+
+      // Calculate cutoff date
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+      logger.info(`Cutoff date for backfill: ${cutoffDate.toISOString()}`);
 
       // Get last processed killmail ID
       const checkpoint =
@@ -276,14 +286,16 @@ export class KillmailIngestionService {
       let successfulIngestCount = 0;
       let skippedCount = 0;
       let errorCount = 0;
+      let tooOldCount = 0;
       let totalKillmailsProcessed = 0;
       let skipReasons: Record<string, number> = {};
+      let reachedCutoff = false;
 
-      while (hasMore) {
+      while (hasMore && !reachedCutoff) {
         try {
           // Fetch killmails from zKillboard
           const killmails = await retryOperation(
-            () => this.zkill.getCharacterKills(Number(characterId)),
+            () => this.zkill.getCharacterKills(Number(characterId), page),
             `Fetching kills for character ${characterId}`,
             {
               maxRetries: 3,
@@ -318,6 +330,18 @@ export class KillmailIngestionService {
               break;
             }
 
+            // Check killmail age
+            const killTime = new Date(killmail.killmail_time);
+            if (killTime < cutoffDate) {
+              logger.info(
+                `Reached killmail older than cutoff date (${cutoffDate.toISOString()}), stopping`
+              );
+              tooOldCount++;
+              reachedCutoff = true;
+              hasMore = false;
+              break;
+            }
+
             const result = await this.ingestKillmail(killId);
             if (result.success) {
               successfulIngestCount++;
@@ -335,7 +359,7 @@ export class KillmailIngestionService {
 
           // Log progress after each page
           logger.info(
-            `Page ${page} complete for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors`
+            `Page ${page} complete for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old`
           );
           if (Object.keys(skipReasons).length > 0) {
             logger.info(
@@ -368,7 +392,7 @@ export class KillmailIngestionService {
 
       const duration = Date.now() - startTime;
       logger.info(
-        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${totalKillmailsProcessed} total processed`
+        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalKillmailsProcessed} total processed`
       );
       if (Object.keys(skipReasons).length > 0) {
         logger.info(
@@ -389,9 +413,15 @@ export class KillmailIngestionService {
   /**
    * Backfill losses for a character
    */
-  public async backfillLosses(characterId: bigint): Promise<void> {
+  public async backfillLosses(
+    characterId: bigint,
+    maxAgeDays: number = 30
+  ): Promise<void> {
+    const startTime = Date.now();
     try {
-      logger.info(`Backfilling losses for character ${characterId}`);
+      logger.info(
+        `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
+      );
 
       // Get character from repository
       const character = await this.characterRepository.getCharacter(
@@ -400,6 +430,11 @@ export class KillmailIngestionService {
       if (!character) {
         throw new Error(`Character ${characterId} not found`);
       }
+
+      // Calculate cutoff date
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+      logger.info(`Cutoff date for backfill: ${cutoffDate.toISOString()}`);
 
       // Get last processed killmail ID
       const checkpoint =
@@ -413,6 +448,10 @@ export class KillmailIngestionService {
       let lastProcessedId = checkpoint.lastSeenId;
       let successfulIngestCount = 0;
       let skippedCount = 0;
+      let errorCount = 0;
+      let tooOldCount = 0;
+      let totalLossmailsProcessed = 0;
+      let skipReasons: Record<string, number> = {};
 
       while (hasMore) {
         try {
@@ -428,14 +467,20 @@ export class KillmailIngestionService {
           );
 
           if (!losses || losses.length === 0) {
+            logger.info(`No more losses found for character ${characterId}`);
             hasMore = false;
             continue;
           }
 
+          // Log progress at the start of each page
+          logger.info(
+            `Processing page ${page} for character ${characterId} - found ${losses.length} losses`
+          );
+
           // Process each loss
           for (const loss of losses) {
             if (!loss || !loss.killmail_id || !loss.zkb) {
-              console.log("Invalid loss data:", {
+              logger.debug("Invalid loss data:", {
                 loss,
                 hasKillmailId: !!loss?.killmail_id,
                 hasZkb: !!loss?.zkb,
@@ -445,6 +490,20 @@ export class KillmailIngestionService {
 
             const killId = loss.killmail_id;
             if (killId <= lastProcessedId) {
+              logger.info(
+                `Reached previously processed loss ${killId}, stopping`
+              );
+              hasMore = false;
+              break;
+            }
+
+            // Check loss age
+            const lossTime = new Date(loss.killmail_time);
+            if (lossTime < cutoffDate) {
+              logger.info(
+                `Reached loss older than cutoff date (${cutoffDate.toISOString()}), stopping`
+              );
+              tooOldCount++;
               hasMore = false;
               break;
             }
@@ -454,22 +513,60 @@ export class KillmailIngestionService {
               successfulIngestCount++;
             } else if (result.skipped) {
               skippedCount++;
+              if (result.skipReason) {
+                skipReasons[result.skipReason] =
+                  (skipReasons[result.skipReason] || 0) + 1;
+              }
+            } else if (result.error) {
+              errorCount++;
             }
+            totalLossmailsProcessed++;
+          }
+
+          // Log progress after each page
+          logger.info(
+            `Page ${page} complete for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old`
+          );
+          if (Object.keys(skipReasons).length > 0) {
+            logger.info(
+              `Skip reasons: ${Object.entries(skipReasons)
+                .map(([reason, count]) => `${reason}: ${count}`)
+                .join(", ")}`
+            );
           }
 
           page++;
-        } catch (error) {
-          logger.error(
-            `Error fetching losses for character ${characterId}:`,
-            error
-          );
-          hasMore = false;
+        } catch (error: any) {
+          logger.error(`Error fetching losses for character ${characterId}:`, {
+            error: error.message,
+            stack: error.stack,
+            response: error.response?.data,
+            status: error.response?.status,
+          });
+          errorCount++;
+          // Don't break the loop on error, just continue to next page
+          page++;
+          // If we get a 404 or 403, stop trying
+          if (
+            error.response?.status === 404 ||
+            error.response?.status === 403
+          ) {
+            hasMore = false;
+          }
         }
       }
 
+      const duration = Date.now() - startTime;
       logger.info(
-        `Backfilled losses for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped`
+        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalLossmailsProcessed} total processed`
       );
+      if (Object.keys(skipReasons).length > 0) {
+        logger.info(
+          `Final skip reasons: ${Object.entries(skipReasons)
+            .map(([reason, count]) => `${reason}: ${count}`)
+            .join(", ")}`
+        );
+      }
     } catch (error) {
       logger.error(
         `Error backfilling losses for character ${characterId}:`,

@@ -137,11 +137,19 @@ export class KillRepository extends BaseRepository {
         typeof killmail.killmailId === "string"
           ? BigInt(killmail.killmailId || "0")
           : killmail.killmailId || BigInt(0);
-      const saved = await this.prisma.killFact.upsert({
-        where: {
-          killmail_id: killmailId,
-        },
-        create: {
+
+      // First check if the killmail already exists
+      const existing = await this.prisma.killFact.findUnique({
+        where: { killmail_id: killmailId },
+      });
+
+      if (existing) {
+        return PrismaMapper.map(existing, Killmail);
+      }
+
+      // If it doesn't exist, create it with all relationships
+      const saved = await this.prisma.killFact.create({
+        data: {
           killmail_id: killmailId,
           kill_time: killmail.killTime || new Date(),
           npc: killmail.npc || false,
@@ -229,71 +237,13 @@ export class KillRepository extends BaseRepository {
             ].filter((rel) => rel.character_id !== BigInt(0)),
           },
         },
-        update: {
-          kill_time: killmail.killTime || new Date(),
-          npc: killmail.npc || false,
-          solo: killmail.solo || false,
-          awox: killmail.awox || false,
-          ship_type_id: killmail.shipTypeId || 0,
-          system_id: killmail.systemId || 0,
-          labels: killmail.labels || [],
-          total_value:
-            typeof killmail.totalValue === "string"
-              ? BigInt(killmail.totalValue)
-              : killmail.totalValue || BigInt(0),
-          points: killmail.points || 0,
-          attackers: {
-            deleteMany: {},
-            create:
-              killmail.attackers?.map((a) => ({
-                character_id: a.characterId
-                  ? typeof a.characterId === "string"
-                    ? BigInt(a.characterId)
-                    : a.characterId
-                  : null,
-                corporation_id: a.corporationId
-                  ? typeof a.corporationId === "string"
-                    ? BigInt(a.corporationId)
-                    : a.corporationId
-                  : null,
-                alliance_id: a.allianceId
-                  ? typeof a.allianceId === "string"
-                    ? BigInt(a.allianceId)
-                    : a.allianceId
-                  : null,
-                damage_done: a.damageDone || 0,
-                final_blow: a.finalBlow || false,
-                security_status: a.securityStatus || 0,
-                ship_type_id: a.shipTypeId || 0,
-                weapon_type_id: a.weaponTypeId || 0,
-              })) || [],
-          },
-          victims: killmail.victim
-            ? {
-                deleteMany: {},
-                create: {
-                  character_id: killmail.victim.characterId
-                    ? typeof killmail.victim.characterId === "string"
-                      ? BigInt(killmail.victim.characterId)
-                      : killmail.victim.characterId
-                    : null,
-                  corporation_id: killmail.victim.corporationId
-                    ? typeof killmail.victim.corporationId === "string"
-                      ? BigInt(killmail.victim.corporationId)
-                      : killmail.victim.corporationId
-                    : null,
-                  alliance_id: killmail.victim.allianceId
-                    ? typeof killmail.victim.allianceId === "string"
-                      ? BigInt(killmail.victim.allianceId)
-                      : killmail.victim.allianceId
-                    : null,
-                  ship_type_id: killmail.victim.shipTypeId || 0,
-                  damage_taken: killmail.victim.damageTaken || 0,
-                },
-              }
-            : undefined,
+        include: {
+          attackers: true,
+          victims: true,
+          characters: true,
         },
       });
+
       return PrismaMapper.map(saved, Killmail);
     });
   }

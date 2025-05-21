@@ -31,34 +31,21 @@ export class CharacterSyncService {
   public async start(): Promise<void> {
     logger.info("Starting character sync service...");
 
-    // First sync characters from Map API
     const mapName = process.env.MAP_NAME;
     if (!mapName) {
       logger.warn(
-        "MAP_NAME environment variable not set, skipping initial character sync"
+        "MAP_NAME environment variable not set, skipping character sync"
       );
-    } else {
-      try {
-        await this.syncUserCharacters(mapName);
-      } catch (error) {
-        logger.error(`Error during initial character sync: ${error}`);
-      }
+      return;
     }
 
-    // Then sync existing characters
-    const characters = await this.characterRepository.getAllCharacters();
-    for (const character of characters) {
-      try {
-        await this.syncCharacter(character.eveId.toString(), {
-          corporationTicker: character.corporationTicker,
-          allianceTicker: character.allianceTicker || "",
-          corporationId: character.corporationId,
-        });
-      } catch (error) {
-        logger.error(`Error syncing character ${character.eveId}:`, error);
-      }
+    try {
+      await this.syncUserCharacters(mapName);
+      logger.info("Character sync service started successfully");
+    } catch (error) {
+      logger.error(`Error during character sync: ${error}`);
+      throw error;
     }
-    logger.info("Character sync service started successfully");
   }
 
   public async syncUserCharacters(mapName: string): Promise<void> {
@@ -93,12 +80,33 @@ export class CharacterSyncService {
         `Found ${uniqueCharacters.size} unique characters to sync for map ${mapName}`
       );
 
+      // Track sync statistics
+      let syncedCount = 0;
+      let errorCount = 0;
+      let skippedCount = 0;
+
       // Sync each character
       for (const [eveId, characterData] of uniqueCharacters) {
-        await this.syncCharacter(eveId.toString(), characterData);
+        try {
+          const result = await this.syncCharacter(
+            eveId.toString(),
+            characterData
+          );
+          if (result === "synced") {
+            syncedCount++;
+          } else if (result === "skipped") {
+            skippedCount++;
+          }
+        } catch (error) {
+          errorCount++;
+          logger.error(`Error syncing character ${eveId}: ${error}`);
+        }
       }
 
-      logger.info(`Successfully synced all characters for map ${mapName}`);
+      // Log summary
+      logger.info(
+        `Character sync summary for map ${mapName}: total=${uniqueCharacters.size}, synced=${syncedCount}, skipped=${skippedCount}, errors=${errorCount}`
+      );
     } catch (error: any) {
       logger.error(
         `Error syncing user characters for map ${mapName}: ${error.message}`
@@ -110,7 +118,7 @@ export class CharacterSyncService {
   private async syncCharacter(
     eveId: string,
     mapCharacterData: any
-  ): Promise<void> {
+  ): Promise<"synced" | "skipped"> {
     try {
       // Check if character already exists
       const existingCharacter = await this.characterRepository.getCharacter(
@@ -135,7 +143,7 @@ export class CharacterSyncService {
 
         if (!esiData) {
           logger.warn(`No ESI data available for character ${eveId}`);
-          return;
+          return "skipped";
         }
         characterName = esiData.name;
       }
@@ -154,7 +162,7 @@ export class CharacterSyncService {
 
       // Save character using repository
       await this.characterRepository.saveCharacter(character);
-      logger.info(`Successfully synced character ${eveId}`);
+      return "synced";
     } catch (error: any) {
       logger.error(`Error syncing character ${eveId}: ${error.message}`);
       throw error;
