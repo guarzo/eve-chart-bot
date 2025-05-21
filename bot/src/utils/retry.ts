@@ -42,10 +42,6 @@ export async function retryOperation<T>(
 
   while (retryCount < finalConfig.maxRetries) {
     try {
-      logger.info(
-        `${operationName} (attempt ${retryCount + 1}/${finalConfig.maxRetries})`
-      );
-
       // Create a promise that rejects after timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(
@@ -60,13 +56,19 @@ export async function retryOperation<T>(
       // Race the operation against the timeout
       const result = await Promise.race([operation(), timeoutPromise]);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       retryCount++;
 
       // Format a simple human-readable error message
-      const status = error.response?.status;
-      const url = error.config?.url;
-      const errorMsg = error.message || "Unknown error";
+      const status =
+        error && typeof error === "object" && "response" in error
+          ? (error.response as any)?.status
+          : undefined;
+      const url =
+        error && typeof error === "object" && "config" in error
+          ? (error.config as any)?.url
+          : undefined;
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
 
       if (
         retryCount >= finalConfig.maxRetries ||

@@ -25,6 +25,42 @@ export class CharacterSyncService {
     this.retryDelay = retryDelay;
   }
 
+  /**
+   * Start the character sync service
+   */
+  public async start(): Promise<void> {
+    logger.info("Starting character sync service...");
+
+    // First sync characters from Map API
+    const mapName = process.env.MAP_NAME;
+    if (!mapName) {
+      logger.warn(
+        "MAP_NAME environment variable not set, skipping initial character sync"
+      );
+    } else {
+      try {
+        await this.syncUserCharacters(mapName);
+      } catch (error) {
+        logger.error(`Error during initial character sync: ${error}`);
+      }
+    }
+
+    // Then sync existing characters
+    const characters = await this.characterRepository.getAllCharacters();
+    for (const character of characters) {
+      try {
+        await this.syncCharacter(character.eveId.toString(), {
+          corporationTicker: character.corporationTicker,
+          allianceTicker: character.allianceTicker || "",
+          corporationId: character.corporationId,
+        });
+      } catch (error) {
+        logger.error(`Error syncing character ${character.eveId}:`, error);
+      }
+    }
+    logger.info("Character sync service started successfully");
+  }
+
   public async syncUserCharacters(mapName: string): Promise<void> {
     try {
       // Get all characters from map API

@@ -96,7 +96,4 @@ ALTER TABLE "KillAttacker" ADD CONSTRAINT "KillAttacker_killmail_id_fkey" FOREIG
 ALTER TABLE "KillVictim" ADD CONSTRAINT "KillVictim_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "kill_characters" ADD CONSTRAINT "kill_characters_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "kill_characters" ADD CONSTRAINT "kill_characters_character_id_fkey" FOREIGN KEY ("character_id") REFERENCES "characters"("eve_id") ON DELETE CASCADE ON UPDATE CASCADE; 
+ALTER TABLE "kill_characters" ADD CONSTRAINT "kill_characters_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE; 

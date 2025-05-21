@@ -304,7 +304,7 @@ export class MapActivityRepository extends BaseRepository {
    * Create or update a map activity record
    */
   async upsertMapActivity(
-    characterId: string,
+    characterId: bigint,
     timestamp: Date,
     signatures: number,
     connections: number,
@@ -312,35 +312,29 @@ export class MapActivityRepository extends BaseRepository {
     allianceId: number | null,
     corporationId: number | null
   ): Promise<void> {
-    if (corporationId === null) {
-      throw new Error("corporationId is required");
-    }
-
-    await this.executeQuery(async () => {
-      await this.prisma.mapActivity.upsert({
-        where: {
-          characterId_timestamp: {
-            characterId: BigInt(characterId),
-            timestamp,
-          },
-        },
-        update: {
-          signatures,
-          connections,
-          passages,
-          allianceId,
-          corporationId,
-        },
-        create: {
-          characterId: BigInt(characterId),
+    await this.prisma.mapActivity.upsert({
+      where: {
+        characterId_timestamp: {
+          characterId,
           timestamp,
-          signatures,
-          connections,
-          passages,
-          allianceId,
-          corporationId,
         },
-      });
+      },
+      update: {
+        signatures,
+        connections,
+        passages,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
+      },
+      create: {
+        characterId,
+        timestamp,
+        signatures,
+        connections,
+        passages,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
+      },
     });
   }
 

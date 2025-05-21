@@ -186,7 +186,7 @@ export class ZkillClient {
       );
 
       const response = await this.client.fetch<Record<string, any>>(
-        `/characterID/${characterId}/losses/page/${page}/`
+        `/losses/characterID/${characterId}/page/${page}/`
       );
 
       // Log the raw response for debugging

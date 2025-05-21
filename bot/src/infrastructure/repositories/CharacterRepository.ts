@@ -50,7 +50,7 @@ export class CharacterRepository extends BaseRepository {
             ? BigInt(character.eveId)
             : character.eveId,
         name: character.name,
-        corporationId: character.corporationId,
+        corporationId: character.corporationId ?? 0,
         corporationTicker: character.corporationTicker,
         ...(character.allianceId && { allianceId: character.allianceId }),
         ...(character.allianceTicker && {
@@ -74,7 +74,7 @@ export class CharacterRepository extends BaseRepository {
         create: createData,
         update: {
           name: character.name,
-          corporationId: character.corporationId,
+          corporationId: character.corporationId ?? 0,
           corporationTicker: character.corporationTicker,
           ...(character.allianceId && { allianceId: character.allianceId }),
           ...(character.allianceTicker && {
@@ -237,9 +237,6 @@ export class CharacterRepository extends BaseRepository {
     allianceId: number | null,
     corporationId: number | null
   ): Promise<void> {
-    if (corporationId === null) {
-      throw new Error("corporationId is required");
-    }
     await this.prisma.mapActivity.upsert({
       where: {
         characterId_timestamp: {
@@ -251,8 +248,8 @@ export class CharacterRepository extends BaseRepository {
         signatures,
         connections,
         passages,
-        allianceId,
-        corporationId,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
       },
       create: {
         characterId,
@@ -260,8 +257,8 @@ export class CharacterRepository extends BaseRepository {
         signatures,
         connections,
         passages,
-        allianceId,
-        corporationId,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
       },
     });
   }

@@ -1,62 +1,63 @@
 import Redis from "ioredis";
-import { KillmailIngestionService } from "./KillmailIngestionService";
 import { logger } from "../../lib/logger";
-import { CircuitBreaker } from "../../lib/circuit-breaker/CircuitBreaker";
 import { retryOperation } from "../../utils/retry";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
+import { ESIService } from "../ESIService";
+import {
+  Killmail,
+  KillmailAttacker,
+  KillmailVictim,
+} from "../../domain/killmail/Killmail";
+import { KillRepository } from "../../infrastructure/repositories/KillRepository";
 
 interface RedisQKillmail {
   killID: number;
-  hash: string;
-  package: {
-    killID: number;
-    killmail_time: string;
-    solar_system_id: number;
-    victim: {
-      character_id?: number;
-      corporation_id?: number;
-      alliance_id?: number;
-      ship_type_id: number;
-      damage_taken: number;
-      position: { x: number; y: number; z: number };
-      items: Array<{
-        type_id: number;
-        flag: number;
-        quantity_destroyed?: number;
-        quantity_dropped?: number;
-        singleton: number;
-      }>;
-    };
-    attackers: Array<{
-      character_id?: number;
-      corporation_id?: number;
-      alliance_id?: number;
-      damage_done: number;
-      final_blow: boolean;
-      security_status: number;
-      ship_type_id: number;
-      weapon_type_id: number;
+  killmail_time: string;
+  solar_system_id: number;
+  victim: {
+    character_id?: number;
+    corporation_id?: number;
+    alliance_id?: number;
+    ship_type_id: number;
+    damage_taken: number;
+    position: { x: number; y: number; z: number };
+    items: Array<{
+      type_id: number;
+      flag: number;
+      quantity_destroyed?: number;
+      quantity_dropped?: number;
+      singleton: number;
     }>;
-    zkb?: {
-      locationID: number;
-      hash: string;
-      fittedValue: number;
-      droppedValue: number;
-      destroyedValue: number;
-      totalValue: number;
-      points: number;
-      npc: boolean;
-      solo: boolean;
-      awox: boolean;
-    };
+  };
+  attackers: Array<{
+    character_id?: number;
+    corporation_id?: number;
+    alliance_id?: number;
+    damage_done: number;
+    final_blow: boolean;
+    security_status: number;
+    ship_type_id: number;
+    weapon_type_id: number;
+  }>;
+  zkb: {
+    locationID: number;
+    hash: string;
+    fittedValue: number;
+    droppedValue: number;
+    destroyedValue: number;
+    totalValue: number;
+    points: number;
+    npc: boolean;
+    solo: boolean;
+    awox: boolean;
   };
 }
 
 export class RedisQService {
   private redis: Redis;
-  private killmailService: KillmailIngestionService;
   private characterRepository: CharacterRepository;
-  private circuitBreaker: CircuitBreaker;
+  private killRepository: KillRepository;
+  private esiService: ESIService;
   private isRunning = false;
   private refreshInterval: NodeJS.Timeout | null = null;
   private metrics = {
@@ -67,18 +68,11 @@ export class RedisQService {
     lastProcessedTime: new Date(),
   };
 
-  constructor(
-    redisUrl: string,
-    circuitBreakerThreshold: number = 5,
-    circuitBreakerTimeout: number = 30000
-  ) {
+  constructor(redisUrl: string) {
     this.redis = new Redis(redisUrl);
-    this.killmailService = new KillmailIngestionService();
     this.characterRepository = new CharacterRepository();
-    this.circuitBreaker = new CircuitBreaker(
-      circuitBreakerThreshold,
-      circuitBreakerTimeout
-    );
+    this.killRepository = new KillRepository();
+    this.esiService = new ESIService();
   }
 
   /**
@@ -124,7 +118,6 @@ export class RedisQService {
     }
 
     await this.redis.quit();
-    await this.killmailService.close();
   }
 
   /**
@@ -144,17 +137,43 @@ export class RedisQService {
    */
   private async processKillmail(killmail: RedisQKillmail): Promise<void> {
     try {
-      // Check if circuit breaker is open
-      if (this.circuitBreaker.isOpen()) {
-        logger.warn("Circuit breaker is open, skipping killmail processing");
+      // Get the killmail data from the package
+      const killID = killmail.killID;
+      const zkb = killmail.zkb;
+      if (!killID || !zkb?.hash) {
         this.metrics.skippedKillmails++;
         return;
       }
 
-      // Process the killmail
+      // Get all tracked characters
+      const trackedCharacters =
+        await this.characterRepository.getAllCharacters();
+      const trackedCharacterIds = new Set(
+        trackedCharacters.map((c) => c.eveId.toString())
+      );
+
+      // Check if any tracked character is involved
+      const victimId = killmail.victim?.character_id?.toString();
+      const attackerIds =
+        killmail.attackers
+          ?.map((a: { character_id?: number }) => a.character_id?.toString())
+          .filter((id: string | undefined): id is string => id !== undefined) ||
+        [];
+
+      const isVictimTracked = victimId && trackedCharacterIds.has(victimId);
+      const trackedAttackers = attackerIds.filter((id: string) =>
+        trackedCharacterIds.has(id)
+      );
+
+      if (!isVictimTracked && trackedAttackers.length === 0) {
+        this.metrics.skippedKillmails++;
+        return;
+      }
+
+      // Process the killmail using ESI directly
       const result = await retryOperation(
-        () => this.killmailService.ingestKillmail(killmail.killID),
-        `Processing killmail ${killmail.killID}`,
+        () => this.esiService.getKillmail(killID, zkb.hash),
+        `Processing killmail ${killID}`,
         {
           maxRetries: 3,
           initialRetryDelay: 5000,
@@ -163,28 +182,77 @@ export class RedisQService {
       );
 
       if (!result) {
-        logger.warn(`No result returned for killmail ${killmail.killID}`);
         this.metrics.skippedKillmails++;
         return;
       }
 
-      if (result.success) {
-        this.metrics.processedKillmails++;
-        this.metrics.lastProcessedId = killmail.killID;
-        this.metrics.lastProcessedTime = new Date();
-        this.circuitBreaker.onSuccess();
-      } else {
-        this.metrics.skippedKillmails++;
-        if (result.error) {
-          logger.warn(
-            `Failed to process killmail ${killmail.killID}: ${result.error}`
-          );
-          this.circuitBreaker.onFailure();
-        }
-      }
+      // Create domain entities
+      const victim = new KillmailVictim({
+        characterId: killmail.victim?.character_id
+          ? BigInt(killmail.victim.character_id)
+          : undefined,
+        corporationId: killmail.victim?.corporation_id
+          ? BigInt(killmail.victim.corporation_id)
+          : undefined,
+        allianceId: killmail.victim?.alliance_id
+          ? BigInt(killmail.victim.alliance_id)
+          : undefined,
+        shipTypeId: killmail.victim?.ship_type_id,
+        damageTaken: killmail.victim?.damage_taken,
+      });
+
+      const attackers = (killmail.attackers || []).map(
+        (a: {
+          character_id?: number;
+          corporation_id?: number;
+          alliance_id?: number;
+          damage_done: number;
+          final_blow: boolean;
+          security_status: number;
+          ship_type_id: number;
+          weapon_type_id: number;
+        }) =>
+          new KillmailAttacker({
+            characterId: a.character_id ? BigInt(a.character_id) : undefined,
+            corporationId: a.corporation_id
+              ? BigInt(a.corporation_id)
+              : undefined,
+            allianceId: a.alliance_id ? BigInt(a.alliance_id) : undefined,
+            damageDone: a.damage_done,
+            finalBlow: a.final_blow,
+            securityStatus: a.security_status,
+            shipTypeId: a.ship_type_id,
+            weaponTypeId: a.weapon_type_id,
+          })
+      );
+
+      // Create the killmail object
+      const killmailData = new Killmail({
+        killmailId: BigInt(killID),
+        killTime: new Date(result.killmail_time),
+        systemId: result.solar_system_id,
+        totalValue: BigInt(Math.round(zkb.totalValue)),
+        points: zkb.points,
+        npc: zkb.npc,
+        solo: zkb.solo,
+        awox: zkb.awox,
+        shipTypeId: result.victim.ship_type_id,
+        labels: [], // zKill doesn't provide labels in the RedisQ package
+        victim,
+        attackers,
+      });
+
+      // Save the killmail
+      await this.killRepository.saveKillmail(killmailData);
+      logger.info(
+        `Saved killmail ${killID} - Tracked victim: ${isVictimTracked}, Tracked attackers: ${trackedAttackers.length}`
+      );
+
+      this.metrics.processedKillmails++;
+      this.metrics.lastProcessedId = killID;
+      this.metrics.lastProcessedTime = new Date();
     } catch (error) {
       this.metrics.failedKillmails++;
-      this.circuitBreaker.onFailure();
       logger.error(
         {
           error,
@@ -223,7 +291,7 @@ export class RedisQService {
           fetch(
             "https://redisq.zkillboard.com/listen.php?queueID=eve-chart-bot"
           ),
-        "Polling RedisQ",
+        "",
         {
           maxRetries: 3,
           initialRetryDelay: 5000,
@@ -232,12 +300,12 @@ export class RedisQService {
       );
 
       if (!response) {
-        logger.warn("No response from RedisQ");
         setTimeout(() => this.poll(), 5000);
         return;
       }
 
       const data = await response.json();
+
       if (data && data.package) {
         await this.processKillmail(data.package as RedisQKillmail);
       }

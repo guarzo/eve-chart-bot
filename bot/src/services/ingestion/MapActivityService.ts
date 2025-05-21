@@ -5,10 +5,12 @@ import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
+import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 
 export class MapActivityService {
   private readonly map: MapClient;
   private readonly cache: CacheRedisAdapter;
+  private readonly characterRepository: CharacterRepository;
   private readonly mapActivityRepository: MapActivityRepository;
   private readonly maxRetries: number;
   private readonly retryDelay: number;
@@ -23,9 +25,30 @@ export class MapActivityService {
   ) {
     this.map = new MapClient(mapApiUrl, mapApiKey);
     this.cache = new CacheRedisAdapter(redisUrl, cacheTtl);
+    this.characterRepository = new CharacterRepository();
     this.mapActivityRepository = new MapActivityRepository();
     this.maxRetries = maxRetries;
     this.retryDelay = retryDelay;
+  }
+
+  /**
+   * Start the map activity service
+   */
+  public async start(): Promise<void> {
+    logger.info("Starting map activity service...");
+    // Initial sync of all characters
+    const characters = await this.characterRepository.getAllCharacters();
+    for (const character of characters) {
+      try {
+        await this.ingestMapActivity(character.eveId.toString(), 7); // Last 7 days
+      } catch (error) {
+        logger.error(
+          `Error ingesting map activity for character ${character.eveId}:`,
+          error
+        );
+      }
+    }
+    logger.info("Map activity service started successfully");
   }
 
   public async ingestMapActivity(slug: string, days = 7): Promise<void> {
@@ -120,7 +143,7 @@ export class MapActivityService {
         });
 
         await this.upsertMapActivity(
-          mapActivity.characterId.toString(),
+          mapActivity.characterId,
           mapActivity.timestamp,
           mapActivity.signatures,
           mapActivity.connections,
@@ -144,7 +167,7 @@ export class MapActivityService {
   }
 
   async upsertMapActivity(
-    characterId: string,
+    characterId: bigint,
     timestamp: Date,
     signatures: number,
     connections: number,
@@ -152,10 +175,6 @@ export class MapActivityService {
     allianceId: number | null,
     corporationId: number | null
   ): Promise<void> {
-    if (corporationId === null) {
-      throw new Error("corporationId is required");
-    }
-
     await this.mapActivityRepository.upsertMapActivity(
       characterId,
       timestamp,

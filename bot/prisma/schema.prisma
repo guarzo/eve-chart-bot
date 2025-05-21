@@ -34,7 +34,6 @@ model Character {
   // Relationships
   losses            LossFact[]
   mapActivity       MapActivity[]
-  killCharacters    KillCharacter[]
 
   @@index([characterGroupId])
   @@index([corporationId])
@@ -145,7 +144,6 @@ model KillCharacter {
 
   // Relationships
   kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
-  character      Character @relation(fields: [character_id], references: [eveId], onDelete: Cascade)
 
   @@id([killmail_id, character_id])
   @@index([character_id])

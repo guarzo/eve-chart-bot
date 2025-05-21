@@ -53,7 +53,7 @@ app.use(
 );
 
 // Initialize services
-const killmailService = new KillmailIngestionService(process.env.ZKILL_API_URL);
+const killmailService = new KillmailIngestionService();
 const mapService = new MapActivityService(
   process.env.MAP_API_URL || "https://api.eve-map.net",
   process.env.MAP_API_KEY || "",
@@ -203,6 +203,8 @@ app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
         : "No Group",
       groupId: char.characterGroupId,
       lastBackfill: char.lastBackfillAt,
+      lastKillmail: char.lastKillmailAt,
+      updatedAt: char.updatedAt,
     }));
 
     res.json({
@@ -394,7 +396,7 @@ async function processLossBackfill(characters: any[]): Promise<void> {
           character.eveId
         }) - ${i + 1}/${characters.length}`
       );
-      await backfillLosses(BigInt(character.eveId), 30);
+      await backfillLosses(BigInt(character.eveId));
     } catch (error) {
       logger.error(
         `Error backfilling losses for character ${character.name}: ${error}`
@@ -416,8 +418,27 @@ async function backfillKills(characterId: bigint) {
   await killmailService.backfillKills(characterId);
 }
 
-async function backfillLosses(characterId: bigint, days = 30) {
-  await killmailService.backfillLosses(characterId, days);
+async function backfillLosses(characterId: bigint) {
+  await killmailService.backfillLosses(characterId);
+}
+
+// Cleanup function
+async function cleanup() {
+  try {
+    if (redisQService) {
+      await redisQService.stop();
+    }
+    // Close map service
+    if (mapService) {
+      await mapService.close();
+    }
+    // Close character service
+    if (characterService) {
+      await characterService.close();
+    }
+  } catch (error) {
+    logger.error("Error during cleanup:", error);
+  }
 }
 
 export async function startServer() {
@@ -435,18 +456,24 @@ export async function startServer() {
     throw error;
   }
 
-  // Start RedisQ consumer
-  const REDIS_URL = process.env.REDIS_URL;
-  if (REDIS_URL) {
-    redisQService = new RedisQService(
-      REDIS_URL,
-      parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD || "5"),
-      parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT || "30000")
-    );
-    await redisQService.start();
-  } else {
-    logger.warn("REDIS_URL not set, RedisQ consumer not started");
-  }
+  // Start character sync service
+  logger.info("Starting character sync service...");
+  await characterService.start();
+
+  // Start killmail ingestion service
+  logger.info("Starting killmail ingestion service...");
+  await killmailService.start();
+
+  // Start map activity service
+  logger.info("Starting map activity service...");
+  await mapService.start();
+
+  // Initialize RedisQ service
+  logger.info("Starting RedisQ service...");
+  redisQService = new RedisQService(
+    process.env.REDIS_URL || "redis://localhost:6379"
+  );
+  await redisQService.start();
 
   // Initialize Discord if token is available
   const discordToken = process.env.DISCORD_BOT_TOKEN;
@@ -513,24 +540,14 @@ export async function startServer() {
   // Handle cleanup
   process.on("SIGTERM", async () => {
     logger.info("SIGTERM received, shutting down gracefully...");
-    if (redisQService) {
-      await redisQService.stop();
-    }
-    await killmailService.close();
-    await mapService.close();
-    await characterService.close();
+    await cleanup();
     await server.close();
     process.exit(0);
   });
 
   process.on("SIGINT", async () => {
     logger.info("SIGINT received, shutting down gracefully...");
-    if (redisQService) {
-      await redisQService.stop();
-    }
-    await killmailService.close();
-    await mapService.close();
-    await characterService.close();
+    await cleanup();
     await server.close();
     process.exit(0);
   });
