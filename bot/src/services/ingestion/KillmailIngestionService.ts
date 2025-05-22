@@ -293,6 +293,8 @@ export class KillmailIngestionService {
 
       while (hasMore && !reachedCutoff) {
         try {
+          logger.info(`Fetching page ${page} for character ${characterId}...`);
+
           // Fetch killmails from zKillboard
           const killmails = await retryOperation(
             () => this.zkill.getCharacterKills(Number(characterId), page),
@@ -315,46 +317,128 @@ export class KillmailIngestionService {
             `Processing page ${page} for character ${characterId} - found ${killmails.length} killmails`
           );
 
+          let allKillsInDb = true;
+          let hitCheckpoint = false;
+          let pageStartTime = Date.now();
+
           // Process each killmail
-          for (const killmail of killmails) {
-            if (!killmail || !killmail.killmail_id || !killmail.zkb) {
-              continue;
-            }
-
-            const killId = killmail.killmail_id;
-            if (killId <= lastProcessedId) {
-              logger.info(
-                `Reached previously processed killmail ${killId}, stopping`
-              );
-              hasMore = false;
-              break;
-            }
-
-            // Check killmail age
-            const killTime = new Date(killmail.killmail_time);
-            if (killTime < cutoffDate) {
-              logger.info(
-                `Reached killmail older than cutoff date (${cutoffDate.toISOString()}), stopping`
-              );
-              tooOldCount++;
-              reachedCutoff = true;
-              hasMore = false;
-              break;
-            }
-
-            const result = await this.ingestKillmail(killId);
-            if (result.success) {
-              successfulIngestCount++;
-            } else if (result.skipped) {
-              skippedCount++;
-              if (result.skipReason) {
-                skipReasons[result.skipReason] =
-                  (skipReasons[result.skipReason] || 0) + 1;
+          for (const [index, killmail] of killmails.entries()) {
+            try {
+              if (!killmail || !killmail.killmail_id || !killmail.zkb) {
+                logger.debug(`Skipping invalid killmail at index ${index}`);
+                continue;
               }
-            } else if (result.error) {
+
+              const killId = killmail.killmail_id;
+
+              // Log progress every 10 killmails
+              if (index % 10 === 0) {
+                logger.info(
+                  `Processing killmail ${index + 1}/${
+                    killmails.length
+                  } (ID: ${killId}) for character ${characterId}`
+                );
+              }
+
+              // Check if we've hit the checkpoint from a previous run
+              if (killId <= lastProcessedId) {
+                logger.info(
+                  `Reached previously processed killmail ${killId}, stopping`
+                );
+                hitCheckpoint = true;
+                hasMore = false;
+                break;
+              }
+
+              // Get full killmail data from ESI to check age
+              const esiData = await retryOperation(
+                () => this.esiService.getKillmail(killId, killmail.zkb.hash),
+                `Fetching ESI data for killmail ${killId}`,
+                {
+                  maxRetries: 3,
+                  initialRetryDelay: 5000,
+                  timeout: 30000,
+                }
+              );
+
+              if (!esiData) {
+                logger.warn(`Failed to fetch ESI data for killmail ${killId}`);
+                continue;
+              }
+
+              // Check killmail age
+              const killTime = new Date(esiData.killmail_time);
+              logger.debug(
+                `Killmail ${killId} time: ${killTime.toISOString()}`
+              );
+
+              if (killTime < cutoffDate) {
+                logger.info(
+                  `Reached killmail older than cutoff date (${cutoffDate.toISOString()}), stopping. Killmail time: ${killTime.toISOString()}`
+                );
+                tooOldCount++;
+                reachedCutoff = true;
+                hasMore = false;
+                break;
+              }
+
+              const result = await this.ingestKillmail(killId);
+              if (result.success) {
+                successfulIngestCount++;
+                allKillsInDb = false;
+              } else if (result.skipped) {
+                skippedCount++;
+                if (result.skipReason) {
+                  skipReasons[result.skipReason] =
+                    (skipReasons[result.skipReason] || 0) + 1;
+                }
+              } else if (result.error) {
+                errorCount++;
+                allKillsInDb = false;
+                logger.error(
+                  `Error processing killmail ${killId}: ${result.error}`
+                );
+              }
+              totalKillmailsProcessed++;
+            } catch (killmailError: any) {
+              logger.error(
+                `Error processing individual killmail at index ${index}:`,
+                {
+                  error: killmailError.message,
+                  stack: killmailError.stack,
+                  killmailId: killmail?.killmail_id,
+                }
+              );
               errorCount++;
+              allKillsInDb = false;
             }
-            totalKillmailsProcessed++;
+          }
+
+          const pageDuration = Date.now() - pageStartTime;
+          logger.info(
+            `Page ${page} processing took ${pageDuration}ms for character ${characterId}`
+          );
+
+          // If we've hit the checkpoint or all kills are in DB, stop
+          if (hitCheckpoint) {
+            logger.info(
+              `Hit checkpoint at killmail ${lastProcessedId}, stopping`
+            );
+            break;
+          }
+
+          // If all kills from this page are already in DB, stop
+          if (allKillsInDb) {
+            logger.info(
+              `All kills from page ${page} are already in database, stopping`
+            );
+            hasMore = false;
+            break;
+          }
+
+          // If we've reached the cutoff or processed all killmails, stop
+          if (reachedCutoff || !hasMore) {
+            break;
           }
 
           // Log progress after each page
@@ -376,6 +460,7 @@ export class KillmailIngestionService {
             stack: error.stack,
             response: error.response?.data,
             status: error.response?.status,
+            page,
           });
           errorCount++;
           // Don't break the loop on error, just continue to next page

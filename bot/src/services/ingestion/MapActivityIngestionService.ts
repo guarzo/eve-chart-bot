@@ -53,19 +53,33 @@ export class MapActivityIngestionService {
         throw new Error(`Character ${characterId} not found`);
       }
 
-      // Get character's group
-      const group = character.characterGroupId
-        ? await this.characterRepository.getCharacterGroup(
-            character.characterGroupId
-          )
-        : null;
-      if (!group) {
-        throw new Error(`Character ${characterId} is not in a group`);
+      // Check if we've processed this character recently (within last hour)
+      const lastBackfillAt = character.lastBackfillAt;
+      if (lastBackfillAt) {
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        if (lastBackfillAt > oneHourAgo) {
+          logger.info(
+            `Skipping character ${characterId} - last processed at ${lastBackfillAt.toISOString()}`
+          );
+          return {
+            success: false,
+            skipped: true,
+            skipReason: "rate limited",
+            timestamp: lastBackfillAt.toISOString(),
+            age: Math.floor((Date.now() - lastBackfillAt.getTime()) / 1000),
+          };
+        }
+      }
+
+      // Get map name from environment
+      const mapName = process.env.MAP_NAME;
+      if (!mapName) {
+        throw new Error("MAP_NAME environment variable not set");
       }
 
       // Fetch from Map API with retry
       const mapData = await retryOperation(
-        () => this.map.getCharacterActivity(group.slug, days),
+        () => this.map.getCharacterActivity(mapName, days),
         `Fetching map data for character ${characterId}`,
         {
           maxRetries: this.maxRetries,
@@ -82,42 +96,45 @@ export class MapActivityIngestionService {
       // Process each activity record
       let successfulIngestCount = 0;
       let skippedCount = 0;
+      let errorCount = 0;
 
       for (const activity of mapData.data) {
         try {
-          // Create and save map activity
+          // Skip if not for this character
+          if (activity.characterId !== characterId.toString()) {
+            continue;
+          }
+
+          // Create map activity record
           const mapActivity = new MapActivity({
-            characterId: BigInt(activity.character.eve_id),
+            characterId: BigInt(activity.characterId),
             timestamp: new Date(activity.timestamp),
             signatures: activity.signatures || 0,
             connections: activity.connections || 0,
             passages: activity.passages || 0,
-            allianceId: activity.character.alliance_id,
-            corporationId: activity.character.corporation_id,
+            allianceId: activity.allianceId || null,
+            corporationId: activity.corporationId,
           });
 
-          await this.mapActivityRepository.upsertMapActivity(
-            mapActivity.characterId.toString(),
-            mapActivity.timestamp,
-            mapActivity.signatures,
-            mapActivity.connections,
-            mapActivity.passages,
-            mapActivity.allianceId,
-            mapActivity.corporationId
-          );
-
+          // Save to database
+          await this.mapActivityRepository.saveMapActivity(mapActivity);
           successfulIngestCount++;
-        } catch (error) {
+        } catch (error: any) {
           logger.error(
             `Error processing map activity for character ${characterId}:`,
             error
           );
-          skippedCount++;
+          errorCount++;
         }
       }
 
+      // Update last backfill time
+      await this.characterRepository.updateLastBackfillAt(
+        characterId.toString()
+      );
+
       logger.info(
-        `Map activity ingestion complete for character ${characterId}: Processed ${successfulIngestCount}, Skipped ${skippedCount}`
+        `Processed map activity for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors`
       );
 
       return {
@@ -126,9 +143,13 @@ export class MapActivityIngestionService {
       };
     } catch (error: any) {
       logger.error(
-        `Error ingesting map activity for character ${characterId}: ${error.message}`
+        `Error ingesting map activity for character ${characterId}:`,
+        error
       );
-      return { success: false, error: error.message };
+      return {
+        success: false,
+        error: error.message,
+      };
     }
   }
 
