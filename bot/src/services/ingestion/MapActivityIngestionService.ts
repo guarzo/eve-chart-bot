@@ -175,14 +175,10 @@ export class MapActivityIngestionService {
         throw new Error(`Character ${characterId} not found`);
       }
 
-      // Get character's group
-      const group = character.characterGroupId
-        ? await this.characterRepository.getCharacterGroup(
-            character.characterGroupId
-          )
-        : null;
-      if (!group) {
-        throw new Error(`Character ${characterId} is not in a group`);
+      // Get map name from environment
+      const mapName = process.env.MAP_NAME;
+      if (!mapName) {
+        throw new Error("MAP_NAME environment variable not set");
       }
 
       // Calculate date range
@@ -192,7 +188,7 @@ export class MapActivityIngestionService {
 
       // Fetch from Map API with retry
       const mapData = await retryOperation(
-        () => this.map.getCharacterActivity(group.slug, maxAgeDays),
+        () => this.map.getCharacterActivity(mapName, maxAgeDays),
         `Fetching map data for character ${characterId}`,
         {
           maxRetries: this.maxRetries,
@@ -206,11 +202,18 @@ export class MapActivityIngestionService {
         return;
       }
 
-      // Filter activities by date range
+      // Filter activities by date range and character
       const filteredActivities = mapData.data.filter(
-        (activity: { timestamp: string | number | Date }) => {
+        (activity: {
+          timestamp: string | number | Date;
+          characterId: string;
+        }) => {
           const activityTime = new Date(activity.timestamp);
-          return activityTime >= startDate && activityTime <= endDate;
+          return (
+            activityTime >= startDate &&
+            activityTime <= endDate &&
+            activity.characterId === characterId.toString()
+          );
         }
       );
 
@@ -226,13 +229,13 @@ export class MapActivityIngestionService {
         try {
           // Create and save map activity
           const mapActivity = new MapActivity({
-            characterId: BigInt(activity.character.eve_id),
+            characterId: BigInt(activity.characterId),
             timestamp: new Date(activity.timestamp),
             signatures: activity.signatures || 0,
             connections: activity.connections || 0,
             passages: activity.passages || 0,
-            allianceId: activity.character.alliance_id,
-            corporationId: activity.character.corporation_id,
+            allianceId: activity.allianceId || null,
+            corporationId: activity.corporationId,
           });
 
           await this.mapActivityRepository.upsertMapActivity(
