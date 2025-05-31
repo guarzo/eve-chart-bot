@@ -1,10 +1,9 @@
 import { KillRepository } from "../../infrastructure/repositories/KillRepository";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { ESIService } from "../ESIService";
-import { retryOperation } from "../../utils/retry";
+import { retryOperation, CircuitBreaker } from "../../utils/retry";
 import { logger } from "../../lib/logger";
 import {
-  Killmail,
   KillmailAttacker,
   KillmailVictim,
 } from "../../domain/killmail/Killmail";
@@ -21,12 +20,20 @@ export class KillmailIngestionService {
   private readonly characterRepository: CharacterRepository;
   private readonly esiService: ESIService;
   private readonly zkill: ZKillboardClient;
+  private readonly esiCircuitBreaker: CircuitBreaker;
+  private readonly zkillCircuitBreaker: CircuitBreaker;
 
   constructor() {
     this.killRepository = new KillRepository();
     this.characterRepository = new CharacterRepository();
     this.esiService = new ESIService();
     this.zkill = new ZKillboardClient();
+    this.esiCircuitBreaker = new CircuitBreaker(3, 30000, "ESI Service");
+    this.zkillCircuitBreaker = new CircuitBreaker(
+      3,
+      60000,
+      "zKillboard Service"
+    ); // Longer cooldown for zKill
   }
 
   /**
@@ -34,6 +41,13 @@ export class KillmailIngestionService {
    */
   public async start(): Promise<void> {
     logger.info("Starting killmail ingestion service...");
+
+    // DEBUG: Check what we're actually reading
+    logger.info(
+      `DEBUG: ENABLE_BACKFILL value is: "${
+        process.env.ENABLE_BACKFILL
+      }" (type: ${typeof process.env.ENABLE_BACKFILL})`
+    );
 
     // Check if backfill is enabled via environment variable
     if (process.env.ENABLE_BACKFILL !== "true") {
@@ -43,26 +57,51 @@ export class KillmailIngestionService {
       return;
     }
 
-    // Initial backfill of all characters
+    // Initial backfill of all characters - both kills and losses
     const characters = await this.characterRepository.getAllCharacters();
-    let completedCount = 0;
-    let errorCount = 0;
+    let killsCompletedCount = 0;
+    let killsErrorCount = 0;
+    let lossesCompletedCount = 0;
+    let lossesErrorCount = 0;
+
+    logger.info(
+      `Starting backfill for ${characters.length} characters (both kills and losses)`
+    );
 
     for (const character of characters) {
       try {
+        logger.info(
+          `Backfilling kills for character: ${character.name} (${character.eveId})`
+        );
         await this.backfillKills(BigInt(character.eveId));
-        completedCount++;
+        killsCompletedCount++;
       } catch (error) {
-        errorCount++;
+        killsErrorCount++;
         logger.error(
           `Error backfilling kills for character ${character.eveId}:`,
+          error
+        );
+      }
+
+      try {
+        logger.info(
+          `Backfilling losses for character: ${character.name} (${character.eveId})`
+        );
+        await this.backfillLosses(BigInt(character.eveId));
+        lossesCompletedCount++;
+      } catch (error) {
+        lossesErrorCount++;
+        logger.error(
+          `Error backfilling losses for character ${character.eveId}:`,
           error
         );
       }
     }
 
     logger.info(
-      `Killmail ingestion service started successfully - Backfilled ${characters.length} characters (${completedCount} completed, ${errorCount} errors)`
+      `Killmail ingestion service started successfully - Backfilled ${characters.length} characters:
+      Kills: ${killsCompletedCount} completed, ${killsErrorCount} errors
+      Losses: ${lossesCompletedCount} completed, ${lossesErrorCount} errors`
     );
   }
 
@@ -244,22 +283,39 @@ export class KillmailIngestionService {
         }
       }
 
-      const killmail = new Killmail({
+      // 6) Build a single structured data object for transactional ingestion
+      const killmailData = {
         killmailId: BigInt(killId),
         killTime: new Date(esi.killmail_time),
+        npc: attackers.every((a) => !a.characterId), // TODO: use correct floag from killmail- NPC kill if no player attackers
+        solo: attackers.length === 1,
+        awox: false, // TODO: implement awox logic -- use correct flag from killmail
+        shipTypeId: esi.victim.ship_type_id,
         systemId: esi.solar_system_id,
+        labels: killData.zkb.labels ?? [],
         totalValue: BigInt(Math.round(killData.zkb.totalValue)),
         points: killData.zkb.points,
-        npc: attackers.every((a) => !a.characterId), // NPC kill if no player attackers
-        solo: attackers.length === 1,
-        awox: false,
-        shipTypeId: esi.victim.ship_type_id,
-        labels: killData.zkb.labels ?? [],
-        victim,
-        attackers,
-      });
+        attackers: attackers.map((a) => ({
+          characterId: a.characterId,
+          corporationId: a.corporationId,
+          allianceId: a.allianceId,
+          damageDone: a.damageDone,
+          finalBlow: a.finalBlow,
+          securityStatus: a.securityStatus,
+          shipTypeId: a.shipTypeId,
+          weaponTypeId: a.weaponTypeId,
+        })),
+        victim: {
+          characterId: victim.characterId,
+          corporationId: victim.corporationId,
+          allianceId: victim.allianceId,
+          shipTypeId: victim.shipTypeId,
+          damageTaken: victim.damageTaken,
+        },
+      };
 
-      await this.killRepository.saveKillmail(killmail);
+      // 7) Call the new transactionally-safe ingestion method
+      await this.killRepository.ingestKillTransaction(killmailData);
 
       return {
         success: true,
@@ -636,9 +692,404 @@ export class KillmailIngestionService {
     }
   }
 
+  /**
+   * Backfill kills for a character using checkpoint-based approach
+   */
+  public async backfillKillsWithCheckpoint(characterId: bigint): Promise<void> {
+    try {
+      // 1. Fetch the character row to read last_backfill_at
+      const character = await this.characterRepository.getCharacter(
+        characterId.toString()
+      );
+      if (!character) {
+        throw new Error(`Character ${characterId} not found`);
+      }
+
+      const sinceDate = character.lastBackfillAt
+        ? character.lastBackfillAt
+        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // 30 days ago as default
+
+      logger.info(
+        `[Backfill] Starting checkpoint-based backfill for character ${characterId} since ${sinceDate.toISOString()}`
+      );
+
+      // 2. Call zKill API to get all kills since sinceDate
+      let page = 1;
+      let hasMore = true;
+      let totalKills = 0;
+      let ingestedKills = 0;
+      let skippedKills = 0;
+      let errorCount = 0;
+
+      while (hasMore) {
+        try {
+          const killmails = await retryOperation(
+            () => this.zkill.getCharacterKills(Number(characterId), page),
+            `Fetching kills for character ${characterId}, page ${page}`,
+            {
+              maxRetries: 3,
+              initialRetryDelay: 5000,
+              timeout: 15000,
+            }
+          );
+
+          if (!killmails || killmails.length === 0) {
+            hasMore = false;
+            continue;
+          }
+
+          for (const kill of killmails) {
+            if (!kill || !kill.killmail_id || !kill.zkb) {
+              continue;
+            }
+
+            totalKills++;
+
+            // Get ESI data to check kill time
+            const esiData = await retryOperation(
+              () =>
+                this.esiService.getKillmail(kill.killmail_id, kill.zkb.hash),
+              `Fetching ESI data for killmail ${kill.killmail_id}`,
+              {
+                maxRetries: 3,
+                initialRetryDelay: 5000,
+                timeout: 30000,
+              }
+            );
+
+            if (!esiData) {
+              errorCount++;
+              continue;
+            }
+
+            const killTime = new Date(esiData.killmail_time);
+
+            // Only process kills newer than sinceDate
+            if (killTime > sinceDate) {
+              const result = await this.ingestKillmail(kill.killmail_id);
+              if (result.success) {
+                ingestedKills++;
+              } else {
+                skippedKills++;
+              }
+            } else {
+              // If we've reached kills older than sinceDate, we can stop
+              hasMore = false;
+              break;
+            }
+          }
+
+          page++;
+        } catch (error: any) {
+          logger.error(
+            `Error fetching kills for character ${characterId}, page ${page}:`,
+            error
+          );
+          errorCount++;
+          // Continue to next page on error
+          page++;
+          // Stop if we get 404 or 403
+          if (
+            error.response?.status === 404 ||
+            error.response?.status === 403
+          ) {
+            hasMore = false;
+          }
+        }
+      }
+
+      // 3. After completion, update last_backfill_at
+      await this.characterRepository.updateLastBackfillAt(characterId);
+
+      logger.info(
+        `[Backfill] character ${characterId}: totalKills=${totalKills}, ingested=${ingestedKills}, skipped=${skippedKills}, errors=${errorCount}`
+      );
+    } catch (error: any) {
+      logger.error(
+        `Error in checkpoint-based backfill for character ${characterId}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to check if we're in a backfill operation
+   */
   private isBackfillOperation(): boolean {
-    // Check if we're in a backfill operation by looking at the call stack
+    // Check if we're running in the context of a backfill operation
+    // This can be determined by looking at the call stack or setting a flag
     const stack = new Error().stack || "";
     return stack.includes("backfillKills") || stack.includes("backfillLosses");
+  }
+
+  /**
+   * Ingest partial killmail data (zKillboard only) and mark for later enrichment
+   */
+  public async ingestPartialKillmail(zkillData: {
+    killmailId: number;
+    killTime: string;
+    npc: boolean;
+    solo: boolean;
+    awox: boolean;
+    shipTypeId?: number;
+    systemId: number;
+    labels: string[];
+    totalValue: number;
+    points: number;
+  }): Promise<{ success: boolean; reason?: string }> {
+    try {
+      // Check if killmail already exists as fully populated
+      const existing = await this.killRepository.getKillmail(
+        zkillData.killmailId.toString()
+      );
+      if (existing) {
+        return { success: false, reason: "killmail already exists" };
+      }
+
+      const partialData = {
+        killmailId: BigInt(zkillData.killmailId),
+        killTime: new Date(zkillData.killTime),
+        npc: zkillData.npc,
+        solo: zkillData.solo,
+        awox: zkillData.awox,
+        shipTypeId: zkillData.shipTypeId || 0, // Default ship type if missing
+        systemId: zkillData.systemId,
+        labels: zkillData.labels,
+        totalValue: BigInt(Math.round(zkillData.totalValue)),
+        points: zkillData.points,
+      };
+
+      await this.killRepository.ingestPartialKillmail(partialData);
+
+      logger.debug(
+        `Ingested partial killmail ${zkillData.killmailId} - will be enriched later`
+      );
+      return { success: true };
+    } catch (error: any) {
+      logger.error(
+        `Error ingesting partial killmail ${zkillData.killmailId}: ${error.message}`,
+        { error }
+      );
+      return { success: false, reason: error.message };
+    }
+  }
+
+  /**
+   * Enrich partial killmails with full ESI data
+   */
+  public async enrichPartialKillmails(batchSize: number = 50): Promise<{
+    processed: number;
+    enriched: number;
+    failed: number;
+    errors: string[];
+  }> {
+    const stats = {
+      processed: 0,
+      enriched: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    try {
+      // Get batch of partial killmails
+      const partialKillmails = await this.killRepository.getPartialKillmails(
+        batchSize
+      );
+
+      if (partialKillmails.length === 0) {
+        logger.debug("No partial killmails found for enrichment");
+        return stats;
+      }
+
+      logger.info(
+        `Starting enrichment of ${partialKillmails.length} partial killmails`
+      );
+
+      for (const partial of partialKillmails) {
+        stats.processed++;
+
+        try {
+          // Use circuit breaker for zKill call
+          const zkillResult = await this.zkillCircuitBreaker.execute(
+            async () => {
+              return await retryOperation(
+                () => this.zkill.getKillmail(Number(partial.killmail_id)),
+                `Fetching zKill data for enrichment ${partial.killmail_id}`,
+                {
+                  maxRetries: 2, // Fewer retries since we have circuit breaker
+                  initialRetryDelay: 3000,
+                  timeout: 10000,
+                }
+              );
+            }
+          );
+
+          if (!zkillResult) {
+            stats.failed++;
+            stats.errors.push(
+              `No zKill data for killmail ${partial.killmail_id}`
+            );
+            continue;
+          }
+
+          const killData =
+            zkillResult[partial.killmail_id.toString()] || zkillResult;
+          if (!killData?.zkb?.hash) {
+            stats.failed++;
+            stats.errors.push(
+              `Invalid zKill data for killmail ${partial.killmail_id}`
+            );
+            continue;
+          }
+
+          // Use circuit breaker for ESI call
+          const esiResult = await this.esiCircuitBreaker.execute(async () => {
+            return await retryOperation(
+              () =>
+                this.esiService.getKillmail(
+                  Number(partial.killmail_id),
+                  killData.zkb.hash
+                ),
+              `Fetching ESI data for enrichment ${partial.killmail_id}`,
+              {
+                maxRetries: 2,
+                initialRetryDelay: 3000,
+                timeout: 15000,
+              }
+            );
+          });
+
+          if (!esiResult?.victim) {
+            stats.failed++;
+            stats.errors.push(
+              `No ESI victim data for killmail ${partial.killmail_id}`
+            );
+            continue;
+          }
+
+          // Check if any tracked characters are involved
+          const victim = new KillmailVictim({
+            characterId: toBigInt(esiResult.victim.character_id) ?? undefined,
+            corporationId:
+              toBigInt(esiResult.victim.corporation_id) ?? undefined,
+            allianceId: toBigInt(esiResult.victim.alliance_id) ?? undefined,
+            shipTypeId: esiResult.victim.ship_type_id,
+            damageTaken: esiResult.victim.damage_taken,
+          });
+
+          const attackers = (esiResult.attackers as any[]).map(
+            (a: any) =>
+              new KillmailAttacker({
+                characterId: toBigInt(a.character_id) ?? undefined,
+                corporationId: toBigInt(a.corporation_id) ?? undefined,
+                allianceId: toBigInt(a.alliance_id) ?? undefined,
+                damageDone: a.damage_done,
+                finalBlow: a.final_blow,
+                securityStatus: a.security_status,
+                shipTypeId: a.ship_type_id,
+                weaponTypeId: a.weapon_type_id,
+              })
+          );
+
+          const allIds = [
+            victim.characterId,
+            ...attackers.map((att) => att.characterId),
+          ]
+            .filter((x): x is bigint => x != null)
+            .map((b) => b.toString());
+
+          const tracked = await this.characterRepository.getCharactersByEveIds(
+            allIds
+          );
+
+          if (tracked.length === 0) {
+            // No tracked characters - skip enrichment but keep as partial
+            logger.debug(
+              `No tracked characters for killmail ${partial.killmail_id} - keeping as partial`
+            );
+            continue;
+          }
+
+          // Build full killmail data for transaction
+          const killmailData = {
+            killmailId: BigInt(partial.killmail_id),
+            killTime: new Date(esiResult.killmail_time),
+            npc: attackers.every((a) => !a.characterId),
+            solo: attackers.length === 1,
+            awox: false, // TODO: implement awox logic
+            shipTypeId: esiResult.victim.ship_type_id,
+            systemId: esiResult.solar_system_id,
+            labels: killData.zkb.labels ?? [],
+            totalValue: BigInt(Math.round(killData.zkb.totalValue)),
+            points: killData.zkb.points,
+            attackers: attackers.map((a) => ({
+              characterId: a.characterId,
+              corporationId: a.corporationId,
+              allianceId: a.allianceId,
+              damageDone: a.damageDone,
+              finalBlow: a.finalBlow,
+              securityStatus: a.securityStatus,
+              shipTypeId: a.shipTypeId,
+              weaponTypeId: a.weaponTypeId,
+            })),
+            victim: {
+              characterId: victim.characterId,
+              corporationId: victim.corporationId,
+              allianceId: victim.allianceId,
+              shipTypeId: victim.shipTypeId,
+              damageTaken: victim.damageTaken,
+            },
+          };
+
+          // Enrich with full data
+          await this.killRepository.ingestKillTransaction(killmailData);
+
+          stats.enriched++;
+          logger.debug(
+            `Enriched killmail ${partial.killmail_id} with full ESI data`
+          );
+        } catch (error: any) {
+          stats.failed++;
+          const errorMsg = `Failed to enrich killmail ${partial.killmail_id}: ${error.message}`;
+          stats.errors.push(errorMsg);
+          logger.warn(errorMsg);
+        }
+      }
+
+      logger.info(
+        `Enrichment completed: ${stats.enriched} enriched, ${stats.failed} failed out of ${stats.processed} processed`
+      );
+
+      return stats;
+    } catch (error: any) {
+      logger.error(`Error during killmail enrichment batch: ${error.message}`, {
+        error,
+      });
+      stats.errors.push(`Batch error: ${error.message}`);
+      return stats;
+    }
+  }
+
+  /**
+   * Get circuit breaker states for monitoring
+   */
+  public getCircuitBreakerStates(): {
+    esi: { state: string; failureCount: number; nextAttemptTime: number };
+    zkill: { state: string; failureCount: number; nextAttemptTime: number };
+  } {
+    return {
+      esi: this.esiCircuitBreaker.getState(),
+      zkill: this.zkillCircuitBreaker.getState(),
+    };
+  }
+
+  /**
+   * Reset circuit breakers (for admin/debugging purposes)
+   */
+  public resetCircuitBreakers(): void {
+    this.esiCircuitBreaker.reset();
+    this.zkillCircuitBreaker.reset();
+    logger.info("All circuit breakers have been reset");
   }
 }

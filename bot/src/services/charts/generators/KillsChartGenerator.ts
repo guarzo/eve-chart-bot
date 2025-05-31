@@ -83,17 +83,18 @@ export class KillsChartGenerator extends BaseChartGenerator {
           `  killmailId: ${kill.killmailId} (type: ${typeof kill.killmailId})`
         );
         logger.info(
-          `  victim.characterId: ${
-            kill.victim?.characterId
-          } (type: ${typeof kill.victim?.characterId})`
+          `  victim: ${JSON.stringify(
+            kill.victim
+          )} (type: ${typeof kill.victim})`
         );
         logger.info(`  attackers_count: ${kill.attackers?.length || 0}`);
         logger.info(`  all_keys: ${Object.keys(kill).join(", ")}`);
         if (kill.attackers?.[0]) {
+          logger.info(`  first_attacker: ${JSON.stringify(kill.attackers[0])}`);
           logger.info(
-            `  first_attacker.characterId: ${
-              kill.attackers[0].characterId
-            } (type: ${typeof kill.attackers[0].characterId})`
+            `  first_attacker_keys: ${Object.keys(kill.attackers[0]).join(
+              ", "
+            )}`
           );
         }
       });

@@ -5,13 +5,47 @@ import { ClassConstructor, plainToInstance } from "class-transformer";
  */
 export class PrismaMapper {
   /**
+   * Converts snake_case to camelCase
+   */
+  private static toCamelCase(str: string): string {
+    return str.replace(/_([a-z])/g, (_match, letter) => letter.toUpperCase());
+  }
+
+  /**
+   * Recursively converts an object's keys from snake_case to camelCase
+   */
+  private static convertKeysToCamelCase(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.convertKeysToCamelCase(item));
+    }
+
+    if (typeof obj === "object" && obj.constructor === Object) {
+      const converted: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const camelKey = this.toCamelCase(key);
+        converted[camelKey] = this.convertKeysToCamelCase(value);
+      }
+      return converted;
+    }
+
+    return obj;
+  }
+
+  /**
    * Maps a Prisma model to a domain entity
    * @param model The Prisma model instance
    * @param EntityClass The domain entity class constructor
    * @returns A new instance of the domain entity
    */
   static map<T>(model: any, EntityClass: ClassConstructor<T>): T {
-    return plainToInstance(EntityClass, model, {
+    // Convert snake_case keys to camelCase before mapping
+    const convertedModel = this.convertKeysToCamelCase(model);
+
+    return plainToInstance(EntityClass, convertedModel, {
       excludeExtraneousValues: true,
       enableImplicitConversion: true,
     });

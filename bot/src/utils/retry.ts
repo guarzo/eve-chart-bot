@@ -100,3 +100,104 @@ export class RateLimiter {
     this.lastRequestTime = Date.now();
   }
 }
+
+/**
+ * Circuit breaker pattern implementation
+ */
+export class CircuitBreaker {
+  private failureCount = 0;
+  private nextAttemptTime = 0;
+  private state: "CLOSED" | "OPEN" | "HALF_OPEN" = "CLOSED";
+
+  constructor(
+    private readonly maxFailuresBeforeOpen: number = 3,
+    private readonly cooldownPeriodMs: number = 30000, // 30 seconds
+    private readonly serviceName: string = "Unknown Service"
+  ) {}
+
+  /**
+   * Execute an operation through the circuit breaker
+   */
+  async execute<T>(operation: () => Promise<T>): Promise<T> {
+    if (this.state === "OPEN") {
+      if (Date.now() < this.nextAttemptTime) {
+        throw new Error(
+          `Circuit breaker OPEN for ${
+            this.serviceName
+          }: cooling down until ${new Date(this.nextAttemptTime).toISOString()}`
+        );
+      } else {
+        // Transition to HALF_OPEN to test if service is back
+        this.state = "HALF_OPEN";
+        logger.info(
+          `Circuit breaker for ${this.serviceName} transitioning to HALF_OPEN for test`
+        );
+      }
+    }
+
+    try {
+      const result = await operation();
+
+      // Success - reset failure count and close circuit if needed
+      if (this.state === "HALF_OPEN") {
+        logger.info(
+          `Circuit breaker for ${this.serviceName} test successful, transitioning to CLOSED`
+        );
+        this.state = "CLOSED";
+      }
+
+      this.failureCount = 0;
+      return result;
+    } catch (error) {
+      this.failureCount++;
+
+      logger.warn(
+        `Circuit breaker for ${this.serviceName} recorded failure ${this.failureCount}/${this.maxFailuresBeforeOpen}`,
+        {
+          error: error instanceof Error ? error.message : String(error),
+          currentState: this.state,
+        }
+      );
+
+      if (
+        this.failureCount >= this.maxFailuresBeforeOpen ||
+        this.state === "HALF_OPEN"
+      ) {
+        // Open the circuit
+        this.state = "OPEN";
+        this.nextAttemptTime = Date.now() + this.cooldownPeriodMs;
+
+        logger.error(
+          `Circuit breaker for ${this.serviceName} OPENED due to ${
+            this.failureCount
+          } failures. Will attempt retry at ${new Date(
+            this.nextAttemptTime
+          ).toISOString()}`
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  /**
+   * Get current circuit breaker state
+   */
+  getState(): { state: string; failureCount: number; nextAttemptTime: number } {
+    return {
+      state: this.state,
+      failureCount: this.failureCount,
+      nextAttemptTime: this.nextAttemptTime,
+    };
+  }
+
+  /**
+   * Manually reset the circuit breaker
+   */
+  reset(): void {
+    this.state = "CLOSED";
+    this.failureCount = 0;
+    this.nextAttemptTime = 0;
+    logger.info(`Circuit breaker for ${this.serviceName} manually reset`);
+  }
+}

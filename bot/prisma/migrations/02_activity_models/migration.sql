@@ -15,4 +15,7 @@ CREATE TABLE "map_activities" (
 CREATE INDEX "map_activities_character_id_timestamp_idx" ON "map_activities"("character_id", "timestamp");
 
 -- CreateIndex
-CREATE INDEX "map_activities_corporation_id_timestamp_idx" ON "map_activities"("corporation_id", "timestamp"); 
+CREATE INDEX "map_activities_corporation_id_timestamp_idx" ON "map_activities"("corporation_id", "timestamp");
+
+-- AddForeignKey
+ALTER TABLE "map_activities" ADD CONSTRAINT "map_activities_character_id_fkey" FOREIGN KEY ("character_id") REFERENCES "characters"("eve_id") ON DELETE RESTRICT ON UPDATE CASCADE; 

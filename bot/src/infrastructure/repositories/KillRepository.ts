@@ -1036,27 +1036,40 @@ export class KillRepository extends BaseRepository {
     characterId: bigint,
     shipTypeId: number
   ): Promise<void> {
-    await this.prisma.lossFact.upsert({
-      where: { killmail_id: killmailId },
-      create: {
-        killmail_id: killmailId,
-        kill_time: killTime,
-        system_id: systemId,
-        total_value: BigInt(totalValue),
-        attacker_count: attackerCount,
-        labels,
-        character_id: characterId,
-        ship_type_id: shipTypeId,
-      },
-      update: {
-        kill_time: killTime,
-        system_id: systemId,
-        total_value: BigInt(totalValue),
-        attacker_count: attackerCount,
-        labels,
-        character_id: characterId,
-        ship_type_id: shipTypeId,
-      },
+    return this.executeQuery(async () => {
+      // Check if this character is tracked (exists in characters table)
+      const trackedCharacter = await this.prisma.character.findUnique({
+        where: { eveId: characterId },
+        select: { eveId: true },
+      });
+
+      if (!trackedCharacter) {
+        // Skip saving loss for untracked character
+        return;
+      }
+
+      await this.prisma.lossFact.upsert({
+        where: { killmail_id: killmailId },
+        create: {
+          killmail_id: killmailId,
+          kill_time: killTime,
+          system_id: systemId,
+          total_value: BigInt(totalValue),
+          attacker_count: attackerCount,
+          labels,
+          character_id: characterId,
+          ship_type_id: shipTypeId,
+        },
+        update: {
+          kill_time: killTime,
+          system_id: systemId,
+          total_value: BigInt(totalValue),
+          attacker_count: attackerCount,
+          labels,
+          character_id: characterId,
+          ship_type_id: shipTypeId,
+        },
+      });
     });
   }
 
@@ -1206,5 +1219,275 @@ export class KillRepository extends BaseRepository {
    */
   async deleteAllKillmails(): Promise<void> {
     await this.prisma.killFact.deleteMany();
+  }
+
+  /**
+   * Ingest a killmail using a single transaction for all related data
+   */
+  async ingestKillTransaction(killData: {
+    killmailId: bigint;
+    killTime: Date;
+    npc: boolean;
+    solo: boolean;
+    awox: boolean;
+    shipTypeId: number;
+    systemId: number;
+    labels: string[];
+    totalValue: bigint;
+    points: number;
+    attackers: Array<{
+      characterId?: bigint;
+      corporationId?: bigint;
+      allianceId?: bigint;
+      damageDone: number;
+      finalBlow: boolean;
+      securityStatus?: number;
+      shipTypeId?: number;
+      weaponTypeId?: number;
+    }>;
+    victim: {
+      characterId?: bigint;
+      corporationId?: bigint;
+      allianceId?: bigint;
+      shipTypeId: number;
+      damageTaken: number;
+    };
+  }): Promise<void> {
+    const {
+      killmailId,
+      killTime,
+      npc,
+      solo,
+      awox,
+      shipTypeId,
+      systemId,
+      labels,
+      totalValue,
+      points,
+      attackers,
+      victim,
+    } = killData;
+
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Upsert KillFact
+      await tx.killFact.upsert({
+        where: { killmail_id: killmailId },
+        create: {
+          killmail_id: killmailId,
+          kill_time: killTime,
+          npc,
+          solo,
+          awox,
+          ship_type_id: shipTypeId,
+          system_id: systemId,
+          labels,
+          total_value: totalValue,
+          points,
+          fully_populated: true, // now fully populated
+        },
+        update: {
+          // If a "partial" row existed, overwrite it with full data
+          kill_time: killTime,
+          npc,
+          solo,
+          awox,
+          ship_type_id: shipTypeId,
+          system_id: systemId,
+          labels,
+          total_value: totalValue,
+          points,
+          fully_populated: true,
+        },
+      });
+
+      // 2. Delete existing KillVictim rows and insert new one
+      await tx.killVictim.deleteMany({ where: { killmail_id: killmailId } });
+      await tx.killVictim.create({
+        data: {
+          killmail_id: killmailId,
+          character_id: victim.characterId ?? null,
+          corporation_id: victim.corporationId ?? null,
+          alliance_id: victim.allianceId ?? null,
+          ship_type_id: victim.shipTypeId,
+          damage_taken: victim.damageTaken,
+        },
+      });
+
+      // 3. Delete existing KillAttacker rows and insert new ones
+      await tx.killAttacker.deleteMany({ where: { killmail_id: killmailId } });
+      for (const a of attackers) {
+        await tx.killAttacker.create({
+          data: {
+            killmail_id: killmailId,
+            character_id: a.characterId ?? null,
+            corporation_id: a.corporationId ?? null,
+            alliance_id: a.allianceId ?? null,
+            damage_done: a.damageDone,
+            final_blow: a.finalBlow,
+            security_status: a.securityStatus ?? null,
+            ship_type_id: a.shipTypeId ?? null,
+            weapon_type_id: a.weaponTypeId ?? null,
+          },
+        });
+      }
+
+      // 4. Delete existing KillCharacter rows and insert new ones
+      await tx.killCharacter.deleteMany({ where: { killmail_id: killmailId } });
+
+      // Collect all character IDs that might be tracked
+      const allCharacterIds = [
+        ...(victim.characterId ? [victim.characterId] : []),
+        ...attackers.filter((a) => a.characterId).map((a) => a.characterId!),
+      ];
+
+      // Batch check which characters are tracked
+      const trackedCharacters =
+        allCharacterIds.length > 0
+          ? await tx.character.findMany({
+              where: { eveId: { in: allCharacterIds } },
+              select: { eveId: true },
+            })
+          : [];
+
+      const trackedCharacterIds = new Set(
+        trackedCharacters.map((c) => c.eveId)
+      );
+
+      // Victim as KillCharacter (only if tracked)
+      if (victim.characterId && trackedCharacterIds.has(victim.characterId)) {
+        await tx.killCharacter.create({
+          data: {
+            killmail_id: killmailId,
+            character_id: victim.characterId,
+            role: "victim",
+          },
+        });
+      }
+
+      // Attackers as KillCharacter (only if tracked)
+      for (const a of attackers) {
+        if (a.characterId && trackedCharacterIds.has(a.characterId)) {
+          await tx.killCharacter.create({
+            data: {
+              killmail_id: killmailId,
+              character_id: a.characterId,
+              role: "attacker",
+            },
+          });
+        }
+      }
+
+      // 5. Insert/Upsert LossFact (only if the victim is a tracked character)
+      if (victim.characterId && trackedCharacterIds.has(victim.characterId)) {
+        const attackerCount = attackers.length;
+        await tx.lossFact.upsert({
+          where: { killmail_id: killmailId },
+          create: {
+            killmail_id: killmailId,
+            character_id: victim.characterId,
+            kill_time: killTime,
+            ship_type_id: victim.shipTypeId,
+            system_id: systemId,
+            total_value: totalValue,
+            attacker_count: attackerCount,
+            labels: labels,
+          },
+          update: {
+            kill_time: killTime,
+            ship_type_id: victim.shipTypeId,
+            system_id: systemId,
+            total_value: totalValue,
+            attacker_count: attackerCount,
+            labels: labels,
+          },
+        });
+      }
+    });
+  }
+
+  /**
+   * Insert partial killmail data (zKillboard only) with fully_populated = false
+   */
+  async ingestPartialKillmail(partialData: {
+    killmailId: bigint;
+    killTime: Date;
+    npc: boolean;
+    solo: boolean;
+    awox: boolean;
+    shipTypeId: number;
+    systemId: number;
+    labels: string[];
+    totalValue: bigint;
+    points: number;
+  }): Promise<void> {
+    const {
+      killmailId,
+      killTime,
+      npc,
+      solo,
+      awox,
+      shipTypeId,
+      systemId,
+      labels,
+      totalValue,
+      points,
+    } = partialData;
+
+    await this.executeQuery(async () => {
+      await this.prisma.killFact.upsert({
+        where: { killmail_id: killmailId },
+        create: {
+          killmail_id: killmailId,
+          kill_time: killTime,
+          npc,
+          solo,
+          awox,
+          ship_type_id: shipTypeId,
+          system_id: systemId,
+          labels,
+          total_value: totalValue,
+          points,
+          fully_populated: false, // partial data only
+        },
+        update: {
+          // Only update if still not fully populated
+          kill_time: killTime,
+          npc,
+          solo,
+          awox,
+          ship_type_id: shipTypeId,
+          system_id: systemId,
+          labels,
+          total_value: totalValue,
+          points,
+          // Don't change fully_populated if it's already true
+        },
+      });
+    });
+  }
+
+  /**
+   * Get killmails that are only partially populated (need ESI enrichment)
+   */
+  async getPartialKillmails(
+    limit: number = 100
+  ): Promise<Array<{ killmail_id: bigint; kill_time: Date }>> {
+    return this.executeQuery(async () => {
+      const partialKills = await this.prisma.killFact.findMany({
+        where: {
+          fully_populated: false,
+        },
+        select: {
+          killmail_id: true,
+          kill_time: true,
+        },
+        orderBy: {
+          kill_time: "desc",
+        },
+        take: limit,
+      });
+
+      return partialKills;
+    });
   }
 }

@@ -71,20 +71,22 @@ model MapActivity {
 }
 
 model KillFact {
-  killmail_id  BigInt         @id
-  kill_time    DateTime
-  npc          Boolean
-  solo         Boolean
-  awox         Boolean
-  ship_type_id Int
-  system_id    Int
-  labels       String[]
-  total_value  BigInt
-  points       Int
-  attackers    KillAttacker[]
-  victims      KillVictim[]
-  characters   KillCharacter[]
+  killmail_id      BigInt         @id
+  kill_time        DateTime
+  npc              Boolean
+  solo             Boolean
+  awox             Boolean
+  ship_type_id     Int
+  system_id        Int
+  labels           String[]
+  total_value      BigInt
+  points           Int
+  fully_populated  Boolean        @default(false)
+  attackers        KillAttacker[]
+  victims          KillVictim[]
+  characters       KillCharacter[]
 
+  @@index([kill_time])
   @@map("KillFact")
 }
 
@@ -119,6 +121,7 @@ model KillAttacker {
 
   @@index([killmail_id])
   @@index([character_id])
+  @@index([character_id, killmail_id])
   @@map("KillAttacker")
 }
 
@@ -135,6 +138,7 @@ model KillVictim {
 
   @@index([killmail_id])
   @@index([character_id])
+  @@index([character_id, killmail_id])
   @@map("KillVictim")
 }
 

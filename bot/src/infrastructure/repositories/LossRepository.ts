@@ -221,6 +221,17 @@ export class LossRepository extends BaseRepository {
    */
   async saveLoss(loss: LossFact): Promise<void> {
     return this.executeQuery(async () => {
+      // Check if this character is tracked (exists in characters table)
+      const trackedCharacter = await this.prisma.character.findUnique({
+        where: { eveId: loss.characterId },
+        select: { eveId: true },
+      });
+
+      if (!trackedCharacter) {
+        // Skip saving loss for untracked character
+        return;
+      }
+
       const data = loss.toObject();
       await this.prisma.lossFact.upsert({
         where: { killmail_id: loss.killmailId },

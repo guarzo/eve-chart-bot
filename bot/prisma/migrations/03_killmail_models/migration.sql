@@ -10,6 +10,7 @@ CREATE TABLE "KillFact" (
     "labels" TEXT[],
     "total_value" BIGINT NOT NULL,
     "points" INTEGER NOT NULL,
+    "fully_populated" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "KillFact_pkey" PRIMARY KEY ("killmail_id")
 );
@@ -81,13 +82,24 @@ CREATE INDEX "KillAttacker_killmail_id_idx" ON "KillAttacker"("killmail_id");
 CREATE INDEX "KillAttacker_character_id_idx" ON "KillAttacker"("character_id");
 
 -- CreateIndex
+CREATE INDEX "KillAttacker_character_id_killmail_id_idx" ON "KillAttacker"("character_id", "killmail_id");
+
+-- CreateIndex
 CREATE INDEX "KillVictim_killmail_id_idx" ON "KillVictim"("killmail_id");
 
 -- CreateIndex
 CREATE INDEX "KillVictim_character_id_idx" ON "KillVictim"("character_id");
 
 -- CreateIndex
+CREATE INDEX "KillVictim_character_id_killmail_id_idx" ON "KillVictim"("character_id", "killmail_id");
+
+-- CreateIndex
 CREATE INDEX "kill_characters_character_id_idx" ON "kill_characters"("character_id");
+
+-- Add check constraint for role field
+ALTER TABLE "kill_characters"
+ADD CONSTRAINT chk_kc_role
+CHECK (role IN ('attacker','victim'));
 
 -- AddForeignKey
 ALTER TABLE "KillAttacker" ADD CONSTRAINT "KillAttacker_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -96,4 +108,7 @@ ALTER TABLE "KillAttacker" ADD CONSTRAINT "KillAttacker_killmail_id_fkey" FOREIG
 ALTER TABLE "KillVictim" ADD CONSTRAINT "KillVictim_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "kill_characters" ADD CONSTRAINT "kill_characters_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE; 
+ALTER TABLE "kill_characters" ADD CONSTRAINT "kill_characters_killmail_id_fkey" FOREIGN KEY ("killmail_id") REFERENCES "KillFact"("killmail_id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "LossFact" ADD CONSTRAINT "LossFact_character_id_fkey" FOREIGN KEY ("character_id") REFERENCES "characters"("eve_id") ON DELETE RESTRICT ON UPDATE CASCADE; 

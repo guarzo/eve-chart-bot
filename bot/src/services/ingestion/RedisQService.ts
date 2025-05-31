@@ -1,13 +1,8 @@
 import Redis from "ioredis";
 import { logger } from "../../lib/logger";
-import { retryOperation } from "../../utils/retry";
+import { retryOperation, CircuitBreaker } from "../../utils/retry";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { ESIService } from "../ESIService";
-import {
-  Killmail,
-  KillmailAttacker,
-  KillmailVictim,
-} from "../../domain/killmail/Killmail";
 import { KillRepository } from "../../infrastructure/repositories/KillRepository";
 
 interface RedisQKillmail {
@@ -58,9 +53,11 @@ export class RedisQService {
   private characterRepository: CharacterRepository;
   private killRepository: KillRepository;
   private esiService: ESIService;
+  private esiCircuitBreaker: CircuitBreaker;
   private isRunning = false;
   private refreshInterval: NodeJS.Timeout | null = null;
   private loggingInterval: NodeJS.Timeout | null = null;
+  private trackedCharacterSet: Set<bigint> = new Set();
   private periodMetrics = {
     receivedKillmails: 0,
     lastLogTime: new Date(),
@@ -78,6 +75,11 @@ export class RedisQService {
     this.characterRepository = new CharacterRepository();
     this.killRepository = new KillRepository();
     this.esiService = new ESIService();
+    this.esiCircuitBreaker = new CircuitBreaker(
+      5,
+      60000,
+      "ESI Service (RedisQ)"
+    ); // More tolerant for RedisQ
   }
 
   /**
@@ -145,7 +147,16 @@ export class RedisQService {
       uptime: this.isRunning
         ? Date.now() - this.metrics.lastProcessedTime.getTime()
         : 0,
+      circuitBreaker: this.esiCircuitBreaker.getState(),
     };
+  }
+
+  /**
+   * Reset the ESI circuit breaker (for admin/debugging purposes)
+   */
+  resetCircuitBreaker(): void {
+    this.esiCircuitBreaker.reset();
+    logger.info("RedisQ ESI circuit breaker has been reset");
   }
 
   /**
@@ -161,24 +172,20 @@ export class RedisQService {
         return;
       }
 
-      // Get all tracked characters
-      const trackedCharacters =
-        await this.characterRepository.getAllCharacters();
-      const trackedCharacterIds = new Set(
-        trackedCharacters.map((c) => c.eveId.toString())
-      );
+      // Check if any tracked character is involved using cached Set
+      const victimId = killmail.victim?.character_id
+        ? BigInt(killmail.victim.character_id)
+        : null;
 
-      // Check if any tracked character is involved
-      const victimId = killmail.victim?.character_id?.toString();
       const attackerIds =
         killmail.attackers
-          ?.map((a: { character_id?: number }) => a.character_id?.toString())
-          .filter((id: string | undefined): id is string => id !== undefined) ||
-        [];
+          ?.map((a) => (a.character_id ? BigInt(a.character_id) : null))
+          .filter((id): id is bigint => id !== null) || [];
 
-      const isVictimTracked = victimId && trackedCharacterIds.has(victimId);
-      const trackedAttackers = attackerIds.filter((id: string) =>
-        trackedCharacterIds.has(id)
+      const isVictimTracked =
+        victimId && this.trackedCharacterSet.has(victimId);
+      const trackedAttackers = attackerIds.filter((id) =>
+        this.trackedCharacterSet.has(id)
       );
 
       if (!isVictimTracked && trackedAttackers.length === 0) {
@@ -189,49 +196,39 @@ export class RedisQService {
         return;
       }
 
-      // Process the killmail using ESI directly
-      const result = await retryOperation(
-        () => this.esiService.getKillmail(killID, zkb.hash),
-        `Processing killmail ${killID}`,
-        {
-          maxRetries: 3,
-          initialRetryDelay: 5000,
-          timeout: 30000,
-        }
-      );
+      // Process the killmail using ESI with circuit breaker
+      const result = await this.esiCircuitBreaker.execute(async () => {
+        return await retryOperation(
+          () => this.esiService.getKillmail(killID, zkb.hash),
+          `Processing killmail ${killID}`,
+          {
+            maxRetries: 2, // Fewer retries since we have circuit breaker
+            initialRetryDelay: 3000,
+            timeout: 20000,
+          }
+        );
+      });
 
       if (!result) {
         this.metrics.skippedKillmails++;
+        logger.warn(`No ESI result for killmail ${killID}`);
         return;
       }
 
-      // Create domain entities
-      const victim = new KillmailVictim({
-        characterId: killmail.victim?.character_id
-          ? BigInt(killmail.victim.character_id)
-          : undefined,
-        corporationId: killmail.victim?.corporation_id
-          ? BigInt(killmail.victim.corporation_id)
-          : undefined,
-        allianceId: killmail.victim?.alliance_id
-          ? BigInt(killmail.victim.alliance_id)
-          : undefined,
-        shipTypeId: killmail.victim?.ship_type_id,
-        damageTaken: killmail.victim?.damage_taken,
-      });
-
-      const attackers = (killmail.attackers || []).map(
-        (a: {
-          character_id?: number;
-          corporation_id?: number;
-          alliance_id?: number;
-          damage_done: number;
-          final_blow: boolean;
-          security_status: number;
-          ship_type_id: number;
-          weapon_type_id: number;
-        }) =>
-          new KillmailAttacker({
+      // Build structured data for transactional ingestion
+      const killmailData = {
+        killmailId: BigInt(killID),
+        killTime: new Date(result.killmail_time),
+        npc: zkb.npc,
+        solo: zkb.solo,
+        awox: zkb.awox,
+        shipTypeId: result.victim.ship_type_id,
+        systemId: result.solar_system_id,
+        labels: [], // zKill doesn't provide labels in the RedisQ package
+        totalValue: BigInt(Math.round(zkb.totalValue)),
+        points: zkb.points,
+        attackers:
+          killmail.attackers?.map((a) => ({
             characterId: a.character_id ? BigInt(a.character_id) : undefined,
             corporationId: a.corporation_id
               ? BigInt(a.corporation_id)
@@ -242,27 +239,25 @@ export class RedisQService {
             securityStatus: a.security_status,
             shipTypeId: a.ship_type_id,
             weaponTypeId: a.weapon_type_id,
-          })
-      );
+          })) || [],
+        victim: {
+          characterId: killmail.victim?.character_id
+            ? BigInt(killmail.victim.character_id)
+            : undefined,
+          corporationId: killmail.victim?.corporation_id
+            ? BigInt(killmail.victim.corporation_id)
+            : undefined,
+          allianceId: killmail.victim?.alliance_id
+            ? BigInt(killmail.victim.alliance_id)
+            : undefined,
+          shipTypeId: killmail.victim?.ship_type_id || 0,
+          damageTaken: killmail.victim?.damage_taken || 0,
+        },
+      };
 
-      // Create the killmail object
-      const killmailData = new Killmail({
-        killmailId: BigInt(killID),
-        killTime: new Date(result.killmail_time),
-        systemId: result.solar_system_id,
-        totalValue: BigInt(Math.round(zkb.totalValue)),
-        points: zkb.points,
-        npc: zkb.npc,
-        solo: zkb.solo,
-        awox: zkb.awox,
-        shipTypeId: result.victim.ship_type_id,
-        labels: [], // zKill doesn't provide labels in the RedisQ package
-        victim,
-        attackers,
-      });
+      // Use transactional ingestion
+      await this.killRepository.ingestKillTransaction(killmailData);
 
-      // Save the killmail
-      await this.killRepository.saveKillmail(killmailData);
       logger.info(
         `Saved killmail ${killID} - Tracked victim: ${isVictimTracked}, Tracked attackers: ${trackedAttackers.length}`
       );
@@ -272,15 +267,30 @@ export class RedisQService {
       this.metrics.lastProcessedTime = new Date();
     } catch (error) {
       this.metrics.failedKillmails++;
-      logger.error(
-        {
-          error,
-          killmailId: killmail.killID,
-          errorMessage: error instanceof Error ? error.message : String(error),
-          errorStack: error instanceof Error ? error.stack : undefined,
-        },
-        `Error processing killmail ${killmail.killID}`
-      );
+
+      // Check if it's a circuit breaker error vs other error
+      const isCircuitBreakerError =
+        error instanceof Error &&
+        error.message.includes("Circuit breaker OPEN");
+
+      if (isCircuitBreakerError) {
+        logger.warn(
+          `Circuit breaker prevented processing killmail ${killmail.killID}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      } else {
+        logger.error(
+          {
+            error,
+            killmailId: killmail.killID,
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+          },
+          `Error processing killmail ${killmail.killID}`
+        );
+      }
     }
   }
 
@@ -292,6 +302,9 @@ export class RedisQService {
       // Get all characters from the repository
       const characters = await this.characterRepository.getAllCharacters();
       logger.info(`Refreshed ${characters.length} tracked characters`);
+      this.trackedCharacterSet = new Set(
+        characters.map((c) => BigInt(c.eveId))
+      );
     } catch (error) {
       logger.error("Failed to refresh tracked characters:", error);
       throw error;
