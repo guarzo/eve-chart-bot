@@ -111,12 +111,11 @@ export class ChartService {
             // Get characters from the group
             const characterRepository =
               this.repositoryManager.getCharacterRepository();
-            const group = await characterRepository.getGroupWithCharacters(
-              groupId
-            );
+            const groups = await characterRepository.getAllCharacterGroups();
+            const group = groups.find((g) => g.id === groupId);
 
             if (group && group.characters) {
-              characterIds = group.characters.map((char) => char.eveId);
+              characterIds = group.characters.map((char: any) => char.eveId);
             }
           }
 

@@ -9,6 +9,7 @@ services:
       - "${API_PORT:-3000}:3000"
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
+      - ENABLE_BACKFILL=${ENABLE_BACKFILL:-false}
     depends_on:
       - postgres
       - redis

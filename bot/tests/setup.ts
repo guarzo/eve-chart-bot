@@ -56,6 +56,7 @@ process.env.DATABASE_URL =
   "postgresql://postgres:postgres@localhost:5432/eve_test";
 process.env.MAP_API_URL = "https://example.com/map-api";
 process.env.MAP_API_KEY = "test-api-key";
+process.env.MAP_NAME = "mock-map";
 
 // Mock Chart.js to avoid issues with Node.js canvas
 jest.mock("chart.js", () => {
@@ -186,7 +187,6 @@ process.env.DISCORD_BOT_TOKEN = "mock-token";
 process.env.ZKILLBOARD_API_URL = "http://mock-zkill-api.test";
 process.env.MAP_API_URL = "http://mock-map-api.test";
 process.env.MAP_API_KEY = "mock-map-key";
-process.env.MAP_NAME = "mock-map";
 process.env.REDIS_URL = "redis://mock";
 process.env.CACHE_TTL = "300";
 

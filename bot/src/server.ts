@@ -227,6 +227,19 @@ const backfillKillsHandler: RequestHandler<BackfillKillsParams> = async (
   res
 ) => {
   try {
+    // Check if backfill is enabled via environment variable
+    if (process.env.ENABLE_BACKFILL !== "true") {
+      logger.info(
+        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
+      );
+      res.status(200).json({
+        success: false,
+        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
+        disabled: true,
+      });
+      return;
+    }
+
     const characterId = parseInt(req.params.characterId);
     if (isNaN(characterId)) {
       res.status(400).json({ error: "Invalid character ID" });
@@ -279,6 +292,19 @@ const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
   res
 ) => {
   try {
+    // Check if backfill is enabled via environment variable
+    if (process.env.ENABLE_BACKFILL !== "true") {
+      logger.info(
+        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
+      );
+      res.status(200).json({
+        success: false,
+        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
+        disabled: true,
+      });
+      return;
+    }
+
     const { groupId } = req.params;
 
     // Find all characters in the group
@@ -333,6 +359,19 @@ async function processCharacterBackfills(characters: any[]): Promise<void> {
 // Add an endpoint to clean up and rebalance kill/loss data
 const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
   try {
+    // Check if backfill is enabled via environment variable
+    if (process.env.ENABLE_BACKFILL !== "true") {
+      logger.info(
+        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
+      );
+      res.status(200).json({
+        success: false,
+        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
+        disabled: true,
+      });
+      return;
+    }
+
     logger.info("Starting kill/loss data cleanup and rebalance");
 
     // First, get current counts

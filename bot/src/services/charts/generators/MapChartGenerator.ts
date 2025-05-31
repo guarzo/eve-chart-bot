@@ -2,6 +2,7 @@ import { BaseChartGenerator } from "../BaseChartGenerator";
 import { ChartData, ChartDisplayType } from "../../../types/chart";
 import { MapActivityRepository } from "../../../infrastructure/repositories/MapActivityRepository";
 import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { logger } from "../../../lib/logger";
 
 /**
  * Generator for map activity charts
@@ -49,10 +50,50 @@ export class MapChartGenerator extends BaseChartGenerator {
 
     // Group activities by character group
     const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
-      const groupActivities = activities.filter((activity) =>
-        groupCharacterIds.includes(BigInt(activity.characterId))
-      );
+      // Filter out characters with invalid eveIds and convert valid ones to BigInt
+      const validCharacters = group.characters.filter((c) => {
+        // Debug log the actual character data
+        logger.info(`Character in group ${group.name}: ${JSON.stringify(c)}`);
+
+        if (
+          !c.eveId ||
+          c.eveId === "" ||
+          c.eveId === "undefined" ||
+          c.eveId === "null"
+        ) {
+          logger.warn(
+            `Skipping character with invalid eveId in group ${
+              group.name
+            }: ${JSON.stringify(c)}`
+          );
+          return false;
+        }
+        return true;
+      });
+
+      const groupCharacterIds = validCharacters
+        .map((c) => {
+          try {
+            return BigInt(c.eveId);
+          } catch (error) {
+            logger.warn(
+              `Failed to convert character eveId to BigInt: ${c.eveId}`,
+              error
+            );
+            return null;
+          }
+        })
+        .filter((id): id is bigint => id !== null);
+
+      const groupActivities = activities.filter((activity) => {
+        if (
+          activity.characterId == null ||
+          activity.characterId === undefined
+        ) {
+          return false;
+        }
+        return groupCharacterIds.includes(activity.characterId);
+      });
 
       // Calculate totals for each metric
       const totalSignatures = groupActivities.reduce(

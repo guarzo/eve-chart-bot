@@ -73,6 +73,8 @@ Optional variables with defaults:
 - `POSTGRES_DB`: PostgreSQL database name (default: evechartbot)
 - `POSTGRES_PORT`: PostgreSQL port (default: 5432)
 - `REDIS_PORT`: Redis port (default: 6379)
+- `ENABLE_BACKFILL`: Enable automatic backfill operations when set to "true" (default: false)
+- `MAP_NAME`: Map identifier for fetching map data and character lists (required for map features)
 
 The following variables are automatically derived and don't need to be set:
 

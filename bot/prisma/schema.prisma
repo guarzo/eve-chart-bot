@@ -43,13 +43,14 @@ model Character {
 
 model CharacterGroup {
   id              String      @id @default(uuid())
-  slug            String      @unique
+  map_name        String      @map("map_name")
   mainCharacterId BigInt?     @unique @map("main_character_id")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
   mainCharacter   Character?  @relation("GroupMainCharacter", fields: [mainCharacterId], references: [eveId])
   characters      Character[] @relation("GroupCharacters")
 
+  @@index([map_name])
   @@map("character_groups")
 }
 

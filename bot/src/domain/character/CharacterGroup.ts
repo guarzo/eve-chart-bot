@@ -11,10 +11,7 @@ export class CharacterGroup {
   readonly id!: string;
 
   @Expose()
-  readonly name!: string;
-
-  @Expose()
-  readonly slug!: string;
+  readonly map_name!: string;
 
   @Expose()
   @Transform(({ value }) => value?.toString())
@@ -39,6 +36,11 @@ export class CharacterGroup {
   })
   readonly updatedAt!: Date;
 
+  // Computed property for name - use map_name as the display name
+  get name(): string {
+    return this.map_name;
+  }
+
   constructor(data: Partial<CharacterGroup>) {
     Object.assign(this, data);
   }
@@ -50,7 +52,7 @@ export class CharacterGroup {
     return {
       id: this.id,
       name: this.name,
-      slug: this.slug,
+      map_name: this.map_name,
       mainCharacterId: this.mainCharacterId,
       characters: this.characters.map((char) => char.toJSON()),
       createdAt: this.createdAt,

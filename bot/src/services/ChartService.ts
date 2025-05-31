@@ -1111,24 +1111,53 @@ export class ChartService extends BaseRepository {
     try {
       // For each group, get the map activity statistics
       for (const group of displayGroups) {
-        // Get all character IDs in this group
-        const characterIds = group.characters.map((c) => BigInt(c.eveId));
+        // Debug log all characters in this group
+        logger.info(`Processing group ${group.displayName}:`);
+        group.characters.forEach((char, i) => {
+          logger.info(
+            `  Character ${i}: eveId=${char.eveId}, name=${
+              char.name
+            }, eveIdType=${typeof char.eveId}`
+          );
+        });
 
-        if (characterIds.length === 0) {
-          logger.info(`No characters in group ${group.displayName}, skipping`);
+        // Filter out characters with undefined eveId and convert valid ones to BigInt
+        const validCharacters = group.characters.filter((c) => {
+          if (!c.eveId || c.eveId === undefined) {
+            logger.warn(
+              `Skipping character with undefined eveId: ${JSON.stringify(c)}`
+            );
+            return false;
+          }
+          return true;
+        });
+
+        logger.info(
+          `After filtering, group ${group.displayName} has ${validCharacters.length} valid characters out of ${group.characters.length} total`
+        );
+
+        if (validCharacters.length === 0) {
+          logger.info(
+            `No valid characters in group ${group.displayName}, skipping`
+          );
           continue;
         }
 
+        const characterIds = validCharacters.map((c) => BigInt(c.eveId));
+
+        logger.info(
+          `Valid character IDs for group ${group.displayName}: ${characterIds
+            .map((id) => id.toString())
+            .join(", ")}`
+        );
+
         // Get all map activities for these characters
-        const activities = await Promise.all(
-          characterIds.map((id) =>
-            this.mapActivityRepository.getActivityForGroup(
-              id.toString(),
-              startDate,
-              endDate
-            )
-          )
-        ).then((results) => results.flat());
+        const activities =
+          await this.mapActivityRepository.getActivityForCharacters(
+            characterIds.map((id) => id.toString()),
+            startDate,
+            endDate
+          );
 
         if (activities.length === 0) {
           logger.info(`No map activities found for group ${group.displayName}`);
@@ -1320,7 +1349,7 @@ export class ChartService extends BaseRepository {
             if (characters.length > 0) {
               result.push({
                 groupId: group.id,
-                name: group.slug || `Group ${group.id.substring(0, 8)}`,
+                name: group.name || `Group ${group.id.substring(0, 8)}`,
                 characters,
               });
             }
@@ -1342,15 +1371,60 @@ export class ChartService extends BaseRepository {
       const validGroups = groups.filter((group) => group.characters.length > 0);
       logger.info(`${validGroups.length} groups have at least one character`);
 
-      return validGroups.map((group) => ({
-        groupId: group.id,
-        name: group.slug || `Group ${group.id.substring(0, 8)}`,
-        characters: group.characters.map((char) => ({
-          eveId: char.eveId,
-          name: char.name,
-        })),
-        mainCharacterId: group.mainCharacterId || undefined,
-      }));
+      return validGroups
+        .map((group) => {
+          // Debug log the raw group data
+          logger.debug(`Processing group ${group.id}:`, {
+            groupId: group.id,
+            name: group.name,
+            characterCount: group.characters?.length || 0,
+            firstCharacter: group.characters?.[0]
+              ? {
+                  eveId: group.characters[0].eveId,
+                  eveIdType: typeof group.characters[0].eveId,
+                  name: group.characters[0].name,
+                }
+              : null,
+          });
+
+          // Filter and transform characters, ensuring eveId is a valid string
+          const validCharacters = group.characters
+            .map((char) => {
+              // Ensure eveId is properly converted to string
+              const eveId =
+                char.eveId?.toString?.() || String(char.eveId || "");
+              const name = char.name || `Character ${eveId}`;
+
+              return { eveId, name };
+            })
+            .filter((char) => {
+              // Filter out characters with invalid eveId
+              if (
+                !char.eveId ||
+                char.eveId === "" ||
+                char.eveId === "undefined" ||
+                char.eveId === "null"
+              ) {
+                logger.warn(`Skipping character with invalid eveId:`, char);
+                return false;
+              }
+              return true;
+            });
+
+          logger.debug(
+            `Group ${group.id} has ${validCharacters.length} valid characters`
+          );
+
+          return {
+            groupId: group.id,
+            name: group.name || `Group ${group.id.substring(0, 8)}`,
+            characters: validCharacters,
+            mainCharacterId:
+              group.mainCharacterId?.toString?.() ||
+              String(group.mainCharacterId || ""),
+          };
+        })
+        .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
     } catch (error: unknown) {
       logger.error("Error fetching character groups:", {
         error: error instanceof Error ? error.message : String(error),
@@ -1374,7 +1448,7 @@ export class ChartService extends BaseRepository {
           string,
           {
             characters: Array<{ eveId: string; name: string }>;
-            slug?: string;
+            name?: string;
             mainCharacterId?: string;
           }
         >();
@@ -1386,21 +1460,35 @@ export class ChartService extends BaseRepository {
             groupMap.set(char.characterGroupId, { characters: [] });
           }
 
-          groupMap.get(char.characterGroupId)!.characters.push({
-            eveId: char.eveId,
-            name: char.name,
-          });
+          // Ensure eveId is properly converted to string
+          const eveId = char.eveId?.toString?.() || String(char.eveId || "");
+          const name = char.name || `Character ${eveId}`;
+
+          // Only add if eveId is valid
+          if (
+            eveId &&
+            eveId !== "" &&
+            eveId !== "undefined" &&
+            eveId !== "null"
+          ) {
+            groupMap.get(char.characterGroupId)!.characters.push({
+              eveId,
+              name,
+            });
+          }
         }
 
         // Convert to the expected format
-        const result = Array.from(groupMap.entries()).map(
-          ([groupId, data]) => ({
+        const result = Array.from(groupMap.entries())
+          .map(([groupId, data]) => ({
             groupId,
-            name: data.slug || `Group ${groupId.substring(0, 8)}`,
+            name: data.name || `Group ${groupId.substring(0, 8)}`,
             characters: data.characters,
-            mainCharacterId: data.mainCharacterId, // Include mainCharacterId
-          })
-        );
+            mainCharacterId:
+              data.mainCharacterId?.toString?.() ||
+              String(data.mainCharacterId || ""),
+          }))
+          .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
 
         logger.info(
           `Alternative approach found ${result.length} character groups`

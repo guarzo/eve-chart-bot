@@ -60,6 +60,11 @@ export class RedisQService {
   private esiService: ESIService;
   private isRunning = false;
   private refreshInterval: NodeJS.Timeout | null = null;
+  private loggingInterval: NodeJS.Timeout | null = null;
+  private periodMetrics = {
+    receivedKillmails: 0,
+    lastLogTime: new Date(),
+  };
   private metrics = {
     processedKillmails: 0,
     failedKillmails: 0,
@@ -93,6 +98,12 @@ export class RedisQService {
       5 * 60 * 1000 // Refresh every 5 minutes
     );
 
+    // Start periodic logging of RedisQ activity
+    this.loggingInterval = setInterval(
+      () => this.logPeriodicMetrics(),
+      60 * 1000 // Log every minute
+    );
+
     // Initial refresh
     await this.refreshTrackedCharacters();
 
@@ -115,6 +126,11 @@ export class RedisQService {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
       this.refreshInterval = null;
+    }
+
+    if (this.loggingInterval) {
+      clearInterval(this.loggingInterval);
+      this.loggingInterval = null;
     }
 
     await this.redis.quit();
@@ -167,6 +183,9 @@ export class RedisQService {
 
       if (!isVictimTracked && trackedAttackers.length === 0) {
         this.metrics.skippedKillmails++;
+        logger.debug(
+          `Skipped killmail ${killID} - no tracked characters involved`
+        );
         return;
       }
 
@@ -280,6 +299,29 @@ export class RedisQService {
   }
 
   /**
+   * Log periodic metrics about RedisQ activity
+   */
+  private logPeriodicMetrics(): void {
+    const now = new Date();
+    const timeSinceLastLog =
+      (now.getTime() - this.periodMetrics.lastLogTime.getTime()) / 1000;
+
+    if (this.periodMetrics.receivedKillmails > 0) {
+      logger.info(
+        `RedisQ activity: ${
+          this.periodMetrics.receivedKillmails
+        } killmails received in last ${Math.round(timeSinceLastLog)}s`
+      );
+    } else {
+      logger.debug("RedisQ activity: No killmails received in the last minute");
+    }
+
+    // Reset counters
+    this.periodMetrics.receivedKillmails = 0;
+    this.periodMetrics.lastLogTime = now;
+  }
+
+  /**
    * Poll RedisQ for new killmails
    */
   private async poll(): Promise<void> {
@@ -289,7 +331,7 @@ export class RedisQService {
       const response = await retryOperation(
         () =>
           fetch(
-            "https://redisq.zkillboard.com/listen.php?queueID=eve-chart-bot"
+            "https://zkillredisq.stream/listen.php?queueID=eve-chart-bot&ttw=10"
           ),
         "",
         {
@@ -307,6 +349,7 @@ export class RedisQService {
       const data = await response.json();
 
       if (data && data.package) {
+        this.periodMetrics.receivedKillmails++;
         await this.processKillmail(data.package as RedisQKillmail);
       }
 

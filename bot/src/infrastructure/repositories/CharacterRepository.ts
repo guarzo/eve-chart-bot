@@ -2,6 +2,7 @@ import { Character } from "../../domain/character/Character";
 import { CharacterGroup } from "../../domain/character/CharacterGroup";
 import { PrismaMapper } from "../mapper/PrismaMapper";
 import { BaseRepository } from "./BaseRepository";
+import { logger } from "../../lib/logger";
 
 /**
  * Repository for character-related data access
@@ -109,17 +110,56 @@ export class CharacterRepository extends BaseRepository {
       where: { id },
       include: { characters: true },
     });
-    return group ? PrismaMapper.map(group, CharacterGroup) : null;
+
+    if (!group) {
+      return null;
+    }
+
+    // Map characters individually first
+    const mappedCharacters =
+      group.characters?.map((char: any) => PrismaMapper.map(char, Character)) ||
+      [];
+
+    // Create the group object with properly mapped characters
+    const groupData = {
+      ...group,
+      characters: mappedCharacters,
+    };
+
+    return PrismaMapper.map(groupData, CharacterGroup);
   }
 
   /**
    * Get all character groups
    */
   async getAllCharacterGroups(): Promise<CharacterGroup[]> {
-    const groups = await this.prisma.characterGroup.findMany({
-      include: { characters: true },
-    });
-    return groups.map((group: any) => PrismaMapper.map(group, CharacterGroup));
+    try {
+      const groups = await this.prisma.characterGroup.findMany({
+        include: { characters: true },
+      });
+
+      logger.info(`Found ${groups.length} raw groups from database`);
+      logger.info(`First group sample:`, JSON.stringify(groups[0], null, 2));
+
+      // Temporarily return simplified data without PrismaMapper to test
+      return groups.map((group: any) => {
+        const simpleCharacters =
+          group.characters?.map((char: any) => ({
+            eveId: char.eveId?.toString() || "",
+            name: char.name || "",
+          })) || [];
+
+        return {
+          id: group.id,
+          name: group.map_name || "Unknown",
+          characters: simpleCharacters,
+          mainCharacterId: group.mainCharacterId?.toString(),
+        } as any;
+      });
+    } catch (error) {
+      logger.error("Error in getAllCharacterGroups:", error);
+      throw error;
+    }
   }
 
   /**
@@ -130,12 +170,12 @@ export class CharacterRepository extends BaseRepository {
     const saved = await this.prisma.characterGroup.upsert({
       where: { id: group.id },
       update: {
-        slug: data.slug,
+        map_name: data.map_name,
         mainCharacterId: data.mainCharacterId,
       },
       create: {
         id: data.id,
-        slug: data.slug,
+        map_name: data.map_name,
         mainCharacterId: data.mainCharacterId,
       },
     });
@@ -164,7 +204,20 @@ export class CharacterRepository extends BaseRepository {
       data: { mainCharacterId: BigInt(eveId) },
       include: { characters: true },
     });
-    return PrismaMapper.map(updated, CharacterGroup);
+
+    // Map characters individually first
+    const mappedCharacters =
+      updated.characters?.map((char: any) =>
+        PrismaMapper.map(char, Character)
+      ) || [];
+
+    // Create the group object with properly mapped characters
+    const groupData = {
+      ...updated,
+      characters: mappedCharacters,
+    };
+
+    return PrismaMapper.map(groupData, CharacterGroup);
   }
 
   /**
@@ -327,13 +380,13 @@ export class CharacterRepository extends BaseRepository {
   }
 
   /**
-   * Get characters by map name (slug)
+   * Get characters by map name
    */
   async getCharactersByMapName(mapName: string): Promise<Character[]> {
     const characters = await this.prisma.character.findMany({
       where: {
         characterGroup: {
-          slug: mapName,
+          map_name: mapName,
         },
       },
     });
@@ -399,12 +452,12 @@ export class CharacterRepository extends BaseRepository {
    * Create a new character group
    */
   async createCharacterGroup(
-    slug: string,
+    mapName: string,
     mainCharacterId?: string | bigint
   ): Promise<CharacterGroup> {
     const created = await this.prisma.characterGroup.create({
       data: {
-        slug,
+        map_name: mapName,
         mainCharacterId: mainCharacterId
           ? typeof mainCharacterId === "string"
             ? BigInt(mainCharacterId)

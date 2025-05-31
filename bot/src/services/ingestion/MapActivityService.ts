@@ -5,12 +5,10 @@ import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
-import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 
 export class MapActivityService {
   private readonly map: MapClient;
   private readonly cache: CacheRedisAdapter;
-  private readonly characterRepository: CharacterRepository;
   private readonly mapActivityRepository: MapActivityRepository;
   private readonly maxRetries: number;
   private readonly retryDelay: number;
@@ -25,7 +23,6 @@ export class MapActivityService {
   ) {
     this.map = new MapClient(mapApiUrl, mapApiKey);
     this.cache = new CacheRedisAdapter(redisUrl, cacheTtl);
-    this.characterRepository = new CharacterRepository();
     this.mapActivityRepository = new MapActivityRepository();
     this.maxRetries = maxRetries;
     this.retryDelay = retryDelay;
@@ -36,19 +33,23 @@ export class MapActivityService {
    */
   public async start(): Promise<void> {
     logger.info("Starting map activity service...");
-    // Initial sync of all characters
-    const characters = await this.characterRepository.getAllCharacters();
-    for (const character of characters) {
-      try {
-        await this.ingestMapActivity(character.eveId.toString(), 7); // Last 7 days
-      } catch (error) {
-        logger.error(
-          `Error ingesting map activity for character ${character.eveId}:`,
-          error
-        );
-      }
+
+    // Get map name from environment
+    const mapName = process.env.MAP_NAME;
+    if (!mapName) {
+      logger.warn(
+        "MAP_NAME environment variable not set, skipping map activity ingestion"
+      );
+      return;
     }
-    logger.info("Map activity service started successfully");
+
+    try {
+      // Fetch map activity data for the entire map (not per character)
+      await this.ingestMapActivity(mapName, 7); // Last 7 days
+      logger.info("Map activity service started successfully");
+    } catch (error) {
+      logger.error(`Error ingesting map activity for map ${mapName}:`, error);
+    }
   }
 
   public async ingestMapActivity(slug: string, days = 7): Promise<void> {

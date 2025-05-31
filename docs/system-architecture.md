@@ -68,7 +68,7 @@ The RedisQ service processes real-time killmails from zKillboard's RedisQ feed:
 
 1. **Polling Process**
 
-   - Polls `https://redisq.zkillboard.com/listen.php?queueID=eve-chart-bot`
+   - Polls `https://zkillredisq.stream/listen.php?queueID=eve-chart-bot&ttw=10`
    - 1-second delay between polls
    - 5-second delay after errors
 

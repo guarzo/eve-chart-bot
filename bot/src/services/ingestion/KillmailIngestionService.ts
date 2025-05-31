@@ -34,6 +34,18 @@ export class KillmailIngestionService {
    */
   public async start(): Promise<void> {
     logger.info("Starting killmail ingestion service...");
+
+    // Check if backfill is enabled via environment variable
+    if (process.env.ENABLE_BACKFILL !== "true") {
+      logger.info(
+        "Automatic backfill is disabled. Set ENABLE_BACKFILL=true to enable automatic backfill on startup"
+      );
+      logger.info(
+        "Killmail ingestion service started successfully (without initial backfill)"
+      );
+      return;
+    }
+
     // Initial backfill of all characters
     const characters = await this.characterRepository.getAllCharacters();
     for (const character of characters) {
