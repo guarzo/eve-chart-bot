@@ -13,20 +13,20 @@ export class ChartRenderer {
    * @returns Buffer containing the PNG image
    */
   static async renderPNG(
-    chartData: ChartData,
-    options: Partial<ChartOptions> = {}
+    _chartData: ChartData,
+    options?: Partial<ChartOptions>
   ): Promise<Buffer | null> {
     try {
       // Set default options
       const chartOptions: ChartOptions = {
-        width: options.width || 800,
-        height: options.height || 600,
-        title: options.title,
+        width: options?.width || 800,
+        height: options?.height || 600,
+        title: options?.title,
         showLegend:
-          options.showLegend !== undefined ? options.showLegend : true,
+          options?.showLegend !== undefined ? options.showLegend : true,
         showLabels:
-          options.showLabels !== undefined ? options.showLabels : true,
-        lightMode: options.lightMode !== undefined ? options.lightMode : false,
+          options?.showLabels !== undefined ? options.showLabels : true,
+        lightMode: options?.lightMode !== undefined ? options.lightMode : false,
       };
 
       logger.info(`Rendering PNG chart: ${chartOptions.title || "Untitled"}`);
@@ -190,7 +190,7 @@ export class ChartRenderer {
       if (chartOptions.showLegend) {
         html += `<div class="legend"><h3>Legend</h3>`;
 
-        chartData.datasets.forEach((dataset, datasetIndex) => {
+        chartData.datasets.forEach((dataset, _datasetIndex) => {
           const colors = Array.isArray(dataset.backgroundColor)
             ? dataset.backgroundColor
             : [dataset.backgroundColor];

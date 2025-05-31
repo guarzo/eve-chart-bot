@@ -6,16 +6,16 @@ import { KillRepository } from "../../../infrastructure/repositories/KillReposit
 import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
 
 interface Kill {
-  character_id: string;
-  timestamp: Date;
-  attacker_count: number;
+  killmailId: bigint;
+  killTime: Date;
+  victim?: { characterId?: bigint };
+  attackers?: Array<{ characterId?: bigint }>;
   solo: boolean;
-  attackers?: Array<{ character_id: string }>;
-  killmail_id: string;
+  [key: string]: any; // For other properties
 }
 
 interface Attacker {
-  character_id: string | null;
+  characterId?: bigint;
 }
 
 /**
@@ -74,11 +74,54 @@ export class KillsChartGenerator extends BaseChartGenerator {
       `Found ${kills.length} total kills across all characters (including as attackers)`
     );
 
+    // Debug: Log the first few kills to see their structure
+    if (kills.length > 0) {
+      logger.info("Sample kill data structure:");
+      kills.slice(0, 3).forEach((kill, index) => {
+        logger.info(`Kill ${index + 1}:`);
+        logger.info(
+          `  killmailId: ${kill.killmailId} (type: ${typeof kill.killmailId})`
+        );
+        logger.info(
+          `  victim.characterId: ${
+            kill.victim?.characterId
+          } (type: ${typeof kill.victim?.characterId})`
+        );
+        logger.info(`  attackers_count: ${kill.attackers?.length || 0}`);
+        logger.info(`  all_keys: ${Object.keys(kill).join(", ")}`);
+        if (kill.attackers?.[0]) {
+          logger.info(
+            `  first_attacker.characterId: ${
+              kill.attackers[0].characterId
+            } (type: ${typeof kill.attackers[0].characterId})`
+          );
+        }
+      });
+    }
+
+    // Debug: Log character IDs we're looking for
+    logger.info(
+      `Character IDs we're looking for: ${characterIds
+        .slice(0, 5)
+        .map((id) => id.toString())
+        .join(", ")}`
+    );
+
     // Log distribution of kills across characters
     const killsByCharacter = new Map<string, number>();
     kills.forEach((kill) => {
-      const charId = kill.character_id.toString();
-      killsByCharacter.set(charId, (killsByCharacter.get(charId) || 0) + 1);
+      // Count kills by attackers (those who participated in the kill)
+      if (kill.attackers) {
+        kill.attackers.forEach((attacker: any) => {
+          if (attacker.characterId != null) {
+            const charId = attacker.characterId.toString();
+            killsByCharacter.set(
+              charId,
+              (killsByCharacter.get(charId) || 0) + 1
+            );
+          }
+        });
+      }
     });
 
     logger.info(
@@ -106,38 +149,58 @@ export class KillsChartGenerator extends BaseChartGenerator {
       // 1. The main character on the kill is in the group, OR
       // 2. Any of the attackers are in the group
       kills.forEach((kill: Kill) => {
+        const killmailIdStr = kill.killmailId?.toString();
+        if (!killmailIdStr) return;
+
         // Skip if we've already counted this killmail
-        if (uniqueGroupKillIds.has(kill.killmail_id.toString())) {
+        if (uniqueGroupKillIds.has(killmailIdStr)) {
           return;
         }
 
-        // Check if main killer is in group
-        if (groupCharacterIds.includes(BigInt(kill.character_id))) {
-          uniqueGroupKillIds.add(kill.killmail_id.toString());
-          return;
-        }
+        // Debug for first group only to avoid spam
+        const isFirstGroup = group === characterGroups[0];
 
-        // Check if any attackers are in group
+        // Check if any attackers are in group (kills are attributed to attackers)
         if (kill.attackers && kill.attackers.length > 0) {
           for (const attacker of kill.attackers) {
-            if (!attacker.character_id) continue;
+            if (!attacker.characterId) continue;
 
-            if (
-              groupCharacterIds.includes(
-                BigInt(attacker.character_id.toString())
-              )
-            ) {
-              uniqueGroupKillIds.add(kill.killmail_id.toString());
+            const attackerCharId = BigInt(attacker.characterId);
+            if (groupCharacterIds.includes(attackerCharId)) {
+              if (isFirstGroup && kills.indexOf(kill) < 3) {
+                logger.info(
+                  `Found attacker match in kill ${killmailIdStr}: attacker=${attacker.characterId}`
+                );
+              }
+              uniqueGroupKillIds.add(killmailIdStr);
               return;
             }
+          }
+        }
+
+        // Also check if victim is in group (for loss tracking)
+        if (kill.victim?.characterId != null) {
+          const victimCharId = BigInt(kill.victim.characterId);
+          const isVictimInGroup = groupCharacterIds.includes(victimCharId);
+
+          if (isFirstGroup && kills.indexOf(kill) < 3) {
+            logger.info(
+              `Checking kill ${killmailIdStr}: victim=${kill.victim.characterId}, isInGroup=${isVictimInGroup}`
+            );
+          }
+
+          if (isVictimInGroup) {
+            uniqueGroupKillIds.add(killmailIdStr);
+            return;
           }
         }
       });
 
       // Now get the actual kill objects for the unique IDs
-      const groupKills = kills.filter((kill: Kill) =>
-        uniqueGroupKillIds.has(kill.killmail_id.toString())
-      );
+      const groupKills = kills.filter((kill: Kill) => {
+        const killmailIdStr = kill.killmailId?.toString();
+        return killmailIdStr && uniqueGroupKillIds.has(killmailIdStr);
+      });
 
       // Calculate total kills using the unique count
       const totalKills = uniqueGroupKillIds.size;
@@ -148,9 +211,16 @@ export class KillsChartGenerator extends BaseChartGenerator {
 
       if (groupKills.length > 0) {
         // List the first few character IDs that have kills in this group
-        const characterIdsWithKills = new Set(
-          groupKills.map((k) => k.character_id.toString())
-        );
+        const characterIdsWithKills = new Set<string>();
+        groupKills.forEach((kill) => {
+          if (kill.attackers) {
+            kill.attackers.forEach((attacker: any) => {
+              if (attacker.characterId != null) {
+                characterIdsWithKills.add(attacker.characterId.toString());
+              }
+            });
+          }
+        });
         logger.info(
           `Characters with kills in group ${groupName}: ${Array.from(
             characterIdsWithKills
@@ -170,7 +240,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
 
         // Get all player attackers (those with character IDs)
         const playerAttackers = kill.attackers.filter(
-          (a: Attacker) => a.character_id
+          (a: Attacker) => a.characterId != null
         );
         if (playerAttackers.length === 0) continue;
 
@@ -179,16 +249,17 @@ export class KillsChartGenerator extends BaseChartGenerator {
         // 2. All player attackers are from this group
         const isTrueSolo = playerAttackers.length === 1;
         const allFromGroup = playerAttackers.every((attacker: Attacker) => {
-          if (!attacker.character_id) return false;
-          return groupCharacterIds.includes(BigInt(attacker.character_id));
+          if (!attacker.characterId) return false;
+          return groupCharacterIds.includes(BigInt(attacker.characterId));
         });
 
         if (isTrueSolo || allFromGroup) {
           soloKills++;
+          const killmailIdStr = kill.killmailId?.toString() || "unknown";
           logger.info(
             `Found ${
               isTrueSolo ? "true" : "group"
-            } solo kill for group ${groupName}: Kill ID ${kill.killmail_id} - ${
+            } solo kill for group ${groupName}: Kill ID ${killmailIdStr} - ${
               playerAttackers.length
             } player attackers`
           );

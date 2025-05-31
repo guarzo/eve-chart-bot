@@ -43,21 +43,7 @@ export class CharacterSyncService {
     }
 
     try {
-      await this.syncUserCharacters(mapName);
-
-      // Automatically create character groups after syncing
-      await this.createCharacterGroups();
-
-      logger.info("Character sync service started successfully");
-    } catch (error) {
-      logger.error(`Error during character sync: ${error}`);
-      throw error;
-    }
-  }
-
-  public async syncUserCharacters(mapName: string): Promise<void> {
-    try {
-      // Get all characters from map API
+      // Fetch map data once and use it for both operations
       const mapData = await retryOperation(
         () => this.map.getUserCharacters(mapName),
         `Fetching character data for map ${mapName}`,
@@ -73,6 +59,30 @@ export class CharacterSyncService {
         return;
       }
 
+      const characterSyncResults = await this.syncUserCharacters(mapData);
+      const groupResults = await this.createCharacterGroups(mapData, mapName);
+
+      logger.info(
+        `Character sync service started successfully - Characters: ${characterSyncResults.total} total (${characterSyncResults.synced} synced, ${characterSyncResults.skipped} skipped, ${characterSyncResults.errors} errors), Groups: ${groupResults.total} total (${groupResults.created} created, ${groupResults.updated} updated)`
+      );
+    } catch (error) {
+      logger.error(`Error during character sync: ${error}`);
+      throw error;
+    }
+  }
+
+  public async syncUserCharacters(mapData: any): Promise<{
+    total: number;
+    synced: number;
+    skipped: number;
+    errors: number;
+  }> {
+    try {
+      if (!mapData?.data || !Array.isArray(mapData.data)) {
+        logger.warn(`No valid character data available`);
+        return { total: 0, synced: 0, skipped: 0, errors: 0 };
+      }
+
       // Extract unique characters from the map data
       const uniqueCharacters = new Map();
       for (const user of mapData.data) {
@@ -82,10 +92,6 @@ export class CharacterSyncService {
           }
         }
       }
-
-      logger.info(
-        `Found ${uniqueCharacters.size} unique characters to sync for map ${mapName}`
-      );
 
       // Track sync statistics
       let syncedCount = 0;
@@ -110,14 +116,14 @@ export class CharacterSyncService {
         }
       }
 
-      // Log summary
-      logger.info(
-        `Character sync summary for map ${mapName}: total=${uniqueCharacters.size}, synced=${syncedCount}, skipped=${skippedCount}, errors=${errorCount}`
-      );
+      return {
+        total: uniqueCharacters.size,
+        synced: syncedCount,
+        skipped: skippedCount,
+        errors: errorCount,
+      };
     } catch (error: any) {
-      logger.error(
-        `Error syncing user characters for map ${mapName}: ${error.message}`
-      );
+      logger.error(`Error syncing user characters: ${error.message}`);
       throw error;
     }
   }
@@ -125,35 +131,22 @@ export class CharacterSyncService {
   /**
    * Create character groups based on users from Map API after character sync
    */
-  private async createCharacterGroups(): Promise<void> {
+  private async createCharacterGroups(
+    mapData: any,
+    mapName: string
+  ): Promise<{
+    total: number;
+    created: number;
+    updated: number;
+  }> {
     try {
-      logger.info(
-        "Creating character groups based on Map API user groupings..."
-      );
-
-      const mapName = process.env.MAP_NAME;
-      if (!mapName) {
-        logger.warn("MAP_NAME not set, cannot create groups");
-        return;
-      }
-
-      // Get the same map data to see the user groupings
-      const mapData = await retryOperation(
-        () => this.map.getUserCharacters(mapName),
-        `Fetching user groups for map ${mapName}`,
-        {
-          maxRetries: this.maxRetries,
-          initialRetryDelay: this.retryDelay,
-          timeout: 30000,
-        }
-      );
-
       if (!mapData?.data || !Array.isArray(mapData.data)) {
         logger.warn(`No valid user data available for map ${mapName}`);
-        return;
+        return { total: 0, created: 0, updated: 0 };
       }
 
-      logger.info(`Found ${mapData.data.length} user groups to process`);
+      let createdCount = 0;
+      let updatedCount = 0;
 
       // Process each user group
       for (let i = 0; i < mapData.data.length; i++) {
@@ -161,12 +154,11 @@ export class CharacterSyncService {
         const userCharacters = user.characters || [];
 
         if (userCharacters.length === 0) {
-          logger.info(`Skipping user ${i} - no characters`);
           continue;
         }
 
         // Extract character IDs for this group
-        const characterIds = userCharacters.map((c) => BigInt(c.eve_id));
+        const characterIds = userCharacters.map((c: any) => BigInt(c.eve_id));
 
         // Check if we already have a group containing any of these characters
         const existingGroup = await this.prisma.characterGroup.findFirst({
@@ -189,9 +181,6 @@ export class CharacterSyncService {
           // Use existing group
           groupId = existingGroup.id;
           groupName = existingGroup.map_name;
-          logger.info(
-            `Found existing group ${groupName} (${groupId}) for user ${i}`
-          );
 
           // Check if we need to update the main character
           // Use the main_character_eve_id from API, or fall back to first character if null
@@ -204,9 +193,7 @@ export class CharacterSyncService {
               where: { id: groupId },
               data: { mainCharacterId: intendedMainCharId },
             });
-            logger.info(
-              `Updated main character for group ${groupName} to character ${intendedMainCharId}`
-            );
+            updatedCount++;
           }
         } else {
           // Create new group - use a stable identifier based on user index and main character
@@ -216,10 +203,6 @@ export class CharacterSyncService {
 
           groupName = `user-${i}-${mainCharacterId}`;
 
-          logger.info(
-            `Creating new group ${groupName} with ${userCharacters.length} characters`
-          );
-
           const group = await this.prisma.characterGroup.create({
             data: {
               map_name: mapName, // Use the MAP_NAME environment variable
@@ -227,7 +210,7 @@ export class CharacterSyncService {
             },
           });
           groupId = group.id;
-          logger.info(`Created new group ${groupName} (${groupId})`);
+          createdCount++;
         }
 
         // Ensure all characters in this user are assigned to this group
@@ -243,15 +226,13 @@ export class CharacterSyncService {
             );
           }
         }
-
-        logger.info(
-          `Successfully processed group ${groupName} with ${userCharacters.length} characters`
-        );
       }
 
-      logger.info(
-        "Successfully processed all character groups from Map API users"
-      );
+      return {
+        total: mapData.data.length,
+        created: createdCount,
+        updated: updatedCount,
+      };
     } catch (error) {
       logger.error(
         "Error creating character groups from Map API users:",

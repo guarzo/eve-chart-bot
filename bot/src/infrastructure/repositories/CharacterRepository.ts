@@ -139,22 +139,44 @@ export class CharacterRepository extends BaseRepository {
       });
 
       logger.info(`Found ${groups.length} raw groups from database`);
-      logger.info(`First group sample:`, JSON.stringify(groups[0], null, 2));
 
-      // Temporarily return simplified data without PrismaMapper to test
+      // Map groups with proper field mapping
       return groups.map((group: any) => {
-        const simpleCharacters =
-          group.characters?.map((char: any) => ({
-            eveId: char.eveId?.toString() || "",
-            name: char.name || "",
-          })) || [];
+        // Map characters with proper field name conversion from snake_case to camelCase
+        const mappedCharacters =
+          group.characters?.map((char: any) => {
+            // Create proper Character domain object with correct field mapping
+            const characterData = {
+              eveId: char.eveId?.toString() || char.eve_id?.toString() || "",
+              name: char.name || "",
+              allianceId: char.allianceId || char.alliance_id,
+              allianceTicker: char.allianceTicker || char.alliance_ticker,
+              corporationId: char.corporationId || char.corporation_id,
+              corporationTicker:
+                char.corporationTicker || char.corporation_ticker,
+              characterGroupId:
+                char.characterGroupId || char.character_group_id,
+              createdAt: char.createdAt || char.created_at,
+              updatedAt: char.updatedAt || char.updated_at,
+              lastBackfillAt: char.lastBackfillAt || char.last_backfill_at,
+            };
 
-        return {
+            return new Character(characterData);
+          }) || [];
+
+        // Create proper CharacterGroup domain object
+        const groupData = {
           id: group.id,
-          name: group.map_name || "Unknown",
-          characters: simpleCharacters,
-          mainCharacterId: group.mainCharacterId?.toString(),
-        } as any;
+          map_name: group.map_name,
+          mainCharacterId:
+            group.mainCharacterId?.toString() ||
+            group.main_character_id?.toString(),
+          createdAt: group.createdAt || group.created_at,
+          updatedAt: group.updatedAt || group.updated_at,
+          characters: mappedCharacters,
+        };
+
+        return new CharacterGroup(groupData);
       });
     } catch (error) {
       logger.error("Error in getAllCharacterGroups:", error);

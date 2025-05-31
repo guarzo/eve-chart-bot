@@ -196,7 +196,7 @@ export class ChartService {
    * @returns Buffer containing the PNG image or null if rendering failed
    */
   async renderChart(
-    chartData: ChartData,
+    _chartData: ChartData,
     options: Partial<ChartOptions> = {}
   ): Promise<Buffer | null> {
     try {

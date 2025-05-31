@@ -1,6 +1,5 @@
 import {
   ChartType,
-  ChartDataset as ChartJSDataset,
   ChartOptions as ChartJSOptions,
 } from "chart.js";
 

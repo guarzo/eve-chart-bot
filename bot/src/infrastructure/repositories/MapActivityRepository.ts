@@ -1,6 +1,5 @@
-import { BaseRepository } from "./BaseRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
-import { PrismaMapper } from "../mapper/PrismaMapper";
+import { BaseRepository } from "./BaseRepository";
 import { logger } from "../../lib/logger";
 
 /**
@@ -32,7 +31,19 @@ export class MapActivityRepository extends BaseRepository {
           timestamp: "desc",
         },
       });
-      return PrismaMapper.mapArray(activities, MapActivity);
+
+      // Map activities with proper field name conversion from snake_case to camelCase
+      return activities.map((activity: any) => {
+        return new MapActivity({
+          characterId: activity.characterId || activity.character_id,
+          timestamp: activity.timestamp,
+          signatures: activity.signatures,
+          connections: activity.connections,
+          passages: activity.passages,
+          allianceId: activity.allianceId || activity.alliance_id,
+          corporationId: activity.corporationId || activity.corporation_id,
+        });
+      });
     });
   }
 
@@ -87,7 +98,18 @@ export class MapActivityRepository extends BaseRepository {
       logger.debug(`Raw activities from database:`, activities.slice(0, 2)); // Log first 2 records
 
       try {
-        return PrismaMapper.mapArray(activities, MapActivity);
+        // Map activities with proper field name conversion from snake_case to camelCase
+        return activities.map((activity: any) => {
+          return new MapActivity({
+            characterId: activity.characterId || activity.character_id,
+            timestamp: activity.timestamp,
+            signatures: activity.signatures,
+            connections: activity.connections,
+            passages: activity.passages,
+            allianceId: activity.allianceId || activity.alliance_id,
+            corporationId: activity.corporationId || activity.corporation_id,
+          });
+        });
       } catch (error) {
         logger.error(
           `Error mapping activities to MapActivity domain objects:`,

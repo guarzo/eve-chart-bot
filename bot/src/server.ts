@@ -495,20 +495,12 @@ export async function startServer() {
     throw error;
   }
 
-  // Start character sync service
-  logger.info("Starting character sync service...");
+  // Start services
   await characterService.start();
-
-  // Start killmail ingestion service
-  logger.info("Starting killmail ingestion service...");
   await killmailService.start();
-
-  // Start map activity service
-  logger.info("Starting map activity service...");
   await mapService.start();
 
   // Initialize RedisQ service
-  logger.info("Starting RedisQ service...");
   redisQService = new RedisQService(
     process.env.REDIS_URL || "redis://localhost:6379"
   );

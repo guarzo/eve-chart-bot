@@ -38,27 +38,32 @@ export class KillmailIngestionService {
     // Check if backfill is enabled via environment variable
     if (process.env.ENABLE_BACKFILL !== "true") {
       logger.info(
-        "Automatic backfill is disabled. Set ENABLE_BACKFILL=true to enable automatic backfill on startup"
-      );
-      logger.info(
-        "Killmail ingestion service started successfully (without initial backfill)"
+        "Killmail ingestion service started successfully (backfill disabled)"
       );
       return;
     }
 
     // Initial backfill of all characters
     const characters = await this.characterRepository.getAllCharacters();
+    let completedCount = 0;
+    let errorCount = 0;
+
     for (const character of characters) {
       try {
         await this.backfillKills(BigInt(character.eveId));
+        completedCount++;
       } catch (error) {
+        errorCount++;
         logger.error(
           `Error backfilling kills for character ${character.eveId}:`,
           error
         );
       }
     }
-    logger.info("Killmail ingestion service started successfully");
+
+    logger.info(
+      `Killmail ingestion service started successfully - Backfilled ${characters.length} characters (${completedCount} completed, ${errorCount} errors)`
+    );
   }
 
   /**
@@ -193,6 +198,20 @@ export class KillmailIngestionService {
       const tracked = await this.characterRepository.getCharactersByEveIds(
         allIds
       );
+
+      // Debug logging for backfill operations
+      const isBackfill = this.isBackfillOperation();
+      if (isBackfill && tracked.length === 0) {
+        logger.warn(`No tracked characters found for killmail ${killId}`, {
+          allCharacterIds: allIds,
+          victimId: victim.characterId?.toString(),
+          attackerIds: attackers
+            .map((a) => a.characterId?.toString())
+            .filter(Boolean),
+          isBackfill,
+        });
+      }
+
       if (tracked.length === 0) {
         return {
           success: false,
@@ -203,7 +222,6 @@ export class KillmailIngestionService {
 
       // 6) For backfill (kills/losses), we only need at least one tracked character
       // For RedisQ, we need to validate there is a tracked attacker or victim
-      const isBackfill = this.isBackfillOperation();
       if (!isBackfill) {
         // For RedisQ, ensure we have at least one tracked character involved
         const victimId = victim.characterId?.toString();
@@ -268,10 +286,6 @@ export class KillmailIngestionService {
   ): Promise<void> {
     const startTime = Date.now();
     try {
-      logger.info(
-        `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
-      );
-
       // Get character from repository
       const character = await this.characterRepository.getCharacter(
         characterId.toString()
@@ -283,7 +297,6 @@ export class KillmailIngestionService {
       // Calculate cutoff date
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
-      logger.info(`Cutoff date for backfill: ${cutoffDate.toISOString()}`);
 
       // Get last processed killmail ID
       const checkpoint =
@@ -297,6 +310,7 @@ export class KillmailIngestionService {
       let lastProcessedId = checkpoint.lastSeenId;
       let successfulIngestCount = 0;
       let skippedCount = 0;
+      let duplicateCount = 0;
       let errorCount = 0;
       let tooOldCount = 0;
       let totalKillmailsProcessed = 0;
@@ -305,8 +319,6 @@ export class KillmailIngestionService {
 
       while (hasMore && !reachedCutoff) {
         try {
-          logger.info(`Fetching page ${page} for character ${characterId}...`);
-
           // Fetch killmails from zKillboard
           const killmails = await retryOperation(
             () => this.zkill.getCharacterKills(Number(characterId), page),
@@ -319,44 +331,24 @@ export class KillmailIngestionService {
           );
 
           if (!killmails || killmails.length === 0) {
-            logger.info(`No more killmails found for character ${characterId}`);
             hasMore = false;
             continue;
           }
 
-          // Log progress at the start of each page
-          logger.info(
-            `Processing page ${page} for character ${characterId} - found ${killmails.length} killmails`
-          );
-
           let allKillsInDb = true;
           let hitCheckpoint = false;
-          let pageStartTime = Date.now();
 
           // Process each killmail
           for (const [index, killmail] of killmails.entries()) {
             try {
               if (!killmail || !killmail.killmail_id || !killmail.zkb) {
-                logger.debug(`Skipping invalid killmail at index ${index}`);
                 continue;
               }
 
               const killId = killmail.killmail_id;
 
-              // Log progress every 10 killmails
-              if (index % 10 === 0) {
-                logger.info(
-                  `Processing killmail ${index + 1}/${
-                    killmails.length
-                  } (ID: ${killId}) for character ${characterId}`
-                );
-              }
-
               // Check if we've hit the checkpoint from a previous run
               if (killId <= lastProcessedId) {
-                logger.info(
-                  `Reached previously processed killmail ${killId}, stopping`
-                );
                 hitCheckpoint = true;
                 hasMore = false;
                 break;
@@ -380,14 +372,8 @@ export class KillmailIngestionService {
 
               // Check killmail age
               const killTime = new Date(esiData.killmail_time);
-              logger.debug(
-                `Killmail ${killId} time: ${killTime.toISOString()}`
-              );
 
               if (killTime < cutoffDate) {
-                logger.info(
-                  `Reached killmail older than cutoff date (${cutoffDate.toISOString()}), stopping. Killmail time: ${killTime.toISOString()}`
-                );
                 tooOldCount++;
                 reachedCutoff = true;
                 hasMore = false;
@@ -399,10 +385,14 @@ export class KillmailIngestionService {
                 successfulIngestCount++;
                 allKillsInDb = false;
               } else if (result.skipped) {
-                skippedCount++;
-                if (result.skipReason) {
-                  skipReasons[result.skipReason] =
-                    (skipReasons[result.skipReason] || 0) + 1;
+                if (result.skipReason === "already in database") {
+                  duplicateCount++;
+                } else {
+                  skippedCount++;
+                  if (result.skipReason) {
+                    skipReasons[result.skipReason] =
+                      (skipReasons[result.skipReason] || 0) + 1;
+                  }
                 }
               } else if (result.error) {
                 errorCount++;
@@ -426,24 +416,13 @@ export class KillmailIngestionService {
             }
           }
 
-          const pageDuration = Date.now() - pageStartTime;
-          logger.info(
-            `Page ${page} processing took ${pageDuration}ms for character ${characterId}`
-          );
-
           // If we've hit the checkpoint or all kills are in DB, stop
           if (hitCheckpoint) {
-            logger.info(
-              `Hit checkpoint at killmail ${lastProcessedId}, stopping`
-            );
             break;
           }
 
           // If all kills from this page are already in DB, stop
           if (allKillsInDb) {
-            logger.info(
-              `All kills from page ${page} are already in database, stopping`
-            );
             hasMore = false;
             break;
           }
@@ -451,18 +430,6 @@ export class KillmailIngestionService {
           // If we've reached the cutoff or processed all killmails, stop
           if (reachedCutoff || !hasMore) {
             break;
-          }
-
-          // Log progress after each page
-          logger.info(
-            `Page ${page} complete for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old`
-          );
-          if (Object.keys(skipReasons).length > 0) {
-            logger.info(
-              `Skip reasons: ${Object.entries(skipReasons)
-                .map(([reason, count]) => `${reason}: ${count}`)
-                .join(", ")}`
-            );
           }
 
           page++;
@@ -489,11 +456,15 @@ export class KillmailIngestionService {
 
       const duration = Date.now() - startTime;
       logger.info(
-        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalKillmailsProcessed} total processed`
+        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${duplicateCount} duplicates, ${skippedCount} other skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalKillmailsProcessed} total processed`
       );
+
+      // Only log skip reasons if there are non-duplicate skips
       if (Object.keys(skipReasons).length > 0) {
         logger.info(
-          `Final skip reasons: ${Object.entries(skipReasons)
+          `Non-duplicate skip reasons for character ${characterId}: ${Object.entries(
+            skipReasons
+          )
             .map(([reason, count]) => `${reason}: ${count}`)
             .join(", ")}`
         );
@@ -545,6 +516,7 @@ export class KillmailIngestionService {
       let lastProcessedId = checkpoint.lastSeenId;
       let successfulIngestCount = 0;
       let skippedCount = 0;
+      let duplicateCount = 0;
       let errorCount = 0;
       let tooOldCount = 0;
       let totalLossmailsProcessed = 0;
@@ -568,11 +540,6 @@ export class KillmailIngestionService {
             hasMore = false;
             continue;
           }
-
-          // Log progress at the start of each page
-          logger.info(
-            `Processing page ${page} for character ${characterId} - found ${losses.length} losses`
-          );
 
           // Process each loss
           for (const loss of losses) {
@@ -609,27 +576,19 @@ export class KillmailIngestionService {
             if (result.success) {
               successfulIngestCount++;
             } else if (result.skipped) {
-              skippedCount++;
-              if (result.skipReason) {
-                skipReasons[result.skipReason] =
-                  (skipReasons[result.skipReason] || 0) + 1;
+              if (result.skipReason === "already in database") {
+                duplicateCount++;
+              } else {
+                skippedCount++;
+                if (result.skipReason) {
+                  skipReasons[result.skipReason] =
+                    (skipReasons[result.skipReason] || 0) + 1;
+                }
               }
             } else if (result.error) {
               errorCount++;
             }
             totalLossmailsProcessed++;
-          }
-
-          // Log progress after each page
-          logger.info(
-            `Page ${page} complete for character ${characterId}: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old`
-          );
-          if (Object.keys(skipReasons).length > 0) {
-            logger.info(
-              `Skip reasons: ${Object.entries(skipReasons)
-                .map(([reason, count]) => `${reason}: ${count}`)
-                .join(", ")}`
-            );
           }
 
           page++;
@@ -655,11 +614,15 @@ export class KillmailIngestionService {
 
       const duration = Date.now() - startTime;
       logger.info(
-        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${skippedCount} skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalLossmailsProcessed} total processed`
+        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${duplicateCount} duplicates, ${skippedCount} other skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalLossmailsProcessed} total processed`
       );
+
+      // Only log skip reasons if there are non-duplicate skips
       if (Object.keys(skipReasons).length > 0) {
         logger.info(
-          `Final skip reasons: ${Object.entries(skipReasons)
+          `Non-duplicate skip reasons for character ${characterId}: ${Object.entries(
+            skipReasons
+          )
             .map(([reason, count]) => `${reason}: ${count}`)
             .join(", ")}`
         );
