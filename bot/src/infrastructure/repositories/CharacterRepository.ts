@@ -76,7 +76,7 @@ export class CharacterRepository extends BaseRepository {
    * Delete a character
    */
   async deleteCharacter(eveId: string | bigint): Promise<void> {
-    return this.delete("character", { eveId: ensureRequiredBigInt(eveId) });
+    return this.delete({ eveId: ensureRequiredBigInt(eveId) });
   }
 
   /**

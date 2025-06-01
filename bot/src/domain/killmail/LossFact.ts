@@ -1,10 +1,18 @@
 import { BaseEntity } from "../BaseEntity";
 import { ensureRequiredBigInt } from "../../utils/conversion";
-import {
-  validateRequired,
-  validatePositive,
-  validateNonNegative,
-} from "../../utils/validation";
+import { z } from "zod";
+
+// Define validation schema for LossFact
+const LossFactSchema = z.object({
+  killmailId: z.bigint(),
+  characterId: z.bigint(),
+  killTime: z.date(),
+  shipTypeId: z.number().positive(),
+  systemId: z.number().positive(),
+  totalValue: z.bigint(),
+  attackerCount: z.number().nonnegative(),
+  labels: z.array(z.string()).default([]),
+});
 
 /**
  * LossFact domain entity
@@ -65,16 +73,24 @@ export class LossFact extends BaseEntity {
   }
 
   /**
-   * Validate the loss fact data using shared validation utilities
+   * Validate the loss fact data using Zod schema
    * @throws Error if data is invalid
    */
   private validate(): void {
-    validateRequired("killmailId", this.killmailId);
-    validateRequired("characterId", this.characterId);
-    validateRequired("killTime", this.killTime);
-    validatePositive("shipTypeId", this.shipTypeId);
-    validatePositive("systemId", this.systemId);
-    validateNonNegative("attackerCount", this.attackerCount);
+    const result = LossFactSchema.safeParse({
+      killmailId: this.killmailId,
+      characterId: this.characterId,
+      killTime: this.killTime,
+      shipTypeId: this.shipTypeId,
+      systemId: this.systemId,
+      totalValue: this.totalValue,
+      attackerCount: this.attackerCount,
+      labels: this.labels,
+    });
+
+    if (!result.success) {
+      throw new Error(`Invalid LossFact data: ${result.error.message}`);
+    }
   }
 
   /**

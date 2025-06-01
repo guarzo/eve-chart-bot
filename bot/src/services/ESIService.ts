@@ -1,7 +1,7 @@
 import { UnifiedESIClient } from "../infrastructure/http/UnifiedESIClient";
 import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
 import { logger } from "../lib/logger";
-import { REDIS_URL } from "../config";
+import { INTERNAL_CONFIG } from "../config";
 
 /**
  * Service for interacting with EVE Online's ESI API
@@ -16,7 +16,7 @@ export class ESIService {
    */
   constructor() {
     // Initialize the ESI client with Redis caching
-    this.cache = new CacheRedisAdapter(REDIS_URL);
+    this.cache = new CacheRedisAdapter(INTERNAL_CONFIG.REDIS_URL);
     this.esiClient = new UnifiedESIClient({}, this.cache);
   }
 

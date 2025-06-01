@@ -4,14 +4,7 @@ import { CacheAdapter } from "../../cache/CacheAdapter";
 import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 import { ESIClientConfig, IESIClient } from "./ESIClient";
 import { retryOperation } from "../../utils/retry";
-import {
-  REDIS_URL,
-  ESI_BASE_URL,
-  CACHE_TTL,
-  HTTP_TIMEOUT,
-  HTTP_MAX_RETRIES,
-  HTTP_INITIAL_RETRY_DELAY,
-} from "../../config";
+import { INTERNAL_CONFIG } from "../../config";
 
 /**
  * Unified client for interacting with EVE Online's ESI API
@@ -29,12 +22,13 @@ export class UnifiedESIClient implements IESIClient {
    */
   constructor(config: ESIClientConfig = {}, cache?: CacheAdapter) {
     this.config = {
-      baseUrl: config.baseUrl || ESI_BASE_URL,
-      timeout: config.timeout || HTTP_TIMEOUT,
+      baseUrl: config.baseUrl || INTERNAL_CONFIG.ESI_BASE_URL,
+      timeout: config.timeout || INTERNAL_CONFIG.HTTP_TIMEOUT,
       userAgent: config.userAgent || "EVE-Chart-Bot/1.0",
-      cacheTtl: config.cacheTtl || CACHE_TTL,
-      maxRetries: config.maxRetries || HTTP_MAX_RETRIES,
-      initialRetryDelay: config.initialRetryDelay || HTTP_INITIAL_RETRY_DELAY,
+      cacheTtl: config.cacheTtl || INTERNAL_CONFIG.CACHE_TTL,
+      maxRetries: config.maxRetries || INTERNAL_CONFIG.HTTP_MAX_RETRIES,
+      initialRetryDelay:
+        config.initialRetryDelay || INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY,
     };
 
     this.client = axios.create({
@@ -47,7 +41,8 @@ export class UnifiedESIClient implements IESIClient {
     });
 
     this.cache =
-      cache || new CacheRedisAdapter(REDIS_URL, this.config.cacheTtl);
+      cache ||
+      new CacheRedisAdapter(INTERNAL_CONFIG.REDIS_URL, this.config.cacheTtl);
   }
 
   /**

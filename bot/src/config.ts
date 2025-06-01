@@ -38,7 +38,7 @@ export const INTERNAL_CONFIG = {
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/evechartbot",
 
   // Redis
-  REDIS_URL: "redis://localhost:6379",
+  REDIS_URL: "redis://redis:6379",
   CACHE_TTL: 300, // 5 minutes
 
   // API endpoints

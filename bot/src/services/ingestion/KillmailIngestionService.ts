@@ -8,7 +8,6 @@ import {
   KillmailVictim,
 } from "../../domain/killmail/Killmail";
 import { ZKillboardClient } from "../../infrastructure/http/zkill";
-import { Configuration } from "../../config";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
@@ -41,21 +40,6 @@ export class KillmailIngestionService {
    */
   public async start(): Promise<void> {
     logger.info("Starting killmail ingestion service...");
-
-    // DEBUG: Check what we're actually reading
-    logger.info(
-      `DEBUG: ENABLE_BACKFILL value is: "${
-        Configuration.ingestion.enableBackfill
-      }" (type: ${typeof Configuration.ingestion.enableBackfill})`
-    );
-
-    // Check if backfill is enabled via centralized configuration
-    if (!Configuration.ingestion.enableBackfill) {
-      logger.info(
-        "Killmail ingestion service started successfully (backfill disabled)"
-      );
-      return;
-    }
 
     // Initial backfill of all characters - both kills and losses
     const characters = await this.characterRepository.getAllCharacters();

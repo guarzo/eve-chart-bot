@@ -6,7 +6,7 @@ import { CharacterRepository } from "../../infrastructure/repositories/Character
 import { MapClient } from "../../infrastructure/http/MapClient";
 import { PrismaClient } from "@prisma/client";
 import prisma from "../../infrastructure/persistence/client";
-import { Configuration } from "../../config";
+import { MAP_NAME, INTERNAL_CONFIG } from "../../config";
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;
@@ -17,14 +17,14 @@ export class CharacterSyncService {
   private readonly prisma: PrismaClient;
 
   constructor(
-    mapApiUrl: string,
-    mapApiKey: string,
-    maxRetries: number = 3,
-    retryDelay: number = 5000
+    esiBaseUrl: string = INTERNAL_CONFIG.ESI_BASE_URL,
+    zkillBaseUrl: string = INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
+    maxRetries: number = INTERNAL_CONFIG.HTTP_MAX_RETRIES,
+    retryDelay: number = INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
   ) {
     this.characterRepository = new CharacterRepository();
     this.esiService = new ESIService();
-    this.map = new MapClient(mapApiUrl, mapApiKey);
+    this.map = new MapClient(esiBaseUrl, zkillBaseUrl);
     this.maxRetries = maxRetries;
     this.retryDelay = retryDelay;
     this.prisma = prisma;
@@ -36,13 +36,14 @@ export class CharacterSyncService {
   public async start(): Promise<void> {
     logger.info("Starting character sync service...");
 
-    const mapName = Configuration.apis.map.name;
-    if (!mapName) {
+    if (!MAP_NAME) {
       logger.warn(
         "MAP_NAME environment variable not set, skipping character sync"
       );
       return;
     }
+
+    const mapName = MAP_NAME; // Type guard to ensure MAP_NAME is string
 
     try {
       // Fetch map data once and use it for both operations

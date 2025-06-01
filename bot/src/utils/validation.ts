@@ -4,89 +4,6 @@
 
 import { z } from "zod";
 
-/**
- * Manual validation functions (legacy)
- */
-
-/**
- * Validates that a value is not null or undefined
- */
-export function validateRequired(name: string, value: any): void {
-  if (value === null || value === undefined) {
-    throw new Error(`${name} is required`);
-  }
-}
-
-/**
- * Validates that a numeric value is not negative
- */
-export function validateNonNegative(name: string, value: number): void {
-  if (value < 0) {
-    throw new Error(`${name} must be non-negative, got ${value}`);
-  }
-}
-
-/**
- * Validates that a numeric value is positive (greater than 0)
- */
-export function validatePositive(name: string, value: number): void {
-  if (value <= 0) {
-    throw new Error(`${name} must be positive, got ${value}`);
-  }
-}
-
-/**
- * Validates that a BigInt value is not null and is positive
- */
-export function validatePositiveBigInt(fieldName: string, value: bigint): void {
-  if (!value) {
-    throw new Error(`${fieldName} is required`);
-  }
-  if (value <= 0n) {
-    throw new Error(`${fieldName} must be positive`);
-  }
-}
-
-/**
- * Validates that a Date value is not null
- */
-export function validateDate(fieldName: string, value: Date): void {
-  if (!value) {
-    throw new Error(`${fieldName} is required`);
-  }
-  if (!(value instanceof Date) || isNaN(value.getTime())) {
-    throw new Error(`${fieldName} must be a valid date`);
-  }
-}
-
-export function validateString(name: string, value: any): void {
-  if (typeof value !== "string") {
-    throw new Error(`${name} must be a string, got ${typeof value}`);
-  }
-}
-
-export function validateNumber(name: string, value: any): void {
-  if (typeof value !== "number" || isNaN(value)) {
-    throw new Error(`${name} must be a valid number, got ${value}`);
-  }
-}
-
-export function validateBigInt(name: string, value: any): void {
-  if (typeof value !== "bigint") {
-    throw new Error(`${name} must be a BigInt, got ${typeof value}`);
-  }
-}
-
-export function validateArray(name: string, value: any): void {
-  if (!Array.isArray(value)) {
-    throw new Error(`${name} must be an array, got ${typeof value}`);
-  }
-}
-
-/**
- * Zod Schema-based validation
- */
-
 // Common schema components
 export const PositiveNumberSchema = z.number().positive();
 export const NonNegativeNumberSchema = z.number().min(0);
@@ -280,10 +197,7 @@ export const FilterSchema = z.object({
   labels: z.array(z.string()).optional(),
 });
 
-/**
- * Validation helper functions using Zod
- */
-
+// Validation helper functions
 export function validateWithSchema<T>(
   schema: z.ZodSchema<T>,
   data: unknown,
@@ -293,11 +207,11 @@ export function validateWithSchema<T>(
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
+      const entityPrefix = entityName ? `${entityName} ` : "";
       throw new Error(
-        `${entityName || "Data"} validation failed: ${errorMessages}`
+        `${entityPrefix}Validation failed: ${error.errors
+          .map((e) => `${e.path.join(".")}: ${e.message}`)
+          .join(", ")}`
       );
     }
     throw error;
@@ -311,55 +225,39 @@ export function safeParseWithSchema<T>(
   return schema.safeParse(data);
 }
 
-/**
- * Validate and transform EVE ID from various input types
- */
 export function validateEVEId(
   value: unknown,
   fieldName: string = "EVE ID"
 ): bigint {
-  try {
-    return EVEIdSchema.parse(value);
-  } catch (error) {
-    throw new Error(
-      `Invalid ${fieldName}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+  const result = EVEIdSchema.safeParse(value);
+  if (!result.success) {
+    throw new Error(`${fieldName} validation failed: ${result.error.message}`);
   }
+  return result.data;
 }
 
-/**
- * Validate array of EVE IDs
- */
 export function validateEVEIds(
   values: unknown[],
   fieldName: string = "EVE IDs"
 ): bigint[] {
-  return values.map((value, index) =>
-    validateEVEId(value, `${fieldName}[${index}]`)
-  );
+  return values.map((value) => validateEVEId(value, fieldName));
 }
 
-/**
- * Validate date range
- */
 export function validateDateRange(
   startDate: unknown,
   endDate: unknown
 ): { startDate: Date; endDate: Date } {
-  const dateRange = {
-    startDate:
-      startDate instanceof Date ? startDate : new Date(String(startDate)),
-    endDate: endDate instanceof Date ? endDate : new Date(String(endDate)),
-  };
-
-  return validateWithSchema(DateRangeSchema, dateRange, "Date range");
+  return validateWithSchema(
+    z.object({
+      startDate: z.date(),
+      endDate: z.date(),
+    }),
+    { startDate, endDate },
+    "Date range"
+  );
 }
 
-/**
- * Type definitions derived from schemas
- */
+// Type definitions
 export type CharacterProps = z.infer<typeof CharacterPropsSchema>;
 export type CharacterGroupProps = z.infer<typeof CharacterGroupPropsSchema>;
 export type KillmailProps = z.infer<typeof KillmailPropsSchema>;
@@ -374,83 +272,3 @@ export type ApiResponseProps = z.infer<typeof ApiResponseSchema>;
 export type PaginationProps = z.infer<typeof PaginationSchema>;
 export type DateRangeProps = z.infer<typeof DateRangeSchema>;
 export type FilterProps = z.infer<typeof FilterSchema>;
-
-// Base schemas for common types
-export const bigIntSchema = z.union([
-  z.string().transform((val) => BigInt(val)),
-  z.number().transform((val) => BigInt(val)),
-  z.bigint(),
-]);
-
-export const nonNegativeNumberSchema = z.number().min(0);
-export const nonNegativeBigIntSchema = bigIntSchema.transform((val) => {
-  if (val < 0n) throw new Error("Value must be non-negative");
-  return val;
-});
-
-export const dateSchema = z.union([
-  z.string().transform((val) => new Date(val)),
-  z.date(),
-]);
-
-// Common validation functions
-export function validateNonNegative(name: string, value: number): void {
-  if (value < 0) {
-    throw new Error(`${name} must be non-negative`);
-  }
-}
-
-export function validateRequired(name: string, value: any): void {
-  if (value === undefined || value === null) {
-    throw new Error(`${name} is required`);
-  }
-}
-
-export function validateBigInt(
-  name: string,
-  value: string | number | bigint
-): bigint {
-  try {
-    return bigIntSchema.parse(value);
-  } catch (error) {
-    throw new Error(`Invalid ${name}: ${error.message}`);
-  }
-}
-
-export function validateDate(name: string, value: string | Date): Date {
-  try {
-    return dateSchema.parse(value);
-  } catch (error) {
-    throw new Error(`Invalid ${name}: ${error.message}`);
-  }
-}
-
-// Entity-specific schemas
-export const characterSchema = z.object({
-  eveId: bigIntSchema,
-  name: z.string().min(1),
-  corporationId: bigIntSchema.nullable(),
-  allianceId: bigIntSchema.nullable(),
-  securityStatus: z.number().min(-10).max(10),
-  lastUpdated: dateSchema,
-});
-
-export const killmailSchema = z.object({
-  killmailId: bigIntSchema,
-  killTime: dateSchema,
-  npc: z.boolean(),
-  solo: z.boolean(),
-  awox: z.boolean(),
-  shipTypeId: nonNegativeNumberSchema,
-  systemId: nonNegativeNumberSchema,
-  totalValue: nonNegativeBigIntSchema,
-  points: nonNegativeNumberSchema,
-});
-
-export const mapActivitySchema = z.object({
-  characterId: bigIntSchema,
-  systemId: nonNegativeNumberSchema,
-  timestamp: dateSchema,
-  activityType: z.enum(["jump", "dock", "undock"]),
-  shipTypeId: nonNegativeNumberSchema,
-});

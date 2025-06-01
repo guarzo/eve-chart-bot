@@ -5,7 +5,7 @@ import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
-import { Configuration } from "../../config";
+import { MAP_NAME, INTERNAL_CONFIG } from "../../config";
 
 export class MapActivityService {
   private readonly map: MapClient;
@@ -15,14 +15,14 @@ export class MapActivityService {
   private readonly retryDelay: number;
 
   constructor(
-    mapApiUrl: string,
-    mapApiKey: string,
-    redisUrl: string = "redis://localhost:6379",
-    cacheTtl: number = 300,
-    maxRetries: number = 3,
-    retryDelay: number = 5000
+    esiBaseUrl: string = INTERNAL_CONFIG.ESI_BASE_URL,
+    zkillBaseUrl: string = INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
+    redisUrl: string = INTERNAL_CONFIG.REDIS_URL,
+    cacheTtl: number = INTERNAL_CONFIG.CACHE_TTL,
+    maxRetries: number = INTERNAL_CONFIG.HTTP_MAX_RETRIES,
+    retryDelay: number = INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
   ) {
-    this.map = new MapClient(mapApiUrl, mapApiKey);
+    this.map = new MapClient(esiBaseUrl, zkillBaseUrl);
     this.cache = new CacheRedisAdapter(redisUrl, cacheTtl);
     this.mapActivityRepository = new MapActivityRepository();
     this.maxRetries = maxRetries;
@@ -35,9 +35,7 @@ export class MapActivityService {
   public async start(): Promise<void> {
     logger.info("Starting map activity service...");
 
-    // Get map name from centralized configuration
-    const mapName = Configuration.apis.map.name;
-    if (!mapName) {
+    if (!MAP_NAME) {
       logger.warn(
         "MAP_NAME environment variable not set, skipping map activity ingestion"
       );
@@ -46,10 +44,10 @@ export class MapActivityService {
 
     try {
       // Fetch map activity data for the entire map (not per character)
-      await this.ingestMapActivity(mapName, 7); // Last 7 days
+      await this.ingestMapActivity(MAP_NAME, 7); // Last 7 days
       logger.info("Map activity service started successfully");
     } catch (error) {
-      logger.error(`Error ingesting map activity for map ${mapName}:`, error);
+      logger.error(`Error ingesting map activity for map ${MAP_NAME}:`, error);
     }
   }
 

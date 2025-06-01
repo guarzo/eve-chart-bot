@@ -46,20 +46,8 @@ app.use(
 
 // Initialize services using internal configuration
 const killmailService = new KillmailIngestionService();
-const mapService = new MapActivityService(
-  INTERNAL_CONFIG.ESI_BASE_URL,
-  INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
-  INTERNAL_CONFIG.REDIS_URL,
-  INTERNAL_CONFIG.CACHE_TTL,
-  INTERNAL_CONFIG.HTTP_MAX_RETRIES,
-  INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
-);
-const characterService = new CharacterSyncService(
-  INTERNAL_CONFIG.ESI_BASE_URL,
-  INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
-  INTERNAL_CONFIG.HTTP_MAX_RETRIES,
-  INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
-);
+const mapService = new MapActivityService();
+const characterService = new CharacterSyncService();
 let redisQService: RedisQService | null = null;
 const chartService = new ChartService();
 const chartRenderer = new ChartRenderer();

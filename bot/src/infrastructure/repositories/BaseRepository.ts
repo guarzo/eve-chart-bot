@@ -56,8 +56,10 @@ export abstract class BaseRepository {
     options: any = {}
   ): Promise<T[]> {
     return this.executeQuery(async () => {
+      // Remove modelName from options if it exists
+      const { modelName, ...queryOptions } = options;
       const records = await (this.prisma as any)[this.modelName].findMany(
-        options
+        queryOptions
       );
       return PrismaMapper.mapArray(records, EntityClass);
     });
