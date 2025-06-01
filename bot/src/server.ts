@@ -21,6 +21,7 @@ import { KillRepository } from "./infrastructure/repositories/KillRepository";
 import { MapActivityRepository } from "./infrastructure/repositories/MapActivityRepository";
 import { exec } from "child_process";
 import { promisify } from "util";
+import { Configuration } from "./config";
 
 const execAsync = promisify(exec);
 
@@ -33,11 +34,9 @@ initSentry();
 // Constants
 const appStartTime = Date.now();
 const port =
-  process.env.NODE_ENV === "test"
-    ? 0
-    : process.env.PORT
-    ? parseInt(process.env.PORT)
-    : 3000;
+  Configuration.server.nodeEnv === "test"
+    ? 0 // Use random port for tests
+    : Configuration.server.port;
 
 // Create Express app
 const app = express();
@@ -52,21 +51,21 @@ app.use(
   })
 );
 
-// Initialize services
+// Initialize services using centralized configuration
 const killmailService = new KillmailIngestionService();
 const mapService = new MapActivityService(
-  process.env.MAP_API_URL || "https://api.eve-map.net",
-  process.env.MAP_API_KEY || "",
-  process.env.REDIS_URL,
-  parseInt(process.env.CACHE_TTL || "300"),
-  parseInt(process.env.MAX_RETRIES || "3"),
-  parseInt(process.env.RETRY_DELAY || "5000")
+  Configuration.apis.map.url,
+  Configuration.apis.map.key,
+  Configuration.redis.url,
+  Configuration.redis.cacheTtl,
+  Configuration.ingestion.maxRetries,
+  Configuration.ingestion.retryDelay
 );
 const characterService = new CharacterSyncService(
-  process.env.MAP_API_URL || "https://api.eve-map.net",
-  process.env.MAP_API_KEY || "",
-  parseInt(process.env.MAX_RETRIES || "3"),
-  parseInt(process.env.RETRY_DELAY || "5000")
+  Configuration.apis.map.url,
+  Configuration.apis.map.key,
+  Configuration.ingestion.maxRetries,
+  Configuration.ingestion.retryDelay
 );
 let redisQService: RedisQService | null = null;
 const chartService = new ChartService();
@@ -193,18 +192,13 @@ const discordClient = new DiscordClient();
 app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
   try {
     const characters = await characterRepository.getAllCharacters();
-
-    // Format the response
     const formattedCharacters = characters.map((char) => ({
-      id: char.eveId,
+      eveId: char.eveId,
       name: char.name,
-      group: char.characterGroupId
-        ? "Group " + char.characterGroupId
-        : "No Group",
-      groupId: char.characterGroupId,
-      lastBackfill: char.lastBackfillAt,
-      lastKillmail: char.lastKillmailAt,
-      updatedAt: char.updatedAt,
+      corporationId: char.corporationId,
+      allianceId: char.allianceId,
+      isMain: char.isMain,
+      characterGroupId: char.characterGroupId,
     }));
 
     res.json({
@@ -217,51 +211,90 @@ app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
   }
 });
 
-// Add an endpoint to trigger a backfill for character kills
-interface BackfillKillsParams {
-  characterId: string;
-}
-
-const backfillKillsHandler: RequestHandler<BackfillKillsParams> = async (
-  req,
-  res
-) => {
+// Backfill endpoint
+app.post("/api/backfill/character/:characterId", async (req, res) => {
   try {
-    // Check if backfill is enabled via environment variable
-    if (process.env.ENABLE_BACKFILL !== "true") {
-      logger.info(
-        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
-      );
-      res.status(200).json({
-        success: false,
-        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
-        disabled: true,
-      });
-      return;
-    }
-
-    const characterId = parseInt(req.params.characterId);
-    if (isNaN(characterId)) {
-      res.status(400).json({ error: "Invalid character ID" });
-      return;
-    }
+    const characterId = BigInt(req.params.characterId);
+    const maxAgeDays = parseInt(req.query.maxAgeDays as string) || 30;
 
     logger.info(
-      `Manually triggering kill backfill for character ${characterId}`
+      `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
     );
-    await backfillKills(BigInt(characterId));
+
+    // Use centralized configuration for backfill check
+    if (!Configuration.ingestion.enableBackfill) {
+      return res.status(400).json({
+        error: "Backfill is disabled",
+        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
+      });
+    }
+
+    await killmailService.backfillKills(characterId, maxAgeDays);
 
     res.json({
       success: true,
-      message: `Backfill triggered for character ${characterId}`,
+      message: `Backfill completed for character ${characterId}`,
     });
-  } catch (error) {
-    logger.error(`Error triggering backfill: ${error}`);
-    res.status(500).json({ error: "Failed to trigger backfill" });
+  } catch (error: any) {
+    logger.error(`Backfill error: ${error.message}`);
+    res.status(500).json({
+      error: "Backfill failed",
+      message: error.message,
+    });
   }
-};
+});
 
-app.get("/api/diagnostics/backfill-kills/:characterId", backfillKillsHandler);
+// Backfill all characters endpoint
+app.post("/api/backfill/all", async (req, res) => {
+  try {
+    const maxAgeDays = parseInt(req.query.maxAgeDays as string) || 30;
+
+    logger.info(
+      `Starting backfill for all characters (max age: ${maxAgeDays} days)`
+    );
+
+    // Use centralized configuration for backfill check
+    if (!Configuration.ingestion.enableBackfill) {
+      return res.status(400).json({
+        error: "Backfill is disabled",
+        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
+      });
+    }
+
+    const characters = await characterRepository.getAllCharacters();
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const character of characters) {
+      try {
+        await killmailService.backfillKills(
+          BigInt(character.eveId),
+          maxAgeDays
+        );
+        successCount++;
+      } catch (error) {
+        errorCount++;
+        logger.error(`Error backfilling character ${character.eveId}:`, error);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Backfill completed for ${characters.length} characters`,
+      results: {
+        total: characters.length,
+        successful: successCount,
+        errors: errorCount,
+      },
+    });
+  } catch (error: any) {
+    logger.error(`Backfill all error: ${error.message}`);
+    res.status(500).json({
+      error: "Backfill failed",
+      message: error.message,
+    });
+  }
+});
 
 // Also add an endpoint to refresh tracked characters
 const refreshCharactersHandler: RequestHandler = async (_req, res) => {
@@ -292,8 +325,8 @@ const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
   res
 ) => {
   try {
-    // Check if backfill is enabled via environment variable
-    if (process.env.ENABLE_BACKFILL !== "true") {
+    // Check if backfill is enabled via centralized configuration
+    if (!Configuration.ingestion.enableBackfill) {
       logger.info(
         "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
       );
@@ -359,8 +392,8 @@ async function processCharacterBackfills(characters: any[]): Promise<void> {
 // Add an endpoint to clean up and rebalance kill/loss data
 const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
   try {
-    // Check if backfill is enabled via environment variable
-    if (process.env.ENABLE_BACKFILL !== "true") {
+    // Check if backfill is enabled via centralized configuration
+    if (!Configuration.ingestion.enableBackfill) {
       logger.info(
         "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
       );
@@ -501,13 +534,11 @@ export async function startServer() {
   await mapService.start();
 
   // Initialize RedisQ service
-  redisQService = new RedisQService(
-    process.env.REDIS_URL || "redis://localhost:6379"
-  );
+  redisQService = new RedisQService(Configuration.redis.url);
   await redisQService.start();
 
   // Initialize Discord if token is available
-  const discordToken = process.env.DISCORD_BOT_TOKEN;
+  const discordToken = Configuration.discord.token;
   if (discordToken) {
     try {
       const discordStartTime = Date.now();
@@ -524,17 +555,18 @@ export async function startServer() {
 
       // Login to Discord
       logger.info("Logging in to Discord...");
-      await discordClient.login(discordToken);
+      const bot = new DiscordClient();
+      await bot.start();
       const loginTime = Date.now();
       logger.info(
         `Discord login successful - Client ready state: ${
-          discordClient.isReady() ? "Ready" : "Not Ready"
+          bot.isReady() ? "Ready" : "Not Ready"
         } (${(loginTime - discordStartTime) / 1000}s)`
       );
 
       // Register commands
       logger.info("Registering Discord commands...");
-      await discordClient.registerCommands(commands);
+      await bot.registerCommands(commands);
       const registerTime = Date.now();
       logger.info(
         `Discord commands registered successfully (${
@@ -550,8 +582,8 @@ export async function startServer() {
             (readyCheckTime - appStartTime) / 1000
           }s)`,
           {
-            ready: discordClient.isReady() ? "Yes" : "No",
-            guilds: discordClient.getGuildsCount(),
+            ready: bot.isReady() ? "Yes" : "No",
+            guilds: bot.getGuildsCount(),
           }
         );
       }, 5000);
@@ -560,12 +592,12 @@ export async function startServer() {
       // Don't throw - allow server to start even if Discord fails
     }
   } else {
-    logger.warn("DISCORD_BOT_TOKEN not set, Discord bot not initialized");
+    logger.warn("Discord bot token not provided, skipping Discord bot startup");
   }
 
   // Start server
   const server = app.listen(port, () => {
-    logger.info(`Server listening on port ${port}`);
+    logger.info(`Server running on port ${port}`);
   });
 
   // Handle cleanup

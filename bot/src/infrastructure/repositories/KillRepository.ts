@@ -1,7 +1,8 @@
-import { Prisma } from "@prisma/client";
-import { Killmail } from "../../domain/killmail/Killmail";
-import { PrismaMapper } from "../mapper/PrismaMapper";
 import { BaseRepository } from "./BaseRepository";
+import { PrismaMapper } from "../mapper/PrismaMapper";
+import { Killmail } from "../../domain/killmail/Killmail";
+import { Prisma } from "@prisma/client";
+import { ensureRequiredBigInt } from "../../utils/conversion";
 
 /**
  * Repository for accessing kill-related data
@@ -18,8 +19,7 @@ export class KillRepository extends BaseRepository {
     return this.executeQuery(async () => {
       const killmail = await this.prisma.killFact.findUnique({
         where: {
-          killmail_id:
-            typeof killmailId === "string" ? BigInt(killmailId) : killmailId,
+          killmail_id: ensureRequiredBigInt(killmailId),
         },
         include: {
           attackers: true,
@@ -727,9 +727,7 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map((id) =>
-      typeof id === "string" ? BigInt(id) : id
-    );
+    const bigIntIds = characterIds.map((id) => ensureRequiredBigInt(id));
 
     const kills = await this.prisma.killFact.findMany({
       where: {
@@ -891,9 +889,7 @@ export class KillRepository extends BaseRepository {
     startDate: Date,
     endDate: Date
   ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map((id) =>
-      typeof id === "string" ? BigInt(id) : id
-    );
+    const bigIntIds = characterIds.map((id) => ensureRequiredBigInt(id));
 
     const kills = await this.prisma.killFact.findMany({
       where: {

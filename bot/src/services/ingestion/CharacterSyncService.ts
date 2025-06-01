@@ -5,6 +5,8 @@ import { Character } from "../../domain/character/Character";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { MapClient } from "../../infrastructure/http/MapClient";
 import { PrismaClient } from "@prisma/client";
+import prisma from "../../infrastructure/persistence/client";
+import { Configuration } from "../../config";
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;
@@ -25,7 +27,7 @@ export class CharacterSyncService {
     this.map = new MapClient(mapApiUrl, mapApiKey);
     this.maxRetries = maxRetries;
     this.retryDelay = retryDelay;
-    this.prisma = new PrismaClient();
+    this.prisma = prisma;
   }
 
   /**
@@ -34,7 +36,7 @@ export class CharacterSyncService {
   public async start(): Promise<void> {
     logger.info("Starting character sync service...");
 
-    const mapName = process.env.MAP_NAME;
+    const mapName = Configuration.apis.map.name;
     if (!mapName) {
       logger.warn(
         "MAP_NAME environment variable not set, skipping character sync"

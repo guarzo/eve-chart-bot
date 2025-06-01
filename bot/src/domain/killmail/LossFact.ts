@@ -1,8 +1,16 @@
+import { BaseEntity } from "../BaseEntity";
+import { ensureRequiredBigInt } from "../../utils/conversion";
+import {
+  validateRequired,
+  validatePositive,
+  validateNonNegative,
+} from "../../utils/validation";
+
 /**
  * LossFact domain entity
  * Represents a character's loss in EVE Online
  */
-export class LossFact {
+export class LossFact extends BaseEntity {
   /** Killmail ID from EVE Online */
   readonly killmailId: bigint;
 
@@ -40,26 +48,16 @@ export class LossFact {
     attackerCount: number;
     labels?: string[];
   }) {
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
+    super();
 
-    this.characterId =
-      typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureRequiredBigInt(props.characterId);
 
     this.killTime = props.killTime;
     this.shipTypeId = props.shipTypeId;
     this.systemId = props.systemId;
-
-    this.totalValue =
-      typeof props.totalValue === "string"
-        ? BigInt(props.totalValue)
-        : props.totalValue;
-
+    this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.attackerCount = props.attackerCount;
     this.labels = props.labels || [];
 
@@ -67,33 +65,16 @@ export class LossFact {
   }
 
   /**
-   * Validate the loss fact data
+   * Validate the loss fact data using shared validation utilities
    * @throws Error if data is invalid
    */
   private validate(): void {
-    if (!this.killmailId) {
-      throw new Error("LossFact must have a killmail ID");
-    }
-
-    if (!this.characterId) {
-      throw new Error("LossFact must have a character ID");
-    }
-
-    if (!this.killTime) {
-      throw new Error("LossFact must have a kill time");
-    }
-
-    if (this.shipTypeId <= 0) {
-      throw new Error("LossFact must have a valid ship type ID");
-    }
-
-    if (this.systemId <= 0) {
-      throw new Error("LossFact must have a valid system ID");
-    }
-
-    if (this.attackerCount < 0) {
-      throw new Error("LossFact attacker count cannot be negative");
-    }
+    validateRequired("killmailId", this.killmailId);
+    validateRequired("characterId", this.characterId);
+    validateRequired("killTime", this.killTime);
+    validatePositive("shipTypeId", this.shipTypeId);
+    validatePositive("systemId", this.systemId);
+    validateNonNegative("attackerCount", this.attackerCount);
   }
 
   /**
@@ -133,48 +114,6 @@ export class LossFact {
     } else {
       return "blingy";
     }
-  }
-
-  /**
-   * Add a label to this loss
-   */
-  addLabel(label: string): void {
-    if (!this.labels.includes(label)) {
-      this.labels.push(label);
-    }
-  }
-
-  /**
-   * Remove a label from this loss
-   */
-  removeLabel(label: string): void {
-    const index = this.labels.indexOf(label);
-    if (index >= 0) {
-      this.labels.splice(index, 1);
-    }
-  }
-
-  /**
-   * Check if this loss has a specific label
-   */
-  hasLabel(label: string): boolean {
-    return this.labels.includes(label);
-  }
-
-  /**
-   * Convert to a plain object for persistence
-   */
-  toObject() {
-    return {
-      killmailId: this.killmailId,
-      characterId: this.characterId,
-      killTime: this.killTime,
-      shipTypeId: this.shipTypeId,
-      systemId: this.systemId,
-      totalValue: this.totalValue,
-      attackerCount: this.attackerCount,
-      labels: this.labels,
-    };
   }
 
   /**

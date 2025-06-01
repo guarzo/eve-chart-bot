@@ -5,6 +5,7 @@ import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
+import { Configuration } from "../../config";
 
 export class MapActivityService {
   private readonly map: MapClient;
@@ -34,8 +35,8 @@ export class MapActivityService {
   public async start(): Promise<void> {
     logger.info("Starting map activity service...");
 
-    // Get map name from environment
-    const mapName = process.env.MAP_NAME;
+    // Get map name from centralized configuration
+    const mapName = Configuration.apis.map.name;
     if (!mapName) {
       logger.warn(
         "MAP_NAME environment variable not set, skipping map activity ingestion"

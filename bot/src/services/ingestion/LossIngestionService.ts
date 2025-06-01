@@ -5,7 +5,6 @@ import { LossRepository } from "../../infrastructure/repositories/LossRepository
 import { LossFact } from "../../domain/killmail/LossFact";
 import { logger } from "../../lib/logger";
 import { retryOperation } from "../../utils/retry";
-import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 
 /**
  * Service for ingesting loss data from zKillboard and ESI
@@ -20,13 +19,11 @@ export class LossIngestionService {
 
   constructor(
     zkillApiUrl: string = "https://zkillboard.com/api",
-    redisUrl: string = "redis://localhost:6379",
-    cacheTtl: number = 300,
     maxRetries: number = 3,
     retryDelay: number = 5000
   ) {
     this.zkill = new ZkillClient(zkillApiUrl);
-    this.esiService = new ESIService(new CacheRedisAdapter(redisUrl, cacheTtl));
+    this.esiService = new ESIService();
     this.characterRepository = new CharacterRepository();
     this.lossRepository = new LossRepository();
     this.maxRetries = maxRetries;

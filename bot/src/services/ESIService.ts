@@ -1,32 +1,23 @@
 import { UnifiedESIClient } from "../infrastructure/http/UnifiedESIClient";
-import { CacheAdapter } from "../cache/CacheAdapter";
-import { logger } from "../lib/logger";
 import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
+import { logger } from "../lib/logger";
+import { REDIS_URL } from "../config";
 
 /**
  * Service for interacting with EVE Online's ESI API
  * Provides caching and error handling around ESI data
  */
 export class ESIService {
-  private client: UnifiedESIClient;
-  private cache: CacheAdapter;
+  private esiClient: UnifiedESIClient;
+  private cache: CacheRedisAdapter;
 
   /**
    * Create a new ESI service
-   * @param cache Optional cache adapter to use
    */
-  constructor(cache?: CacheAdapter) {
-    this.cache =
-      cache ||
-      new CacheRedisAdapter(process.env.REDIS_URL || "redis://redis:6379");
-    this.client = new UnifiedESIClient(
-      {
-        cacheTtl: 30 * 60, // 30 minutes cache for ESI data
-        maxRetries: 3,
-        initialRetryDelay: 1000,
-      },
-      this.cache
-    );
+  constructor() {
+    // Initialize the ESI client with Redis caching
+    this.cache = new CacheRedisAdapter(REDIS_URL);
+    this.esiClient = new UnifiedESIClient({}, this.cache);
   }
 
   /**
@@ -34,7 +25,7 @@ export class ESIService {
    */
   async getKillmail(killmailId: number, hash: string): Promise<any> {
     try {
-      return await this.client.fetchKillmail(killmailId, hash);
+      return await this.esiClient.fetchKillmail(killmailId, hash);
     } catch (error) {
       logger.error(`Error fetching killmail ${killmailId}:`, error);
       throw error;
@@ -46,7 +37,7 @@ export class ESIService {
    */
   async getCharacter(characterId: number): Promise<any> {
     try {
-      return await this.client.fetchCharacter(characterId);
+      return await this.esiClient.fetchCharacter(characterId);
     } catch (error) {
       logger.error(`Error fetching character ${characterId}:`, error);
       throw error;
@@ -58,7 +49,7 @@ export class ESIService {
    */
   async getCorporation(corporationId: number): Promise<any> {
     try {
-      return await this.client.fetchCorporation(corporationId);
+      return await this.esiClient.fetchCorporation(corporationId);
     } catch (error) {
       logger.error(`Error fetching corporation ${corporationId}:`, error);
       throw error;
@@ -70,7 +61,7 @@ export class ESIService {
    */
   async getAlliance(allianceId: number): Promise<any> {
     try {
-      return await this.client.fetchAlliance(allianceId);
+      return await this.esiClient.fetchAlliance(allianceId);
     } catch (error) {
       logger.error(`Error fetching alliance ${allianceId}:`, error);
       throw error;
@@ -82,7 +73,7 @@ export class ESIService {
    */
   async getShipType(typeId: number): Promise<any> {
     try {
-      return await this.client.fetchType(typeId);
+      return await this.esiClient.fetchType(typeId);
     } catch (error) {
       logger.error(`Error fetching type ${typeId}:`, error);
       throw error;
@@ -94,7 +85,7 @@ export class ESIService {
    */
   async getSolarSystem(systemId: number): Promise<any> {
     try {
-      return await this.client.fetchSolarSystem(systemId);
+      return await this.esiClient.fetchSolarSystem(systemId);
     } catch (error) {
       logger.error(`Error fetching system ${systemId}:`, error);
       throw error;

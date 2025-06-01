@@ -1,11 +1,11 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
+import { REDIS_URL } from "../../config";
 import { logger } from "../../lib/logger";
 
-// Get Redis connection string from environment or use a default
-const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+const redisUrl = REDIS_URL;
 
 // Create a Redis client singleton
-const redis = new Redis(redisUrl);
+export const redis = new Redis(redisUrl);
 
 // Log connection state
 redis.on("connect", () => {
@@ -15,5 +15,3 @@ redis.on("connect", () => {
 redis.on("error", (err) => {
   logger.error(`Redis client error: ${err.message}`);
 });
-
-export default redis;

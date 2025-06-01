@@ -5,6 +5,7 @@ import {
 } from "../../types/ingestion";
 import { z } from "zod";
 import { logger } from "../../lib/logger";
+import { RateLimiter } from "../../utils/rateLimiter";
 
 // Infer types from schemas
 type MapActivityResponse = z.infer<typeof MapActivityResponseSchema>;
@@ -21,8 +22,7 @@ type ApiResponse = any[] | RawApiResponse;
 export class MapClient {
   private readonly client: UnifiedESIClient;
   private readonly apiKey: string;
-  private lastRequestTime: number = 0;
-  private readonly rateLimitMs: number = 200; // 5 requests per second
+  private readonly rateLimiter: RateLimiter;
 
   constructor(baseUrl: string, apiKey: string) {
     this.apiKey = apiKey;
@@ -31,24 +31,9 @@ export class MapClient {
       userAgent: "EVE-Chart-Bot/1.0",
       timeout: 10000,
     });
-  }
 
-  /**
-   * Respect rate limits when making requests to the Map API
-   */
-  private async respectRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-
-    if (timeSinceLastRequest < this.rateLimitMs) {
-      const waitTime = this.rateLimitMs - timeSinceLastRequest;
-      logger.debug(
-        `Rate limiting - waiting ${waitTime}ms before next request to Map API`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-
-    this.lastRequestTime = Date.now();
+    // Use shared rate limiter with 200ms delay (5 requests per second)
+    this.rateLimiter = new RateLimiter(200, "Map API");
   }
 
   /**
@@ -74,7 +59,7 @@ export class MapClient {
       );
 
       // Respect rate limit
-      await this.respectRateLimit();
+      await this.rateLimiter.wait();
 
       const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
       const response = await this.client.fetch<ApiResponse>(url, {
@@ -129,7 +114,7 @@ export class MapClient {
 
   async getUserCharacters(slug: string): Promise<UserCharactersResponse> {
     try {
-      await this.respectRateLimit();
+      await this.rateLimiter.wait();
       logger.info(`Fetching user characters for slug: ${slug}`);
 
       const response = await this.client.fetch<ApiResponse>(

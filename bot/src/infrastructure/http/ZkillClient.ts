@@ -1,5 +1,7 @@
 import { UnifiedESIClient } from "./UnifiedESIClient";
 import { logger } from "../../lib/logger";
+import { RateLimiter } from "../../utils/rateLimiter";
+import { RATE_LIMIT_MIN_DELAY } from "../../config";
 
 interface ZkillResponse {
   killID: number;
@@ -15,8 +17,7 @@ interface ZkillResponse {
 
 export class ZkillClient {
   private readonly client: UnifiedESIClient;
-  private lastRequestTime: number = 0;
-  private readonly rateLimitMs: number = 1000; // 1 request per second
+  private readonly rateLimiter: RateLimiter;
 
   constructor(baseUrl: string = "https://zkillboard.com/api") {
     this.client = new UnifiedESIClient({
@@ -24,24 +25,9 @@ export class ZkillClient {
       userAgent: "EVE-Chart-Bot/1.0",
       timeout: 15000,
     });
-  }
 
-  /**
-   * Respect rate limits when making requests to zKillboard
-   */
-  private async respectRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-
-    if (timeSinceLastRequest < this.rateLimitMs) {
-      const waitTime = this.rateLimitMs - timeSinceLastRequest;
-      logger.debug(
-        `Rate limiting - waiting ${waitTime}ms before next request to zKillboard`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-
-    this.lastRequestTime = Date.now();
+    // Use shared rate limiter with 1 second delay for zKillboard
+    this.rateLimiter = new RateLimiter(RATE_LIMIT_MIN_DELAY, "zKillboard");
   }
 
   /**
@@ -49,7 +35,7 @@ export class ZkillClient {
    */
   async getKillmail(killId: number): Promise<ZkillResponse | null> {
     try {
-      await this.respectRateLimit();
+      await this.rateLimiter.wait();
       logger.info(`Fetching killmail ${killId} from zKillboard`);
 
       const response = await this.client.fetch<Record<string, any>>(
@@ -119,7 +105,7 @@ export class ZkillClient {
     page: number = 1
   ): Promise<ZkillResponse[]> {
     try {
-      await this.respectRateLimit();
+      await this.rateLimiter.wait();
       logger.info(
         `Fetching kills for character ${characterId} from zKillboard (page ${page})`
       );
@@ -180,7 +166,7 @@ export class ZkillClient {
     page: number = 1
   ): Promise<ZkillResponse[]> {
     try {
-      await this.respectRateLimit();
+      await this.rateLimiter.wait();
       logger.info(
         `Fetching losses for character ${characterId} from zKillboard (page ${page})`
       );

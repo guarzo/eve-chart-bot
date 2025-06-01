@@ -7,8 +7,8 @@ import {
   KillmailAttacker,
   KillmailVictim,
 } from "../../domain/killmail/Killmail";
-
 import { ZKillboardClient } from "../../infrastructure/http/zkill";
+import { Configuration } from "../../config";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
@@ -45,12 +45,12 @@ export class KillmailIngestionService {
     // DEBUG: Check what we're actually reading
     logger.info(
       `DEBUG: ENABLE_BACKFILL value is: "${
-        process.env.ENABLE_BACKFILL
-      }" (type: ${typeof process.env.ENABLE_BACKFILL})`
+        Configuration.ingestion.enableBackfill
+      }" (type: ${typeof Configuration.ingestion.enableBackfill})`
     );
 
-    // Check if backfill is enabled via environment variable
-    if (process.env.ENABLE_BACKFILL !== "true") {
+    // Check if backfill is enabled via centralized configuration
+    if (!Configuration.ingestion.enableBackfill) {
       logger.info(
         "Killmail ingestion service started successfully (backfill disabled)"
       );

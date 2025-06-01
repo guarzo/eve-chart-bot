@@ -4,6 +4,14 @@ import { CacheAdapter } from "../../cache/CacheAdapter";
 import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 import { ESIClientConfig, IESIClient } from "./ESIClient";
 import { retryOperation } from "../../utils/retry";
+import {
+  REDIS_URL,
+  ESI_BASE_URL,
+  CACHE_TTL,
+  HTTP_TIMEOUT,
+  HTTP_MAX_RETRIES,
+  HTTP_INITIAL_RETRY_DELAY,
+} from "../../config";
 
 /**
  * Unified client for interacting with EVE Online's ESI API
@@ -21,12 +29,12 @@ export class UnifiedESIClient implements IESIClient {
    */
   constructor(config: ESIClientConfig = {}, cache?: CacheAdapter) {
     this.config = {
-      baseUrl: config.baseUrl || "https://esi.evetech.net/latest",
-      timeout: config.timeout || 10000,
+      baseUrl: config.baseUrl || ESI_BASE_URL,
+      timeout: config.timeout || HTTP_TIMEOUT,
       userAgent: config.userAgent || "EVE-Chart-Bot/1.0",
-      cacheTtl: config.cacheTtl || 3600, // Default 1 hour cache
-      maxRetries: config.maxRetries || 3,
-      initialRetryDelay: config.initialRetryDelay || 1000,
+      cacheTtl: config.cacheTtl || CACHE_TTL,
+      maxRetries: config.maxRetries || HTTP_MAX_RETRIES,
+      initialRetryDelay: config.initialRetryDelay || HTTP_INITIAL_RETRY_DELAY,
     };
 
     this.client = axios.create({
@@ -39,8 +47,7 @@ export class UnifiedESIClient implements IESIClient {
     });
 
     this.cache =
-      cache ||
-      new CacheRedisAdapter("redis://redis:6379", this.config.cacheTtl);
+      cache || new CacheRedisAdapter(REDIS_URL, this.config.cacheTtl);
   }
 
   /**

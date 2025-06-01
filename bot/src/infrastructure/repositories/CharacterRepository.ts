@@ -3,6 +3,7 @@ import { CharacterGroup } from "../../domain/character/CharacterGroup";
 import { PrismaMapper } from "../mapper/PrismaMapper";
 import { BaseRepository } from "./BaseRepository";
 import { logger } from "../../lib/logger";
+import { ensureRequiredBigInt } from "../../utils/conversion";
 
 /**
  * Repository for character-related data access
@@ -16,28 +17,28 @@ export class CharacterRepository extends BaseRepository {
    * Get a character by their EVE ID
    */
   async getCharacter(eveId: string | bigint): Promise<Character | null> {
-    const character = await this.prisma.character.findUnique({
-      where: { eveId: typeof eveId === "string" ? BigInt(eveId) : eveId },
+    return this.executeQuery(async () => {
+      const character = await this.prisma.character.findUnique({
+        where: { eveId: ensureRequiredBigInt(eveId) },
+      });
+      return character ? PrismaMapper.map(character, Character) : null;
     });
-    return character ? PrismaMapper.map(character, Character) : null;
   }
 
   /**
    * Get all characters
    */
   async getAllCharacters(): Promise<Character[]> {
-    const characters = await this.prisma.character.findMany();
-    return characters.map((char: any) => PrismaMapper.map(char, Character));
+    return this.findMany("character", Character);
   }
 
   /**
    * Get characters by group ID
    */
   async getCharactersByGroup(groupId: string): Promise<Character[]> {
-    const characters = await this.prisma.character.findMany({
+    return this.findMany("character", Character, {
       where: { characterGroupId: groupId },
     });
-    return characters.map((char: any) => PrismaMapper.map(char, Character));
   }
 
   /**
@@ -45,11 +46,10 @@ export class CharacterRepository extends BaseRepository {
    */
   async saveCharacter(character: Character): Promise<Character> {
     return this.executeQuery(async () => {
+      const eveId = ensureRequiredBigInt(character.eveId);
+
       const createData = {
-        eveId:
-          typeof character.eveId === "string"
-            ? BigInt(character.eveId)
-            : character.eveId,
+        eveId,
         name: character.name,
         corporationId: character.corporationId ?? 0,
         corporationTicker: character.corporationTicker,
@@ -65,15 +65,11 @@ export class CharacterRepository extends BaseRepository {
         }),
       };
 
-      const saved = await this.prisma.character.upsert({
-        where: {
-          eveId:
-            typeof character.eveId === "string"
-              ? BigInt(character.eveId)
-              : character.eveId,
-        },
-        create: createData,
-        update: {
+      return this.upsert(
+        "character",
+        { eveId },
+        createData,
+        {
           name: character.name,
           corporationId: character.corporationId ?? 0,
           corporationTicker: character.corporationTicker,
@@ -88,8 +84,8 @@ export class CharacterRepository extends BaseRepository {
             lastBackfillAt: character.lastBackfillAt,
           }),
         },
-      });
-      return PrismaMapper.map(saved, Character);
+        Character
+      );
     });
   }
 
@@ -97,91 +93,42 @@ export class CharacterRepository extends BaseRepository {
    * Delete a character
    */
   async deleteCharacter(eveId: string | bigint): Promise<void> {
-    await this.prisma.character.delete({
-      where: { eveId: typeof eveId === "string" ? BigInt(eveId) : eveId },
-    });
+    return this.delete("character", { eveId: ensureRequiredBigInt(eveId) });
   }
 
   /**
    * Get a character group by ID
    */
   async getCharacterGroup(id: string): Promise<CharacterGroup | null> {
-    const group = await this.prisma.characterGroup.findUnique({
-      where: { id },
-      include: { characters: true },
+    return this.executeQuery(async () => {
+      const group = await this.prisma.characterGroup.findUnique({
+        where: { id },
+        include: { characters: true },
+      });
+
+      if (!group) {
+        return null;
+      }
+
+      // Use PrismaMapper for the entire group including nested characters
+      return PrismaMapper.map(group, CharacterGroup);
     });
-
-    if (!group) {
-      return null;
-    }
-
-    // Map characters individually first
-    const mappedCharacters =
-      group.characters?.map((char: any) => PrismaMapper.map(char, Character)) ||
-      [];
-
-    // Create the group object with properly mapped characters
-    const groupData = {
-      ...group,
-      characters: mappedCharacters,
-    };
-
-    return PrismaMapper.map(groupData, CharacterGroup);
   }
 
   /**
    * Get all character groups
    */
   async getAllCharacterGroups(): Promise<CharacterGroup[]> {
-    try {
+    return this.executeQuery(async () => {
       const groups = await this.prisma.characterGroup.findMany({
         include: { characters: true },
       });
 
       logger.info(`Found ${groups.length} raw groups from database`);
 
-      // Map groups with proper field mapping
-      return groups.map((group: any) => {
-        // Map characters with proper field name conversion from snake_case to camelCase
-        const mappedCharacters =
-          group.characters?.map((char: any) => {
-            // Create proper Character domain object with correct field mapping
-            const characterData = {
-              eveId: char.eveId?.toString() || char.eve_id?.toString() || "",
-              name: char.name || "",
-              allianceId: char.allianceId || char.alliance_id,
-              allianceTicker: char.allianceTicker || char.alliance_ticker,
-              corporationId: char.corporationId || char.corporation_id,
-              corporationTicker:
-                char.corporationTicker || char.corporation_ticker,
-              characterGroupId:
-                char.characterGroupId || char.character_group_id,
-              createdAt: char.createdAt || char.created_at,
-              updatedAt: char.updatedAt || char.updated_at,
-              lastBackfillAt: char.lastBackfillAt || char.last_backfill_at,
-            };
-
-            return new Character(characterData);
-          }) || [];
-
-        // Create proper CharacterGroup domain object
-        const groupData = {
-          id: group.id,
-          map_name: group.map_name,
-          mainCharacterId:
-            group.mainCharacterId?.toString() ||
-            group.main_character_id?.toString(),
-          createdAt: group.createdAt || group.created_at,
-          updatedAt: group.updatedAt || group.updated_at,
-          characters: mappedCharacters,
-        };
-
-        return new CharacterGroup(groupData);
-      });
-    } catch (error) {
-      logger.error("Error in getAllCharacterGroups:", error);
-      throw error;
-    }
+      // Use PrismaMapper for consistent mapping
+      return PrismaMapper.mapArray(groups, CharacterGroup);
+    });
   }
 
   /**
@@ -223,7 +170,7 @@ export class CharacterRepository extends BaseRepository {
     }
     const updated = await this.prisma.characterGroup.update({
       where: { id: character.characterGroupId },
-      data: { mainCharacterId: BigInt(eveId) },
+      data: { mainCharacterId: ensureRequiredBigInt(eveId) },
       include: { characters: true },
     });
 
@@ -247,7 +194,7 @@ export class CharacterRepository extends BaseRepository {
    */
   async removeFromGroup(eveId: string | bigint): Promise<Character> {
     const updated = await this.prisma.character.update({
-      where: { eveId: BigInt(eveId) },
+      where: { eveId: ensureRequiredBigInt(eveId) },
       data: { characterGroupId: null },
     });
     return PrismaMapper.map(updated, Character);
@@ -263,7 +210,7 @@ export class CharacterRepository extends BaseRepository {
       const characters = await this.prisma.character.findMany({
         where: {
           eveId: {
-            in: eveIds.map((id) => (typeof id === "string" ? BigInt(id) : id)),
+            in: eveIds.map((id) => ensureRequiredBigInt(id)),
           },
         },
       });
@@ -426,7 +373,7 @@ export class CharacterRepository extends BaseRepository {
     return this.executeQuery(async () => {
       const character = await this.prisma.character.findUnique({
         where: {
-          eveId: typeof eveId === "string" ? BigInt(eveId) : eveId,
+          eveId: ensureRequiredBigInt(eveId),
         },
       });
       if (!character) {
@@ -444,7 +391,7 @@ export class CharacterRepository extends BaseRepository {
     groupId: string
   ): Promise<Character> {
     const updated = await this.prisma.character.update({
-      where: { eveId: typeof eveId === "string" ? BigInt(eveId) : eveId },
+      where: { eveId: ensureRequiredBigInt(eveId) },
       data: { characterGroupId: groupId },
     });
     return PrismaMapper.map(updated, Character);
@@ -460,10 +407,7 @@ export class CharacterRepository extends BaseRepository {
     const updated = await this.prisma.characterGroup.update({
       where: { id: groupId },
       data: {
-        mainCharacterId:
-          typeof mainCharacterId === "string"
-            ? BigInt(mainCharacterId)
-            : mainCharacterId,
+        mainCharacterId: ensureRequiredBigInt(mainCharacterId),
       },
       include: { characters: true },
     });
@@ -481,9 +425,7 @@ export class CharacterRepository extends BaseRepository {
       data: {
         map_name: mapName,
         mainCharacterId: mainCharacterId
-          ? typeof mainCharacterId === "string"
-            ? BigInt(mainCharacterId)
-            : mainCharacterId
+          ? ensureRequiredBigInt(mainCharacterId)
           : null,
       },
       include: { characters: true },
