@@ -29,14 +29,17 @@ export class CharacterRepository extends BaseRepository {
    * Get all characters
    */
   async getAllCharacters(): Promise<Character[]> {
-    return this.findMany("character", Character);
+    return this.findMany(Character, {
+      modelName: "character",
+    });
   }
 
   /**
    * Get characters by group ID
    */
   async getCharactersByGroup(groupId: string): Promise<Character[]> {
-    return this.findMany("character", Character, {
+    return this.findMany(Character, {
+      modelName: "character",
       where: { characterGroupId: groupId },
     });
   }
@@ -65,27 +68,7 @@ export class CharacterRepository extends BaseRepository {
         }),
       };
 
-      return this.upsert(
-        "character",
-        { eveId },
-        createData,
-        {
-          name: character.name,
-          corporationId: character.corporationId ?? 0,
-          corporationTicker: character.corporationTicker,
-          ...(character.allianceId && { allianceId: character.allianceId }),
-          ...(character.allianceTicker && {
-            allianceTicker: character.allianceTicker,
-          }),
-          ...(character.characterGroupId && {
-            characterGroupId: character.characterGroupId,
-          }),
-          ...(character.lastBackfillAt && {
-            lastBackfillAt: character.lastBackfillAt,
-          }),
-        },
-        Character
-      );
+      return this.upsert({ eveId }, createData, createData, Character);
     });
   }
 

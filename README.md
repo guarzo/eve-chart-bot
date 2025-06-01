@@ -46,8 +46,14 @@ npm start
 1. Create a `.env` file with the following content:
 
 ```
-DOCKER_IMAGE=guarzo/eve-chart-bot:latest
-DISCORD_TOKEN=your_discord_token
+# Required environment variables
+DISCORD_BOT_TOKEN=your_discord_token
+MAP_URL=your_map_url
+MAP_NAME=your_map_name
+MAP_API_TOKEN=your_map_api_token
+
+# Optional environment variables
+NODE_ENV=production  # defaults to "development"
 ```
 
 2. Start the services:
@@ -62,30 +68,14 @@ This will start the bot along with PostgreSQL and Redis services.
 
 The following environment variables are required:
 
-- `DOCKER_IMAGE`: The Docker image to use (e.g., `guarzo/eve-chart-bot:latest`)
-- `DISCORD_TOKEN`: Your Discord bot token
+- `DISCORD_BOT_TOKEN`: Your Discord bot token
+- `MAP_URL`: URL of the map API
+- `MAP_NAME`: Name of the map to use
+- `MAP_API_TOKEN`: API token for map access
 
-Optional variables with defaults:
+Optional variables:
 
-- `API_PORT`: Port for the API (default: 3000)
-- `POSTGRES_USER`: PostgreSQL username (default: postgres)
-- `POSTGRES_PASSWORD`: PostgreSQL password (default: postgres)
-- `POSTGRES_DB`: PostgreSQL database name (default: evechartbot)
-- `POSTGRES_PORT`: PostgreSQL port (default: 5432)
-- `REDIS_PORT`: Redis port (default: 6379)
-- `ENABLE_BACKFILL`: Enable automatic backfill operations when set to "true" (default: false)
-- `MAP_NAME`: Map identifier for fetching map data and character lists (required for map features)
-
-The following variables are automatically derived and don't need to be set:
-
-- `DATABASE_URL`: Derived from PostgreSQL settings
-- `REDIS_URL`: Derived from Redis settings
-
-### Available Tags
-
-- `latest`: Most recent release
-- `x.y.z`: Specific version (e.g., `1.2.3`)
-- `x.y`: Latest patch version for a minor release (e.g., `1.2`)
+- `NODE_ENV`: Environment (development/production/test, defaults to "development")
 
 ## License
 

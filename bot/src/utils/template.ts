@@ -1,62 +1,61 @@
-import * as fs from "fs";
-import * as path from "path";
+import fs from "fs";
+import path from "path";
 import { logger } from "../lib/logger";
 
 /**
- * Template utility for loading and rendering HTML templates
+ * Simple template engine for rendering HTML templates
  */
 export class TemplateEngine {
   private static templateCache: Map<string, string> = new Map();
 
   /**
-   * Load a template from the filesystem
-   * @param templatePath Path to the template file relative to the templates directory
-   * @returns Template content as string
+   * Load a template from file
    */
-  static loadTemplate(templatePath: string): string {
-    if (this.templateCache.has(templatePath)) {
-      return this.templateCache.get(templatePath)!;
+  private static loadTemplate(templateName: string): string {
+    // Check cache first
+    if (this.templateCache.has(templateName)) {
+      return this.templateCache.get(templateName)!;
     }
 
     try {
-      const fullPath = path.resolve(
+      const templatePath = path.join(
         __dirname,
-        "../application/chart/templates",
-        templatePath
+        "..",
+        "application",
+        "chart",
+        "templates",
+        templateName
       );
-      const template = fs.readFileSync(fullPath, "utf8");
-      this.templateCache.set(templatePath, template);
+      const template = fs.readFileSync(templatePath, "utf-8");
+
+      // Cache the template
+      this.templateCache.set(templateName, template);
+
       return template;
     } catch (error) {
-      logger.error(`Failed to load template: ${templatePath}`, error);
-      throw new Error(`Template not found: ${templatePath}`);
+      logger.error(`Failed to load template ${templateName}:`, error);
+      throw new Error(`Template ${templateName} not found`);
     }
   }
 
   /**
-   * Render a template with placeholders replaced
-   * @param templatePath Path to the template file
-   * @param variables Object containing variables to replace in the template
-   * @returns Rendered HTML string
+   * Replace placeholders in template with values
    */
-  static render(
-    templatePath: string,
-    variables: Record<string, string>
+  private static replacePlaceholders(
+    template: string,
+    values: Record<string, string>
   ): string {
-    try {
-      let template = this.loadTemplate(templatePath);
+    return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+      return values[key] !== undefined ? values[key] : match;
+    });
+  }
 
-      // Replace all {{placeholder}} with corresponding values
-      for (const [key, value] of Object.entries(variables)) {
-        const placeholder = `{{${key}}}`;
-        template = template.replace(new RegExp(placeholder, "g"), value);
-      }
-
-      return template;
-    } catch (error) {
-      logger.error(`Failed to render template: ${templatePath}`, error);
-      throw error;
-    }
+  /**
+   * Render a template with the given values
+   */
+  static render(templateName: string, values: Record<string, string>): string {
+    const template = this.loadTemplate(templateName);
+    return this.replacePlaceholders(template, values);
   }
 
   /**

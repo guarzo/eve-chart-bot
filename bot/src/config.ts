@@ -1,163 +1,57 @@
-// Configuration options for the application
+/**
+ * Application configuration
+ */
 
-export const config = {
-  // Cache settings
-  cache: {
-    // Default TTL for cache entries in milliseconds
-    defaultTTL: 5 * 60 * 1000, // 5 minutes
+import { config } from "dotenv";
+config(); // Load environment variables from .env file
 
-    // Whether to enable caching
-    enabled: true,
-  },
-
-  // API settings
-  api: {
-    // Rate limiting
-    rateLimit: {
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
-    },
-  },
-};
-
-// Environment-based configuration
-export const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
-export const CACHE_TTL = Number(process.env.CACHE_TTL) || 300; // seconds
-export const ESI_BASE_URL =
-  process.env.ESI_BASE_URL ?? "https://esi.evetech.net/latest";
-export const ZKILLBOARD_BASE_URL =
-  process.env.ZKILLBOARD_BASE_URL ?? "https://zkillboard.com/api";
-
-// Database configuration
-export const DATABASE_URL = process.env.DATABASE_URL;
-
-// HTTP Client configuration
-export const HTTP_TIMEOUT = Number(process.env.HTTP_TIMEOUT) || 30000; // 30 seconds
-export const HTTP_MAX_RETRIES = Number(process.env.HTTP_MAX_RETRIES) || 3;
-export const HTTP_INITIAL_RETRY_DELAY =
-  Number(process.env.HTTP_INITIAL_RETRY_DELAY) || 1000; // 1 second
-export const HTTP_MAX_RETRY_DELAY =
-  Number(process.env.HTTP_MAX_RETRY_DELAY) || 45000; // 45 seconds
-
-// Rate limiting configuration
-export const RATE_LIMIT_MIN_DELAY =
-  Number(process.env.RATE_LIMIT_MIN_DELAY) || 1000; // 1 second
-export const RATE_LIMIT_MAX_DELAY =
-  Number(process.env.RATE_LIMIT_MAX_DELAY) || 10000; // 10 seconds
-
-// Feature flags
-export const NEW_CHART_RENDERING = process.env.NEW_CHART_RENDERING === "true";
-
-// Server configuration
-export const PORT = Number(process.env.PORT) || 3000;
+// Core configuration
 export const NODE_ENV = process.env.NODE_ENV || "development";
 
-// Logging configuration
-export const LOG_LEVEL = process.env.LOG_LEVEL || "info";
-
-// Discord Bot Configuration
+// Discord configuration
 export const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN;
+if (!DISCORD_BOT_TOKEN) {
+  throw new Error("DISCORD_BOT_TOKEN environment variable is required");
+}
 
-// Map API Configuration
-export const MAP_API_URL = process.env.MAP_API_URL || "https://api.eve-map.net";
-export const MAP_API_KEY = process.env.MAP_API_KEY || "";
+// Map configuration
+export const MAP_URL = process.env.MAP_URL;
 export const MAP_NAME = process.env.MAP_NAME;
+export const MAP_API_TOKEN = process.env.MAP_API_TOKEN;
 
-// Ingestion Configuration
-export const ENABLE_BACKFILL = process.env.ENABLE_BACKFILL === "true";
+// Validate required map configuration
+if (NODE_ENV !== "test") {
+  if (!MAP_URL) {
+    throw new Error("MAP_URL environment variable is required");
+  }
+  if (!MAP_NAME) {
+    throw new Error("MAP_NAME environment variable is required");
+  }
+  if (!MAP_API_TOKEN) {
+    throw new Error("MAP_API_TOKEN environment variable is required");
+  }
+}
 
-// Retry Configuration
-export const MAX_RETRIES = Number(process.env.MAX_RETRIES) || 3;
-export const RETRY_DELAY = Number(process.env.RETRY_DELAY) || 5000; // 5 seconds
+// Internal configuration (not configurable via env vars)
+export const INTERNAL_CONFIG = {
+  // Database
+  DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/evechartbot",
 
-// Sentry Configuration
-export const SENTRY_DSN = process.env.SENTRY_DSN;
+  // Redis
+  REDIS_URL: "redis://localhost:6379",
+  CACHE_TTL: 300, // 5 minutes
 
-// Feature Flags - Centralized boolean conversion
-const getBooleanFlag = (
-  envVar: string | undefined,
-  defaultValue: boolean
-): boolean => {
-  if (envVar === undefined) return defaultValue;
-  return envVar.toLowerCase() === "true";
-};
+  // API endpoints
+  ESI_BASE_URL: "https://esi.evetech.net/latest",
+  ZKILLBOARD_BASE_URL: "https://zkillboard.com/api",
 
-export const FEATURE_FLAGS = {
-  newChartRendering: getBooleanFlag(
-    process.env.FEATURE_NEW_CHART_RENDERING,
-    false
-  ),
-  redisCache: getBooleanFlag(process.env.FEATURE_REDIS_CACHE, true),
-  newIngestionService: getBooleanFlag(
-    process.env.FEATURE_NEW_INGESTION_SERVICE,
-    false
-  ),
-  awoxDetection: getBooleanFlag(process.env.FEATURE_AWOX_DETECTION, false),
-};
+  // HTTP settings
+  HTTP_TIMEOUT: 30000, // 30 seconds
+  HTTP_MAX_RETRIES: 3,
+  HTTP_INITIAL_RETRY_DELAY: 1000, // 1 second
+  HTTP_MAX_RETRY_DELAY: 45000, // 45 seconds
 
-// Type-safe configuration object
-export const Configuration = {
-  server: {
-    port: PORT,
-    nodeEnv: NODE_ENV,
-  },
-  database: {
-    url: DATABASE_URL,
-  },
-  redis: {
-    url: REDIS_URL,
-    cacheTtl: CACHE_TTL,
-  },
-  apis: {
-    esi: {
-      baseUrl: ESI_BASE_URL,
-    },
-    zkillboard: {
-      baseUrl: ZKILLBOARD_BASE_URL,
-    },
-    map: {
-      url: MAP_API_URL,
-      key: MAP_API_KEY,
-      name: MAP_NAME,
-    },
-  },
-  http: {
-    timeout: HTTP_TIMEOUT,
-    maxRetries: HTTP_MAX_RETRIES,
-    initialRetryDelay: HTTP_INITIAL_RETRY_DELAY,
-    maxRetryDelay: HTTP_MAX_RETRY_DELAY,
-  },
-  rateLimit: {
-    minDelay: RATE_LIMIT_MIN_DELAY,
-    maxDelay: RATE_LIMIT_MAX_DELAY,
-  },
-  features: FEATURE_FLAGS,
-  logging: {
-    level: LOG_LEVEL,
-  },
-  discord: {
-    token: DISCORD_BOT_TOKEN,
-  },
-  ingestion: {
-    enableBackfill: ENABLE_BACKFILL,
-    maxRetries: MAX_RETRIES,
-    retryDelay: RETRY_DELAY,
-  },
-  sentry: {
-    dsn: SENTRY_DSN,
-  },
+  // Rate limiting
+  RATE_LIMIT_MIN_DELAY: 1000, // 1 second
+  RATE_LIMIT_MAX_DELAY: 10000, // 10 seconds
 } as const;
-
-// Type definitions for configuration
-export type ConfigurationType = typeof Configuration;
-export type ServerConfig = ConfigurationType["server"];
-export type DatabaseConfig = ConfigurationType["database"];
-export type RedisConfig = ConfigurationType["redis"];
-export type ApiConfig = ConfigurationType["apis"];
-export type HttpConfig = ConfigurationType["http"];
-export type RateLimitConfig = ConfigurationType["rateLimit"];
-export type FeatureFlags = ConfigurationType["features"];
-export type LoggingConfig = ConfigurationType["logging"];
-export type DiscordConfig = ConfigurationType["discord"];
-export type IngestionConfig = ConfigurationType["ingestion"];
-export type SentryConfig = ConfigurationType["sentry"];

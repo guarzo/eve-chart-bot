@@ -1,5 +1,6 @@
 # Multi-stage Dockerfile that supports both development and production builds
 ARG NODE_VERSION=20
+ARG BUILD_TARGET=production
 
 # Development target
 FROM node:${NODE_VERSION} AS development
@@ -102,4 +103,7 @@ COPY --from=builder /app/prisma ./prisma/
 ENV NODE_ENV=production
 
 # Start the application
-CMD ["npm", "start"] 
+CMD ["npm", "start"]
+
+# Final target based on BUILD_TARGET argument
+FROM ${BUILD_TARGET} 

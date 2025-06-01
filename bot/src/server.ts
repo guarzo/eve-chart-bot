@@ -19,11 +19,7 @@ import { CharacterSyncService } from "./services/ingestion/CharacterSyncService"
 import { CharacterRepository } from "./infrastructure/repositories/CharacterRepository";
 import { KillRepository } from "./infrastructure/repositories/KillRepository";
 import { MapActivityRepository } from "./infrastructure/repositories/MapActivityRepository";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { Configuration } from "./config";
-
-const execAsync = promisify(exec);
+import { NODE_ENV, INTERNAL_CONFIG } from "./config";
 
 // Load environment variables
 dotenvConfig();
@@ -33,10 +29,7 @@ initSentry();
 
 // Constants
 const appStartTime = Date.now();
-const port =
-  Configuration.server.nodeEnv === "test"
-    ? 0 // Use random port for tests
-    : Configuration.server.port;
+const port = NODE_ENV === "test" ? 0 : 3000; // Use random port for tests
 
 // Create Express app
 const app = express();
@@ -51,21 +44,21 @@ app.use(
   })
 );
 
-// Initialize services using centralized configuration
+// Initialize services using internal configuration
 const killmailService = new KillmailIngestionService();
 const mapService = new MapActivityService(
-  Configuration.apis.map.url,
-  Configuration.apis.map.key,
-  Configuration.redis.url,
-  Configuration.redis.cacheTtl,
-  Configuration.ingestion.maxRetries,
-  Configuration.ingestion.retryDelay
+  INTERNAL_CONFIG.ESI_BASE_URL,
+  INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
+  INTERNAL_CONFIG.REDIS_URL,
+  INTERNAL_CONFIG.CACHE_TTL,
+  INTERNAL_CONFIG.HTTP_MAX_RETRIES,
+  INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
 );
 const characterService = new CharacterSyncService(
-  Configuration.apis.map.url,
-  Configuration.apis.map.key,
-  Configuration.ingestion.maxRetries,
-  Configuration.ingestion.retryDelay
+  INTERNAL_CONFIG.ESI_BASE_URL,
+  INTERNAL_CONFIG.ZKILLBOARD_BASE_URL,
+  INTERNAL_CONFIG.HTTP_MAX_RETRIES,
+  INTERNAL_CONFIG.HTTP_INITIAL_RETRY_DELAY
 );
 let redisQService: RedisQService | null = null;
 const chartService = new ChartService();
@@ -221,14 +214,6 @@ app.post("/api/backfill/character/:characterId", async (req, res) => {
       `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
     );
 
-    // Use centralized configuration for backfill check
-    if (!Configuration.ingestion.enableBackfill) {
-      return res.status(400).json({
-        error: "Backfill is disabled",
-        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
-      });
-    }
-
     await killmailService.backfillKills(characterId, maxAgeDays);
 
     res.json({
@@ -252,14 +237,6 @@ app.post("/api/backfill/all", async (req, res) => {
     logger.info(
       `Starting backfill for all characters (max age: ${maxAgeDays} days)`
     );
-
-    // Use centralized configuration for backfill check
-    if (!Configuration.ingestion.enableBackfill) {
-      return res.status(400).json({
-        error: "Backfill is disabled",
-        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
-      });
-    }
 
     const characters = await characterRepository.getAllCharacters();
     let successCount = 0;
@@ -325,19 +302,6 @@ const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
   res
 ) => {
   try {
-    // Check if backfill is enabled via centralized configuration
-    if (!Configuration.ingestion.enableBackfill) {
-      logger.info(
-        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
-      );
-      res.status(200).json({
-        success: false,
-        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
-        disabled: true,
-      });
-      return;
-    }
-
     const { groupId } = req.params;
 
     // Find all characters in the group
@@ -392,19 +356,6 @@ async function processCharacterBackfills(characters: any[]): Promise<void> {
 // Add an endpoint to clean up and rebalance kill/loss data
 const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
   try {
-    // Check if backfill is enabled via centralized configuration
-    if (!Configuration.ingestion.enableBackfill) {
-      logger.info(
-        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
-      );
-      res.status(200).json({
-        success: false,
-        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
-        disabled: true,
-      });
-      return;
-    }
-
     logger.info("Starting kill/loss data cleanup and rebalance");
 
     // First, get current counts
@@ -514,108 +465,48 @@ async function cleanup() {
 }
 
 export async function startServer() {
-  logger.info("Starting server...");
-
-  // Run database migrations
-  logger.info("Running database migrations...");
   try {
-    const { stderr } = await execAsync("npx prisma migrate deploy");
-    if (stderr) {
-      logger.warn("Migration warnings:", stderr);
+    // Initialize RedisQ service
+    redisQService = new RedisQService(INTERNAL_CONFIG.REDIS_URL);
+    await redisQService.start();
+
+    // Initialize Discord if token is available
+    const discordToken = process.env.DISCORD_BOT_TOKEN;
+    if (discordToken) {
+      try {
+        await discordClient.login(discordToken);
+        await discordClient.registerCommands(commands);
+        logger.info("Discord bot initialized successfully");
+      } catch (error) {
+        logger.error("Failed to initialize Discord bot:", error);
+      }
+    } else {
+      logger.warn("No Discord token provided, bot will not be available");
     }
+
+    // Start the server
+    const server = app.listen(port, () => {
+      const uptime = Date.now() - appStartTime;
+      logger.info(
+        `Server started on port ${port} (took ${uptime}ms to initialize)`
+      );
+    });
+
+    // Handle graceful shutdown
+    process.on("SIGTERM", async () => {
+      logger.info("Received SIGTERM signal, shutting down gracefully");
+      await cleanup();
+      server.close(() => {
+        logger.info("Server closed");
+        process.exit(0);
+      });
+    });
+
+    return server;
   } catch (error) {
-    logger.error("Error running migrations:", error);
+    logger.error("Failed to start server:", error);
     throw error;
   }
-
-  // Start services
-  await characterService.start();
-  await killmailService.start();
-  await mapService.start();
-
-  // Initialize RedisQ service
-  redisQService = new RedisQService(Configuration.redis.url);
-  await redisQService.start();
-
-  // Initialize Discord if token is available
-  const discordToken = Configuration.discord.token;
-  if (discordToken) {
-    try {
-      const discordStartTime = Date.now();
-      logger.info(
-        `Discord initialization starting... (${
-          (discordStartTime - appStartTime) / 1000
-        }s after app start)`
-      );
-
-      logger.debug(
-        "Found Discord token:",
-        discordToken.substring(0, 10) + "..."
-      );
-
-      // Login to Discord
-      logger.info("Logging in to Discord...");
-      const bot = new DiscordClient();
-      await bot.start();
-      const loginTime = Date.now();
-      logger.info(
-        `Discord login successful - Client ready state: ${
-          bot.isReady() ? "Ready" : "Not Ready"
-        } (${(loginTime - discordStartTime) / 1000}s)`
-      );
-
-      // Register commands
-      logger.info("Registering Discord commands...");
-      await bot.registerCommands(commands);
-      const registerTime = Date.now();
-      logger.info(
-        `Discord commands registered successfully (${
-          (registerTime - loginTime) / 1000
-        }s)`
-      );
-
-      // Add specific Discord readiness log
-      setTimeout(() => {
-        const readyCheckTime = Date.now();
-        logger.info(
-          `Discord client status check after 5 seconds: (Total time since app start: ${
-            (readyCheckTime - appStartTime) / 1000
-          }s)`,
-          {
-            ready: bot.isReady() ? "Yes" : "No",
-            guilds: bot.getGuildsCount(),
-          }
-        );
-      }, 5000);
-    } catch (error) {
-      logger.error("Discord initialization failed:", error);
-      // Don't throw - allow server to start even if Discord fails
-    }
-  } else {
-    logger.warn("Discord bot token not provided, skipping Discord bot startup");
-  }
-
-  // Start server
-  const server = app.listen(port, () => {
-    logger.info(`Server running on port ${port}`);
-  });
-
-  // Handle cleanup
-  process.on("SIGTERM", async () => {
-    logger.info("SIGTERM received, shutting down gracefully...");
-    await cleanup();
-    await server.close();
-    process.exit(0);
-  });
-
-  process.on("SIGINT", async () => {
-    logger.info("SIGINT received, shutting down gracefully...");
-    await cleanup();
-    await server.close();
-    process.exit(0);
-  });
-
-  return server;
 }
 
 // Refresh character tracking for RedisQ

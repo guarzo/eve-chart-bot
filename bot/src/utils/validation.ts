@@ -374,3 +374,83 @@ export type ApiResponseProps = z.infer<typeof ApiResponseSchema>;
 export type PaginationProps = z.infer<typeof PaginationSchema>;
 export type DateRangeProps = z.infer<typeof DateRangeSchema>;
 export type FilterProps = z.infer<typeof FilterSchema>;
+
+// Base schemas for common types
+export const bigIntSchema = z.union([
+  z.string().transform((val) => BigInt(val)),
+  z.number().transform((val) => BigInt(val)),
+  z.bigint(),
+]);
+
+export const nonNegativeNumberSchema = z.number().min(0);
+export const nonNegativeBigIntSchema = bigIntSchema.transform((val) => {
+  if (val < 0n) throw new Error("Value must be non-negative");
+  return val;
+});
+
+export const dateSchema = z.union([
+  z.string().transform((val) => new Date(val)),
+  z.date(),
+]);
+
+// Common validation functions
+export function validateNonNegative(name: string, value: number): void {
+  if (value < 0) {
+    throw new Error(`${name} must be non-negative`);
+  }
+}
+
+export function validateRequired(name: string, value: any): void {
+  if (value === undefined || value === null) {
+    throw new Error(`${name} is required`);
+  }
+}
+
+export function validateBigInt(
+  name: string,
+  value: string | number | bigint
+): bigint {
+  try {
+    return bigIntSchema.parse(value);
+  } catch (error) {
+    throw new Error(`Invalid ${name}: ${error.message}`);
+  }
+}
+
+export function validateDate(name: string, value: string | Date): Date {
+  try {
+    return dateSchema.parse(value);
+  } catch (error) {
+    throw new Error(`Invalid ${name}: ${error.message}`);
+  }
+}
+
+// Entity-specific schemas
+export const characterSchema = z.object({
+  eveId: bigIntSchema,
+  name: z.string().min(1),
+  corporationId: bigIntSchema.nullable(),
+  allianceId: bigIntSchema.nullable(),
+  securityStatus: z.number().min(-10).max(10),
+  lastUpdated: dateSchema,
+});
+
+export const killmailSchema = z.object({
+  killmailId: bigIntSchema,
+  killTime: dateSchema,
+  npc: z.boolean(),
+  solo: z.boolean(),
+  awox: z.boolean(),
+  shipTypeId: nonNegativeNumberSchema,
+  systemId: nonNegativeNumberSchema,
+  totalValue: nonNegativeBigIntSchema,
+  points: nonNegativeNumberSchema,
+});
+
+export const mapActivitySchema = z.object({
+  characterId: bigIntSchema,
+  systemId: nonNegativeNumberSchema,
+  timestamp: dateSchema,
+  activityType: z.enum(["jump", "dock", "undock"]),
+  shipTypeId: nonNegativeNumberSchema,
+});
