@@ -1,7 +1,6 @@
 import { KillRepository } from "../../infrastructure/repositories/KillRepository";
 import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
 import { ESIService } from "../ESIService";
-import { retryOperation, CircuitBreaker } from "../../utils/retry";
 import { logger } from "../../lib/logger";
 import {
   KillmailAttacker,
@@ -9,31 +8,25 @@ import {
 } from "../../domain/killmail/Killmail";
 import { ZKillboardClient } from "../../infrastructure/http/zkill";
 import { Configuration } from "../../config";
+import { BaseIngestionService, IngestionConfig } from "./BaseIngestionService";
 
 // ——— Helpers ———
 /** Safely coerce numbers/strings to BigInt, or return null */
 const toBigInt = (val?: number | string | null): bigint | null =>
   val == null ? null : BigInt(typeof val === "string" ? val : Math.trunc(val));
 
-export class KillmailIngestionService {
+export class KillmailIngestionService extends BaseIngestionService {
   private readonly killRepository: KillRepository;
   private readonly characterRepository: CharacterRepository;
   private readonly esiService: ESIService;
   private readonly zkill: ZKillboardClient;
-  private readonly esiCircuitBreaker: CircuitBreaker;
-  private readonly zkillCircuitBreaker: CircuitBreaker;
 
-  constructor() {
+  constructor(config: Partial<IngestionConfig> = {}) {
+    super(config);
     this.killRepository = new KillRepository();
     this.characterRepository = new CharacterRepository();
     this.esiService = new ESIService();
     this.zkill = new ZKillboardClient();
-    this.esiCircuitBreaker = new CircuitBreaker(3, 30000, "ESI Service");
-    this.zkillCircuitBreaker = new CircuitBreaker(
-      3,
-      60000,
-      "zKillboard Service"
-    ); // Longer cooldown for zKill
   }
 
   /**
@@ -135,14 +128,9 @@ export class KillmailIngestionService {
       }
 
       // 2) Fetch from zKillboard with retry (15s timeout for zKill)
-      const zk = await retryOperation(
+      const zk = await this.retryZkill(
         () => this.zkill.getKillmail(killId),
-        `Fetching zKill data for killmail ${killId}`,
-        {
-          maxRetries: 3,
-          initialRetryDelay: 5000,
-          timeout: 15000,
-        }
+        `Fetching zKill data for killmail ${killId}`
       );
 
       if (!zk) {
@@ -175,15 +163,10 @@ export class KillmailIngestionService {
       }
 
       // 3) Fetch from ESI with caching and retry (30s timeout for ESI)
-      const esi = await retryOperation(
+      const esi = await this.retryEsi(
         () =>
           this.esiService.getKillmail(killData.killmail_id, killData.zkb.hash),
-        `Fetching ESI data for killmail ${killId}`,
-        {
-          maxRetries: 3,
-          initialRetryDelay: 5000,
-          timeout: 30000,
-        }
+        `Fetching ESI data for killmail ${killId}`
       );
 
       if (!esi) {
@@ -353,6 +336,7 @@ export class KillmailIngestionService {
       // Calculate cutoff date
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+      logger.info(`Cutoff date for backfill: ${cutoffDate.toISOString()}`);
 
       // Get last processed killmail ID
       const checkpoint =
@@ -371,19 +355,13 @@ export class KillmailIngestionService {
       let tooOldCount = 0;
       let totalKillmailsProcessed = 0;
       let skipReasons: Record<string, number> = {};
-      let reachedCutoff = false;
 
-      while (hasMore && !reachedCutoff) {
+      while (hasMore) {
         try {
           // Fetch killmails from zKillboard
-          const killmails = await retryOperation(
+          const killmails = await this.retryZkill(
             () => this.zkill.getCharacterKills(Number(characterId), page),
-            `Fetching kills for character ${characterId}`,
-            {
-              maxRetries: 3,
-              initialRetryDelay: 5000,
-              timeout: 15000,
-            }
+            `Fetching kills for character ${characterId}`
           );
 
           if (!killmails || killmails.length === 0) {
@@ -391,101 +369,58 @@ export class KillmailIngestionService {
             continue;
           }
 
-          let allKillsInDb = true;
-          let hitCheckpoint = false;
-
-          // Process each killmail
-          for (const [index, killmail] of killmails.entries()) {
-            try {
+          // Process killmails in batches
+          const results = await this.processBatch(
+            killmails,
+            async (killmail) => {
               if (!killmail || !killmail.killmail_id || !killmail.zkb) {
-                continue;
+                return null;
               }
 
               const killId = killmail.killmail_id;
 
               // Check if we've hit the checkpoint from a previous run
               if (killId <= lastProcessedId) {
-                hitCheckpoint = true;
                 hasMore = false;
-                break;
-              }
-
-              // Get full killmail data from ESI to check age
-              const esiData = await retryOperation(
-                () => this.esiService.getKillmail(killId, killmail.zkb.hash),
-                `Fetching ESI data for killmail ${killId}`,
-                {
-                  maxRetries: 3,
-                  initialRetryDelay: 5000,
-                  timeout: 30000,
-                }
-              );
-
-              if (!esiData) {
-                logger.warn(`Failed to fetch ESI data for killmail ${killId}`);
-                continue;
+                return null;
               }
 
               // Check killmail age
-              const killTime = new Date(esiData.killmail_time);
-
+              const killTime = new Date(killmail.killmail_time);
               if (killTime < cutoffDate) {
-                tooOldCount++;
-                reachedCutoff = true;
-                hasMore = false;
-                break;
-              }
-
-              const result = await this.ingestKillmail(killId);
-              if (result.success) {
-                successfulIngestCount++;
-                allKillsInDb = false;
-              } else if (result.skipped) {
-                if (result.skipReason === "already in database") {
-                  duplicateCount++;
-                } else {
-                  skippedCount++;
-                  if (result.skipReason) {
-                    skipReasons[result.skipReason] =
-                      (skipReasons[result.skipReason] || 0) + 1;
-                  }
-                }
-              } else if (result.error) {
-                errorCount++;
-                allKillsInDb = false;
-                logger.error(
-                  `Error processing killmail ${killId}: ${result.error}`
+                logger.info(
+                  `Reached killmail older than cutoff date (${cutoffDate.toISOString()}), stopping`
                 );
+                tooOldCount++;
+                hasMore = false;
+                return null;
               }
-              totalKillmailsProcessed++;
-            } catch (killmailError: any) {
-              logger.error(
-                `Error processing individual killmail at index ${index}:`,
-                {
-                  error: killmailError.message,
-                  stack: killmailError.stack,
-                  killmailId: killmail?.killmail_id,
+
+              return await this.ingestKillmail(killId);
+            },
+            `Processing kills for character ${characterId}`
+          );
+
+          // Process results
+          for (const result of results) {
+            if (!result) continue;
+
+            if (result.success) {
+              successfulIngestCount++;
+            } else if (result.skipped) {
+              if (result.skipReason === "already in database") {
+                duplicateCount++;
+              } else {
+                skippedCount++;
+                if (result.skipReason) {
+                  skipReasons[result.skipReason] =
+                    (skipReasons[result.skipReason] || 0) + 1;
                 }
-              );
+              }
+            } else if (result.error) {
               errorCount++;
-              allKillsInDb = false;
             }
-          }
-
-          // If we've hit the checkpoint or all kills are in DB, stop
-          if (hitCheckpoint) {
-            break;
-          }
-
-          // If all kills from this page are already in DB, stop
-          if (allKillsInDb) {
-            hasMore = false;
-            break;
-          }
-
-          // If we've reached the cutoff or processed all killmails, stop
-          if (reachedCutoff || !hasMore) {
-            break;
+            totalKillmailsProcessed++;
           }
 
           page++;
@@ -498,9 +433,7 @@ export class KillmailIngestionService {
             page,
           });
           errorCount++;
-          // Don't break the loop on error, just continue to next page
           page++;
-          // If we get a 404 or 403, stop trying
           if (
             error.response?.status === 404 ||
             error.response?.status === 403
@@ -525,7 +458,7 @@ export class KillmailIngestionService {
             .join(", ")}`
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       logger.error(
         `Error backfilling kills for character ${characterId}:`,
         error
@@ -578,17 +511,19 @@ export class KillmailIngestionService {
       let totalLossmailsProcessed = 0;
       let skipReasons: Record<string, number> = {};
 
+      logger.info(
+        `Starting to fetch losses for character ${characterId} (last processed ID: ${lastProcessedId})`
+      );
+
       while (hasMore) {
         try {
-          // Fetch losses from zKillboard
-          const losses = await retryOperation(
-            () => this.zkill.getCharacterLosses(Number(characterId)),
-            `Fetching losses for character ${characterId}`,
-            {
-              maxRetries: 3,
-              initialRetryDelay: 5000,
-              timeout: 15000,
-            }
+          logger.info(
+            `Fetching page ${page} of losses for character ${characterId}`
+          );
+          // Fetch losses from zKillboard with optimized timeout
+          const losses = await this.retryZkill(
+            () => this.zkill.getCharacterLosses(Number(characterId), page),
+            `Fetching losses for character ${characterId}`
           );
 
           if (!losses || losses.length === 0) {
@@ -597,56 +532,75 @@ export class KillmailIngestionService {
             continue;
           }
 
-          // Process each loss
-          for (const loss of losses) {
-            if (!loss || !loss.killmail_id || !loss.zkb) {
-              logger.debug("Invalid loss data:", {
-                loss,
-                hasKillmailId: !!loss?.killmail_id,
-                hasZkb: !!loss?.zkb,
-              });
-              continue;
-            }
+          logger.info(`Processing ${losses.length} losses from page ${page}`);
 
-            const killId = loss.killmail_id;
-            if (killId <= lastProcessedId) {
-              logger.info(
-                `Reached previously processed loss ${killId}, stopping`
-              );
-              hasMore = false;
-              break;
-            }
-
-            // Check loss age
-            const lossTime = new Date(loss.killmail_time);
-            if (lossTime < cutoffDate) {
-              logger.info(
-                `Reached loss older than cutoff date (${cutoffDate.toISOString()}), stopping`
-              );
-              tooOldCount++;
-              hasMore = false;
-              break;
-            }
-
-            const result = await this.ingestKillmail(killId);
-            if (result.success) {
-              successfulIngestCount++;
-            } else if (result.skipped) {
-              if (result.skipReason === "already in database") {
-                duplicateCount++;
-              } else {
-                skippedCount++;
-                if (result.skipReason) {
-                  skipReasons[result.skipReason] =
-                    (skipReasons[result.skipReason] || 0) + 1;
+          // Process losses in parallel batches of 5
+          const batchSize = 5;
+          for (let i = 0; i < losses.length; i += batchSize) {
+            const batch = losses.slice(i, i + batchSize);
+            await Promise.all(
+              batch.map(async (loss) => {
+                if (!loss || !loss.killmail_id || !loss.zkb) {
+                  logger.debug("Invalid loss data:", {
+                    loss,
+                    hasKillmailId: !!loss?.killmail_id,
+                    hasZkb: !!loss?.zkb,
+                  });
+                  return;
                 }
-              }
-            } else if (result.error) {
-              errorCount++;
-            }
-            totalLossmailsProcessed++;
+
+                const killId = loss.killmail_id;
+                logger.debug(`Processing loss ${killId}`);
+
+                if (killId <= lastProcessedId) {
+                  logger.info(
+                    `Reached previously processed loss ${killId}, stopping`
+                  );
+                  hasMore = false;
+                  return;
+                }
+
+                // Check loss age
+                const lossTime = new Date(loss.killmail_time);
+                if (lossTime < cutoffDate) {
+                  logger.info(
+                    `Reached loss older than cutoff date (${cutoffDate.toISOString()}), stopping`
+                  );
+                  tooOldCount++;
+                  hasMore = false;
+                  return;
+                }
+
+                const result = await this.ingestKillmail(killId);
+                if (result.success) {
+                  successfulIngestCount++;
+                  logger.debug(`Successfully ingested loss ${killId}`);
+                } else if (result.skipped) {
+                  if (result.skipReason === "already in database") {
+                    duplicateCount++;
+                    logger.debug(`Skipped duplicate loss ${killId}`);
+                  } else {
+                    skippedCount++;
+                    if (result.skipReason) {
+                      skipReasons[result.skipReason] =
+                        (skipReasons[result.skipReason] || 0) + 1;
+                      logger.debug(
+                        `Skipped loss ${killId}: ${result.skipReason}`
+                      );
+                    }
+                  }
+                } else if (result.error) {
+                  errorCount++;
+                  logger.error(
+                    `Error processing loss ${killId}: ${result.error}`
+                  );
+                }
+                totalLossmailsProcessed++;
+              })
+            );
           }
 
+          logger.info(`Completed processing page ${page} of losses`);
           page++;
         } catch (error: any) {
           logger.error(`Error fetching losses for character ${characterId}:`, {
@@ -723,14 +677,9 @@ export class KillmailIngestionService {
 
       while (hasMore) {
         try {
-          const killmails = await retryOperation(
+          const killmails = await this.retryZkill(
             () => this.zkill.getCharacterKills(Number(characterId), page),
-            `Fetching kills for character ${characterId}, page ${page}`,
-            {
-              maxRetries: 3,
-              initialRetryDelay: 5000,
-              timeout: 15000,
-            }
+            `Fetching kills for character ${characterId}, page ${page}`
           );
 
           if (!killmails || killmails.length === 0) {
@@ -746,15 +695,10 @@ export class KillmailIngestionService {
             totalKills++;
 
             // Get ESI data to check kill time
-            const esiData = await retryOperation(
+            const esiData = await this.retryEsi(
               () =>
                 this.esiService.getKillmail(kill.killmail_id, kill.zkb.hash),
-              `Fetching ESI data for killmail ${kill.killmail_id}`,
-              {
-                maxRetries: 3,
-                initialRetryDelay: 5000,
-                timeout: 30000,
-              }
+              `Fetching ESI data for killmail ${kill.killmail_id}`
             );
 
             if (!esiData) {
@@ -811,16 +755,6 @@ export class KillmailIngestionService {
       );
       throw error;
     }
-  }
-
-  /**
-   * Helper to check if we're in a backfill operation
-   */
-  private isBackfillOperation(): boolean {
-    // Check if we're running in the context of a backfill operation
-    // This can be determined by looking at the call stack or setting a flag
-    const stack = new Error().stack || "";
-    return stack.includes("backfillKills") || stack.includes("backfillLosses");
   }
 
   /**
@@ -911,18 +845,9 @@ export class KillmailIngestionService {
 
         try {
           // Use circuit breaker for zKill call
-          const zkillResult = await this.zkillCircuitBreaker.execute(
-            async () => {
-              return await retryOperation(
-                () => this.zkill.getKillmail(Number(partial.killmail_id)),
-                `Fetching zKill data for enrichment ${partial.killmail_id}`,
-                {
-                  maxRetries: 2, // Fewer retries since we have circuit breaker
-                  initialRetryDelay: 3000,
-                  timeout: 10000,
-                }
-              );
-            }
+          const zkillResult = await this.retryZkill(
+            () => this.zkill.getKillmail(Number(partial.killmail_id)),
+            `Fetching zKill data for enrichment ${partial.killmail_id}`
           );
 
           if (!zkillResult) {
@@ -944,21 +869,14 @@ export class KillmailIngestionService {
           }
 
           // Use circuit breaker for ESI call
-          const esiResult = await this.esiCircuitBreaker.execute(async () => {
-            return await retryOperation(
-              () =>
-                this.esiService.getKillmail(
-                  Number(partial.killmail_id),
-                  killData.zkb.hash
-                ),
-              `Fetching ESI data for enrichment ${partial.killmail_id}`,
-              {
-                maxRetries: 2,
-                initialRetryDelay: 3000,
-                timeout: 15000,
-              }
-            );
-          });
+          const esiResult = await this.retryEsi(
+            () =>
+              this.esiService.getKillmail(
+                Number(partial.killmail_id),
+                killData.zkb.hash
+              ),
+            `Fetching ESI data for enrichment ${partial.killmail_id}`
+          );
 
           if (!esiResult?.victim) {
             stats.failed++;
@@ -1069,27 +987,5 @@ export class KillmailIngestionService {
       stats.errors.push(`Batch error: ${error.message}`);
       return stats;
     }
-  }
-
-  /**
-   * Get circuit breaker states for monitoring
-   */
-  public getCircuitBreakerStates(): {
-    esi: { state: string; failureCount: number; nextAttemptTime: number };
-    zkill: { state: string; failureCount: number; nextAttemptTime: number };
-  } {
-    return {
-      esi: this.esiCircuitBreaker.getState(),
-      zkill: this.zkillCircuitBreaker.getState(),
-    };
-  }
-
-  /**
-   * Reset circuit breakers (for admin/debugging purposes)
-   */
-  public resetCircuitBreakers(): void {
-    this.esiCircuitBreaker.reset();
-    this.zkillCircuitBreaker.reset();
-    logger.info("All circuit breakers have been reset");
   }
 }

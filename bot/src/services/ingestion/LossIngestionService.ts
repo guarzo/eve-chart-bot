@@ -4,36 +4,30 @@ import { CharacterRepository } from "../../infrastructure/repositories/Character
 import { LossRepository } from "../../infrastructure/repositories/LossRepository";
 import { LossFact } from "../../domain/killmail/LossFact";
 import { logger } from "../../lib/logger";
-import { retryOperation } from "../../utils/retry";
+import { BaseIngestionService, IngestionConfig } from "./BaseIngestionService";
 
 /**
  * Service for ingesting loss data from zKillboard and ESI
  */
-export class LossIngestionService {
+export class LossIngestionService extends BaseIngestionService {
   private readonly zkill: ZkillClient;
   private readonly esiService: ESIService;
   private readonly characterRepository: CharacterRepository;
   private readonly lossRepository: LossRepository;
-  private readonly maxRetries: number;
-  private readonly retryDelay: number;
 
   constructor(
     zkillApiUrl: string = "https://zkillboard.com/api",
-    maxRetries: number = 3,
-    retryDelay: number = 5000
+    config: Partial<IngestionConfig> = {}
   ) {
+    super(config);
     this.zkill = new ZkillClient(zkillApiUrl);
     this.esiService = new ESIService();
     this.characterRepository = new CharacterRepository();
     this.lossRepository = new LossRepository();
-    this.maxRetries = maxRetries;
-    this.retryDelay = retryDelay;
   }
 
   /**
    * Ingest a single loss killmail
-   * @param killId Killmail ID to ingest
-   * @param characterId Character ID who lost the ship
    */
   public async ingestLoss(
     killId: number,
@@ -55,14 +49,9 @@ export class LossIngestionService {
       }
 
       // 2) Fetch from zKillboard with retry
-      const zk = await retryOperation(
+      const zk = await this.retryZkill(
         () => this.zkill.getKillmail(killId),
-        `Fetching zKill data for loss ${killId}`,
-        {
-          maxRetries: this.maxRetries,
-          initialRetryDelay: this.retryDelay,
-          timeout: 15000,
-        }
+        `Fetching zKill data for loss ${killId}`
       );
       if (!zk) {
         logger.warn(`No zKill data for loss ${killId}`);
@@ -70,14 +59,9 @@ export class LossIngestionService {
       }
 
       // 3) Fetch from ESI with retry
-      const esi = await retryOperation(
+      const esi = await this.retryEsi(
         () => this.esiService.getKillmail(zk.killmail_id, zk.zkb.hash),
-        `Fetching ESI data for loss ${killId}`,
-        {
-          maxRetries: this.maxRetries,
-          initialRetryDelay: this.retryDelay,
-          timeout: 30000,
-        }
+        `Fetching ESI data for loss ${killId}`
       );
       if (!esi?.victim) {
         logger.warn(`Invalid ESI data for loss ${killId}`);
@@ -121,19 +105,18 @@ export class LossIngestionService {
 
   /**
    * Backfill losses for a character
-   * @param characterId Character ID to backfill losses for
-   * @param maxAgeDays Maximum age of losses to backfill in days
    */
   public async backfillLosses(
     characterId: bigint,
     maxAgeDays: number = 30
   ): Promise<void> {
+    const startTime = Date.now();
     try {
       logger.info(
-        `Backfilling losses for character ${characterId} (max age: ${maxAgeDays} days)`
+        `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
       );
 
-      // Get character info
+      // Get character from repository
       const character = await this.characterRepository.getCharacter(
         characterId.toString()
       );
@@ -141,64 +124,139 @@ export class LossIngestionService {
         throw new Error(`Character ${characterId} not found`);
       }
 
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - maxAgeDays);
+      // Calculate cutoff date
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - maxAgeDays);
+      logger.info(`Cutoff date for backfill: ${cutoffDate.toISOString()}`);
 
-      // Get losses from zKillboard
-      const losses = await retryOperation(
-        () => this.zkill.getCharacterLosses(Number(characterId)),
-        `Fetching losses for character ${characterId}`,
-        {
-          maxRetries: this.maxRetries,
-          initialRetryDelay: this.retryDelay,
-          timeout: 30000,
-        }
-      );
+      // Get last processed killmail ID
+      const checkpoint =
+        await this.characterRepository.upsertIngestionCheckpoint(
+          "losses",
+          characterId
+        );
 
-      if (!losses || !Array.isArray(losses)) {
-        logger.warn(`No losses found for character ${characterId}`);
-        return;
-      }
-
-      // Filter losses by date range
-      const filteredLosses = losses.filter((loss) => {
-        const killTime = new Date(loss.killmail_time);
-        return killTime >= startDate && killTime <= endDate;
-      });
-
-      logger.info(
-        `Found ${filteredLosses.length} losses to process for character ${characterId}`
-      );
-
-      // Process each loss
+      let page = 1;
+      let hasMore = true;
+      let lastProcessedId = checkpoint.lastSeenId;
       let successfulIngestCount = 0;
       let skippedCount = 0;
+      let duplicateCount = 0;
+      let errorCount = 0;
+      let tooOldCount = 0;
+      let totalLossmailsProcessed = 0;
+      let skipReasons: Record<string, number> = {};
 
-      for (const loss of filteredLosses) {
+      logger.info(
+        `Starting to fetch losses for character ${characterId} (last processed ID: ${lastProcessedId})`
+      );
+
+      while (hasMore) {
         try {
-          const result = await this.ingestLoss(loss.killmail_id, characterId);
-          if (result.success) {
-            successfulIngestCount++;
-          } else {
-            skippedCount++;
-          }
-        } catch (error) {
-          logger.error(
-            `Error processing loss ${loss.killmail_id} for character ${characterId}:`,
-            error
+          logger.info(
+            `Fetching page ${page} of losses for character ${characterId}`
           );
-          skippedCount++;
+
+          // Fetch losses from zKillboard
+          const losses = await this.retryZkill(
+            () => this.zkill.getCharacterLosses(Number(characterId), page),
+            `Fetching losses for character ${characterId}`
+          );
+
+          if (!losses || losses.length === 0) {
+            logger.info(`No more losses found for character ${characterId}`);
+            hasMore = false;
+            continue;
+          }
+
+          logger.info(`Processing ${losses.length} losses from page ${page}`);
+
+          // Process losses in batches
+          const results = await this.processBatch(
+            losses,
+            async (loss) => {
+              if (!loss || !loss.killmail_id || !loss.zkb) {
+                logger.debug("Invalid loss data:", {
+                  loss,
+                  hasKillmailId: !!loss?.killmail_id,
+                  hasZkb: !!loss?.zkb,
+                });
+                return null;
+              }
+
+              const killId = loss.killmail_id;
+              logger.debug(`Processing loss ${killId}`);
+
+              if (killId <= lastProcessedId) {
+                logger.info(
+                  `Reached previously processed loss ${killId}, stopping`
+                );
+                hasMore = false;
+                return null;
+              }
+
+              // Check loss age
+              const lossTime = new Date(loss.killmail_time);
+              if (lossTime < cutoffDate) {
+                logger.info(
+                  `Reached loss older than cutoff date (${cutoffDate.toISOString()}), stopping`
+                );
+                tooOldCount++;
+                hasMore = false;
+                return null;
+              }
+
+              return await this.ingestLoss(killId, characterId);
+            },
+            `Processing losses for character ${characterId}`
+          );
+
+          // Process results
+          for (const result of results) {
+            if (!result) continue;
+
+            if (result.success) {
+              successfulIngestCount++;
+            } else if (result.skipped) {
+              if (result.existing) {
+                duplicateCount++;
+              } else {
+                skippedCount++;
+              }
+            } else if (result.error) {
+              errorCount++;
+            }
+            totalLossmailsProcessed++;
+          }
+
+          logger.info(`Completed processing page ${page} of losses`);
+          page++;
+        } catch (error: any) {
+          logger.error(`Error fetching losses for character ${characterId}:`, {
+            error: error.message,
+            stack: error.stack,
+            response: error.response?.data,
+            status: error.response?.status,
+          });
+          errorCount++;
+          page++;
+          if (
+            error.response?.status === 404 ||
+            error.response?.status === 403
+          ) {
+            hasMore = false;
+          }
         }
       }
 
+      const duration = Date.now() - startTime;
       logger.info(
-        `Loss backfill complete for character ${characterId}: Processed ${successfulIngestCount}, Skipped ${skippedCount}`
+        `Completed backfill for character ${characterId} in ${duration}ms: ${successfulIngestCount} ingested, ${duplicateCount} duplicates, ${skippedCount} other skipped, ${errorCount} errors, ${tooOldCount} too old, ${totalLossmailsProcessed} total processed`
       );
     } catch (error: any) {
       logger.error(
-        `Error backfilling losses for character ${characterId}: ${error.message}`
+        `Error backfilling losses for character ${characterId}:`,
+        error
       );
       throw error;
     }

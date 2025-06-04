@@ -1,6 +1,8 @@
 import { logger } from "../../lib/logger";
 import { flags } from "../../utils/feature-flags";
 import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
+import { CacheAdapter } from "../../cache/CacheAdapter";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 
 /**
  * Chart rendering options
@@ -52,12 +54,19 @@ interface ShipDataEntry {
  */
 export class ChartService {
   private repositoryManager: RepositoryManager;
+  private cache: CacheAdapter;
 
   /**
    * Create a new ChartService
    */
-  constructor() {
+  constructor(cache?: CacheAdapter) {
     this.repositoryManager = new RepositoryManager();
+    this.cache =
+      cache ||
+      new CacheRedisAdapter(
+        process.env.REDIS_URL || "redis://localhost:6379",
+        3600
+      );
   }
 
   /**
@@ -175,6 +184,22 @@ export class ChartService {
           },
         ],
       };
+
+      // Generate cache key
+      const cacheKey = `ship-usage-${characterId}-${days}`;
+
+      // Check cache
+      const cachedData = await this.cache.get<ChartData>(cacheKey);
+      if (cachedData) {
+        logger.info(
+          `Retrieved ship usage chart from cache for key: ${cacheKey}`
+        );
+        return cachedData;
+      }
+
+      // Store in cache
+      await this.cache.set(cacheKey, chartData, 3600); // Cache for 1 hour
+      logger.info(`Stored ship usage chart in cache for key: ${cacheKey}`);
 
       return chartData;
     } catch (error) {

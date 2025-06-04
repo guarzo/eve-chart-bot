@@ -223,10 +223,11 @@ app.post("/api/backfill/character/:characterId", async (req, res) => {
 
     // Use centralized configuration for backfill check
     if (!Configuration.ingestion.enableBackfill) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "Backfill is disabled",
         message: "Set ENABLE_BACKFILL=true to enable backfill operations",
       });
+      return;
     }
 
     await killmailService.backfillKills(characterId, maxAgeDays);
@@ -255,10 +256,11 @@ app.post("/api/backfill/all", async (req, res) => {
 
     // Use centralized configuration for backfill check
     if (!Configuration.ingestion.enableBackfill) {
-      return res.status(400).json({
+      res.status(400).json({
         error: "Backfill is disabled",
         message: "Set ENABLE_BACKFILL=true to enable backfill operations",
       });
+      return;
     }
 
     const characters = await characterRepository.getAllCharacters();
@@ -555,23 +557,13 @@ export async function startServer() {
 
       // Login to Discord
       logger.info("Logging in to Discord...");
-      const bot = new DiscordClient();
-      await bot.start();
+      await discordClient.login(discordToken);
+      await discordClient.registerCommands(commands);
       const loginTime = Date.now();
       logger.info(
         `Discord login successful - Client ready state: ${
-          bot.isReady() ? "Ready" : "Not Ready"
+          discordClient.isReady() ? "Ready" : "Not Ready"
         } (${(loginTime - discordStartTime) / 1000}s)`
-      );
-
-      // Register commands
-      logger.info("Registering Discord commands...");
-      await bot.registerCommands(commands);
-      const registerTime = Date.now();
-      logger.info(
-        `Discord commands registered successfully (${
-          (registerTime - loginTime) / 1000
-        }s)`
       );
 
       // Add specific Discord readiness log
@@ -582,8 +574,8 @@ export async function startServer() {
             (readyCheckTime - appStartTime) / 1000
           }s)`,
           {
-            ready: bot.isReady() ? "Yes" : "No",
-            guilds: bot.getGuildsCount(),
+            ready: discordClient.isReady() ? "Yes" : "No",
+            guilds: discordClient.getGuildsCount(),
           }
         );
       }, 5000);

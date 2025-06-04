@@ -201,3 +201,34 @@ global.console = {
   warn: console.warn,
   info: jest.fn(),
 };
+
+// Simple in-memory test double for CacheAdapter
+export class TestMemoryCache {
+  private store = new Map<string, any>();
+
+  async get<T>(key: string): Promise<T | null> {
+    return this.store.has(key) ? this.store.get(key) : null;
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    this.store.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    this.store.clear();
+  }
+
+  // Optional: for compatibility with some tests
+  async del(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  // Optional: for compatibility with some tests
+  dispose() {
+    this.store.clear();
+  }
+}
