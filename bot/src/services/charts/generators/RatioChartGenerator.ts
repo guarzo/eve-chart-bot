@@ -50,7 +50,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
       if (characterIds.length === 0) continue;
       // Compute stats manually
       const kills = await this.killRepository.getKillsForCharacters(
-        characterIds.map(String),
+        characterIds,
         startDate,
         endDate
       );

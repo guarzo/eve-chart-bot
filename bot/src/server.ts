@@ -1,7 +1,7 @@
 import "reflect-metadata";
 import express, { RequestHandler } from "express";
 import { logger } from "./lib/logger";
-import { RedisQService } from "./services/ingestion/RedisQService";
+import { WebSocketIngestionService } from "./services/ingestion/WebSocketIngestionService";
 import { config as dotenvConfig } from "dotenv";
 import cors from "cors";
 import bodyParser from "body-parser";
@@ -10,18 +10,16 @@ import { DiscordClient } from "./lib/discord/client";
 import { commands } from "./lib/discord/commands";
 import { ChartService } from "./services/ChartService";
 import { ChartRenderer } from "./services/ChartRenderer";
-import { ChartOptions } from "./types/chart";
+import { ChartConfigInput } from "./types/chart";
 import { z } from "zod";
 import { initSentry } from "./lib/sentry";
-import { KillmailIngestionService } from "./services/ingestion/KillmailIngestionService";
 import { MapActivityService } from "./services/ingestion/MapActivityService";
 import { CharacterSyncService } from "./services/ingestion/CharacterSyncService";
 import { CharacterRepository } from "./infrastructure/repositories/CharacterRepository";
-import { KillRepository } from "./infrastructure/repositories/KillRepository";
-import { MapActivityRepository } from "./infrastructure/repositories/MapActivityRepository";
 import { exec } from "child_process";
 import { promisify } from "util";
 import { Configuration } from "./config";
+import { PrismaClient } from "@prisma/client";
 
 const execAsync = promisify(exec);
 
@@ -30,6 +28,9 @@ dotenvConfig();
 
 // Initialize Sentry
 initSentry();
+
+// Initialize Prisma
+const prisma = new PrismaClient();
 
 // Constants
 const appStartTime = Date.now();
@@ -51,30 +52,43 @@ app.use(
   })
 );
 
-// Initialize services using centralized configuration
-const killmailService = new KillmailIngestionService();
+// Initialize services
+const websocketService = new WebSocketIngestionService(
+  {
+    url: Configuration.websocket.url,
+    reconnectIntervalMs: Configuration.websocket.reconnectIntervalMs,
+    maxReconnectAttempts: Configuration.websocket.maxReconnectAttempts,
+    timeout: Configuration.websocket.timeout,
+    preload: Configuration.websocket.preload,
+  },
+  prisma
+);
+
+
 const mapService = new MapActivityService(
   Configuration.apis.map.url,
   Configuration.apis.map.key,
   Configuration.redis.url,
   Configuration.redis.cacheTtl,
-  Configuration.ingestion.maxRetries,
-  Configuration.ingestion.retryDelay
+  Configuration.http.maxRetries,
+  Configuration.http.initialRetryDelay
 );
+
 const characterService = new CharacterSyncService(
   Configuration.apis.map.url,
   Configuration.apis.map.key,
-  Configuration.ingestion.maxRetries,
-  Configuration.ingestion.retryDelay
+  Configuration.http.maxRetries,
+  Configuration.http.initialRetryDelay
 );
-let redisQService: RedisQService | null = null;
+
 const chartService = new ChartService();
 const chartRenderer = new ChartRenderer();
 
 // Initialize repositories
-const characterRepository = new CharacterRepository();
-const killRepository = new KillRepository();
-const mapActivityRepository = new MapActivityRepository();
+const characterRepository = new CharacterRepository(prisma);
+
+// Initialize Discord client
+const discordClient = new DiscordClient();
 
 // Validation schemas
 const chartConfigSchema = z.object({
@@ -87,6 +101,53 @@ const chartConfigSchema = z.object({
 // Health check endpoint
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
+});
+
+// WebSocket service status endpoint
+app.get("/api/websocket/status", (_req, res) => {
+  const status = websocketService.getStatus();
+  res.json(status);
+});
+
+// Character management endpoints
+app.post("/api/characters/:characterId", async (req, res) => {
+  try {
+    const characterId = BigInt(req.params.characterId);
+    const character = await characterRepository.upsertCharacter({
+      eveId: characterId,
+      name: req.body.name,
+      corporationId: req.body.corporationId,
+      corporationTicker: req.body.corporationTicker,
+      allianceId: req.body.allianceId,
+      allianceTicker: req.body.allianceTicker,
+    });
+
+    // Update WebSocket subscriptions
+    await websocketService.updateCharacterSubscriptions([Number(characterId)]);
+
+    res.json({ success: true, character });
+  } catch (error) {
+    logger.error("Failed to add character", error);
+    res.status(500).json({ error: "Failed to add character" });
+  }
+});
+
+app.delete("/api/characters/:characterId", async (req, res) => {
+  try {
+    const characterId = BigInt(req.params.characterId);
+    await characterRepository.deleteCharacter(characterId);
+
+    // Update WebSocket subscriptions
+    await websocketService.updateCharacterSubscriptions(
+      undefined,
+      [Number(characterId)]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    logger.error("Failed to remove character", error);
+    res.status(500).json({ error: "Failed to remove character" });
+  }
 });
 
 // Get available chart types
@@ -104,419 +165,106 @@ app.get("/v1/charts/types", (_req, res) => {
         id: "map_activity",
         name: "Map Activity Chart",
         description: "Generate a chart showing map activity",
-        periods: ["24h", "7d", "30d", "90d"],
-        groupBy: ["hour", "day", "week"],
+        periods: ["24h", "7d", "30d"],
+        groupBy: ["hour", "day"],
       },
     ],
   });
 });
 
-app.post("/v1/charts/generate", async (req, res) => {
+// Generate chart endpoint
+app.post("/v1/charts/generate", (async (req, res) => {
   try {
+    // Validate request
     const config = chartConfigSchema.parse(req.body);
 
+    // Convert config to ChartConfigInput
+    const chartConfig: ChartConfigInput = {
+      type: config.type,
+      characterIds: config.characterIds,
+      period: config.period,
+      groupBy: config.groupBy,
+    };
+
     // Generate chart data
-    const chartData = await chartService.generateChart(config);
-
-    // Ensure ChartConfig has required 'data' property
-    const chartConfigWithData = {
-      ...config,
-      data: chartData,
-    };
-
-    // Create chart options
-    const options: ChartOptions = {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        title: {
-          display: true,
-          text: `${
-            config.type === "kills" ? "Kills" : "Map Activity"
-          } - 7 Days Rolling Data`,
-        },
-        legend: {
-          display: true,
-          position: "top",
-        },
-      },
-    };
+    const chartData = await chartService.generateChart(chartConfig);
 
     // Render chart to buffer
-    const buffer = await chartRenderer.renderToBuffer(
-      chartConfigWithData.data,
-      options
-    );
+    const buffer = await chartRenderer.renderToBuffer(chartData);
 
-    res.setHeader("Content-Type", "image/png");
+    // Send image
+    res.contentType("image/png");
     res.send(buffer);
   } catch (error) {
     if (error instanceof z.ZodError) {
       res.status(400).json({ error: "Invalid request", details: error.errors });
     } else {
-      console.error("Error generating chart:", error);
-      res.status(500).json({ error: "Internal server error" });
+      logger.error("Error generating chart:", error);
+      res.status(500).json({ error: "Failed to generate chart" });
     }
   }
-});
+}) as RequestHandler);
 
-// Add debug endpoint for DB counts
-app.get("/debug/counts", async (_req, res) => {
-  try {
-    const mapActivityCount = await mapActivityRepository.count();
-    const lossCount = await killRepository.countLosses();
-    const killCount = await killRepository.countKills();
-    const charCount = await characterRepository.count();
-
-    res.status(200).json({
-      status: "ok",
-      counts: {
-        mapActivity: mapActivityCount,
-        losses: lossCount,
-        kills: killCount,
-        characters: charCount,
+// Status endpoint
+app.get("/status", (_req, res) => {
+  const uptime = Math.floor((Date.now() - appStartTime) / 1000);
+  const status = {
+    uptime,
+    services: {
+      websocket: websocketService.getStatus(),
+      discord: {
+        connected: discordClient.isReady(),
+        guilds: discordClient.getGuildsCount(),
       },
-    });
-  } catch (error) {
-    res.status(500).json({
-      status: "error",
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
+    },
+    version: process.env.npm_package_version || "unknown",
+  };
+  res.json(status);
 });
 
-// Initialize Discord bot
-const discordClient = new DiscordClient();
-
-// Add diagnostic routes
+// Diagnostics endpoints
 app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
   try {
     const characters = await characterRepository.getAllCharacters();
-    const formattedCharacters = characters.map((char) => ({
-      eveId: char.eveId,
-      name: char.name,
-      corporationId: char.corporationId,
-      allianceId: char.allianceId,
-      isMain: char.isMain,
-      characterGroupId: char.characterGroupId,
-    }));
-
     res.json({
-      total: characters.length,
-      characters: formattedCharacters,
+      count: characters.length,
+      characters: characters.map((char) => ({
+        id: char.eveId.toString(),
+        name: char.name,
+        corporationId: char.corporationId,
+        allianceId: char.allianceId,
+      })),
     });
   } catch (error) {
-    logger.error(`Error getting tracked characters: ${error}`);
+    logger.error("Failed to get tracked characters", error);
     res.status(500).json({ error: "Failed to get tracked characters" });
   }
 });
 
-// Backfill endpoint
-app.post("/api/backfill/character/:characterId", async (req, res) => {
+app.get("/api/diagnostics/character-groups", async (_req, res) => {
   try {
-    const characterId = BigInt(req.params.characterId);
-    const maxAgeDays = parseInt(req.query.maxAgeDays as string) || 30;
-
-    logger.info(
-      `Starting backfill for character ${characterId} (max age: ${maxAgeDays} days)`
-    );
-
-    // Use centralized configuration for backfill check
-    if (!Configuration.ingestion.enableBackfill) {
-      res.status(400).json({
-        error: "Backfill is disabled",
-        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
-      });
-      return;
-    }
-
-    await killmailService.backfillKills(characterId, maxAgeDays);
-
+    const groups = await characterRepository.getAllCharacterGroups();
     res.json({
-      success: true,
-      message: `Backfill completed for character ${characterId}`,
+      count: groups.length,
+      groups: groups.map((group) => ({
+        id: group.id,
+        mainCharacterId: group.mainCharacterId?.toString(),
+        characterCount: group.characters.length,
+        characters: group.characters.map((char) => ({
+          id: char.eveId.toString(),
+          name: char.name,
+        })),
+      })),
     });
-  } catch (error: any) {
-    logger.error(`Backfill error: ${error.message}`);
-    res.status(500).json({
-      error: "Backfill failed",
-      message: error.message,
-    });
+  } catch (error) {
+    logger.error("Failed to get character groups", error);
+    res.status(500).json({ error: "Failed to get character groups" });
   }
 });
 
-// Backfill all characters endpoint
-app.post("/api/backfill/all", async (req, res) => {
-  try {
-    const maxAgeDays = parseInt(req.query.maxAgeDays as string) || 30;
-
-    logger.info(
-      `Starting backfill for all characters (max age: ${maxAgeDays} days)`
-    );
-
-    // Use centralized configuration for backfill check
-    if (!Configuration.ingestion.enableBackfill) {
-      res.status(400).json({
-        error: "Backfill is disabled",
-        message: "Set ENABLE_BACKFILL=true to enable backfill operations",
-      });
-      return;
-    }
-
-    const characters = await characterRepository.getAllCharacters();
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const character of characters) {
-      try {
-        await killmailService.backfillKills(
-          BigInt(character.eveId),
-          maxAgeDays
-        );
-        successCount++;
-      } catch (error) {
-        errorCount++;
-        logger.error(`Error backfilling character ${character.eveId}:`, error);
-      }
-    }
-
-    res.json({
-      success: true,
-      message: `Backfill completed for ${characters.length} characters`,
-      results: {
-        total: characters.length,
-        successful: successCount,
-        errors: errorCount,
-      },
-    });
-  } catch (error: any) {
-    logger.error(`Backfill all error: ${error.message}`);
-    res.status(500).json({
-      error: "Backfill failed",
-      message: error.message,
-    });
-  }
-});
-
-// Also add an endpoint to refresh tracked characters
-const refreshCharactersHandler: RequestHandler = async (_req, res) => {
-  try {
-    if (!redisQService) {
-      throw new Error("RedisQ service not initialized");
-    }
-    await refreshCharacters();
-    res.json({ status: "ok", message: "Characters refreshed" });
-  } catch (error) {
-    logger.error(`Error refreshing characters: ${error}`);
-    res.status(500).json({ error: "Failed to refresh characters" });
-  }
-};
-
-app.get(
-  "/api/diagnostics/refresh-character-tracking",
-  refreshCharactersHandler
-);
-
-// Add an endpoint to backfill all characters in a specific group
-interface BackfillGroupParams {
-  groupId: string;
-}
-
-const backfillGroupHandler: RequestHandler<BackfillGroupParams> = async (
-  req,
-  res
-) => {
-  try {
-    // Check if backfill is enabled via centralized configuration
-    if (!Configuration.ingestion.enableBackfill) {
-      logger.info(
-        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
-      );
-      res.status(200).json({
-        success: false,
-        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
-        disabled: true,
-      });
-      return;
-    }
-
-    const { groupId } = req.params;
-
-    // Find all characters in the group
-    const characters = await characterRepository.getCharactersByGroup(groupId);
-
-    if (characters.length === 0) {
-      res.status(404).json({
-        success: false,
-        message: `No characters found in group ${groupId}`,
-      });
-      return;
-    }
-
-    // Start backfill for each character
-    processCharacterBackfills(characters).catch((error) => {
-      logger.error(`Error backfilling group ${groupId}: ${error}`);
-    });
-
-    res.json({
-      success: true,
-      message: `Backfill started for ${characters.length} characters in group ${groupId}`,
-      characters: characters.map((c) => ({ id: c.eveId, name: c.name })),
-    });
-  } catch (error) {
-    logger.error(`Error backfilling group: ${error}`);
-    res.status(500).json({
-      success: false,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-};
-
-app.get("/api/diagnostics/backfill-group/:groupId", backfillGroupHandler);
-
-// Helper function to process character backfills asynchronously
-async function processCharacterBackfills(characters: any[]): Promise<void> {
-  for (const character of characters) {
-    try {
-      logger.info(
-        `Backfilling kills for character ${character.name} (${character.eveId})`
-      );
-      await backfillKills(BigInt(character.eveId));
-    } catch (error) {
-      logger.error(
-        `Error backfilling kills for character ${character.name}: ${error}`
-      );
-    }
-  }
-  logger.info("Character backfill processing completed");
-}
-
-// Add an endpoint to clean up and rebalance kill/loss data
-const fixKillLossBalanceHandler: RequestHandler = async (_req, res) => {
-  try {
-    // Check if backfill is enabled via centralized configuration
-    if (!Configuration.ingestion.enableBackfill) {
-      logger.info(
-        "Backfill is disabled. Set ENABLE_BACKFILL=true to enable backfill operations"
-      );
-      res.status(200).json({
-        success: false,
-        message: "Backfill is disabled. Set ENABLE_BACKFILL=true to enable",
-        disabled: true,
-      });
-      return;
-    }
-
-    logger.info("Starting kill/loss data cleanup and rebalance");
-
-    // First, get current counts
-    const initialLossCount = await killRepository.countLosses();
-    const initialKillCount = await killRepository.countKills();
-
-    logger.info(
-      `Initial counts - Losses: ${initialLossCount}, Kills: ${initialKillCount}`
-    );
-
-    // Step 1: Remove all loss records to start fresh
-    logger.info("Removing all existing loss records");
-    const deletedLosses = await killRepository.deleteAllLosses();
-    logger.info(`Deleted ${deletedLosses.count} loss records`);
-
-    // Step 2: Reset all ingestion checkpoints for losses
-    logger.info("Resetting ingestion checkpoints for losses");
-    const deletedCheckpoints = await killRepository.deleteAllLossCheckpoints();
-    logger.info(`Deleted ${deletedCheckpoints.count} loss checkpoints`);
-
-    // Step 3: Backfill losses for all characters (but limit to 5 in dev mode)
-    const characters = await characterRepository.getAllCharacters();
-    const totalCharacters = characters.length;
-    logger.info(`Found ${totalCharacters} characters to backfill losses for`);
-
-    // Process all characters
-    logger.info(
-      `Will process all ${characters.length} characters for loss backfill`
-    );
-
-    // Begin the response to avoid timeout
-    res.json({
-      success: true,
-      message: "Kill/loss data cleanup and rebalance started",
-      initialCounts: {
-        losses: initialLossCount,
-        kills: initialKillCount,
-      },
-      charactersToProcess: totalCharacters,
-    });
-
-    // Continue processing after sending response
-    processLossBackfill(characters).catch((error) => {
-      logger.error(`Error in loss backfill processing: ${error}`);
-    });
-  } catch (error) {
-    logger.error(`Error fixing kill/loss balance: ${error}`);
-    res.status(500).json({ error: "Failed to fix kill/loss balance" });
-  }
-};
-
-app.get("/api/diagnostics/fix-kill-loss-balance", fixKillLossBalanceHandler);
-
-// Helper function to process loss backfill asynchronously
-async function processLossBackfill(characters: any[]): Promise<void> {
-  for (let i = 0; i < characters.length; i++) {
-    const character = characters[i];
-    try {
-      logger.info(
-        `Backfilling losses for character: ${character.name} (${
-          character.eveId
-        }) - ${i + 1}/${characters.length}`
-      );
-      await backfillLosses(BigInt(character.eveId));
-    } catch (error) {
-      logger.error(
-        `Error backfilling losses for character ${character.name}: ${error}`
-      );
-    }
-  }
-
-  // Get final counts
-  const finalLossCount = await killRepository.countLosses();
-  const finalKillCount = await killRepository.countKills();
-
-  logger.info(
-    `Fix kill/loss balance complete - Final counts - Losses: ${finalLossCount}, Kills: ${finalKillCount}`
-  );
-}
-
-// Helper functions
-async function backfillKills(characterId: bigint) {
-  await killmailService.backfillKills(characterId);
-}
-
-async function backfillLosses(characterId: bigint) {
-  await killmailService.backfillLosses(characterId);
-}
-
-// Cleanup function
-async function cleanup() {
-  try {
-    if (redisQService) {
-      await redisQService.stop();
-    }
-    // Close map service
-    if (mapService) {
-      await mapService.close();
-    }
-    // Close character service
-    if (characterService) {
-      await characterService.close();
-    }
-  } catch (error) {
-    logger.error("Error during cleanup:", error);
-  }
-}
-
-export async function startServer() {
-  logger.info("Starting server...");
+// Start the server
+async function startServer() {
+  logger.info("Starting EVE Chart Bot server...");
 
   // Run database migrations
   logger.info("Running database migrations...");
@@ -532,12 +280,10 @@ export async function startServer() {
 
   // Start services
   await characterService.start();
-  await killmailService.start();
   await mapService.start();
 
-  // Initialize RedisQ service
-  redisQService = new RedisQService(Configuration.redis.url);
-  await redisQService.start();
+  // Initialize WebSocket service
+  await websocketService.start();
 
   // Initialize Discord if token is available
   const discordToken = Configuration.discord.token;
@@ -580,52 +326,63 @@ export async function startServer() {
         );
       }, 5000);
     } catch (error) {
-      logger.error("Discord initialization failed:", error);
-      // Don't throw - allow server to start even if Discord fails
+      logger.error("Failed to initialize Discord:", error);
+      // Don't throw - allow server to continue without Discord
     }
   } else {
-    logger.warn("Discord bot token not provided, skipping Discord bot startup");
+    logger.warn("Discord token not found, Discord integration will be disabled");
   }
 
-  // Start server
+  // Start Express server
   const server = app.listen(port, () => {
-    logger.info(`Server running on port ${port}`);
+    const startupTime = (Date.now() - appStartTime) / 1000;
+    logger.info(`Server is running on port ${port} (startup took ${startupTime}s)`);
   });
 
-  // Handle cleanup
-  process.on("SIGTERM", async () => {
-    logger.info("SIGTERM received, shutting down gracefully...");
-    await cleanup();
-    await server.close();
-    process.exit(0);
-  });
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    logger.info(`${signal} received, shutting down gracefully...`);
 
-  process.on("SIGINT", async () => {
-    logger.info("SIGINT received, shutting down gracefully...");
-    await cleanup();
-    await server.close();
+    // Stop accepting new connections
+    server.close(() => {
+      logger.info("HTTP server closed");
+    });
+
+    // Stop services
+    await websocketService.stop();
+    await mapService.close();
+    await characterService.close();
+
+    // Disconnect Discord
+    if (discordClient.isReady()) {
+      // Discord.js Client doesn't have destroy, just disconnect
+      discordClient.client.destroy();
+    }
+
+    // Close database connection
+    await prisma.$disconnect();
+
+    logger.info("Shutdown complete");
     process.exit(0);
-  });
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 
   return server;
 }
 
-// Refresh character tracking for RedisQ
-async function refreshCharacters() {
-  try {
-    if (!redisQService) {
-      throw new Error("RedisQ service not initialized");
-    }
-    await redisQService.refreshTrackedCharacters();
-    logger.info("Characters refreshed successfully");
-  } catch (error) {
-    logger.error(`Error refreshing characters: ${error}`);
-    throw error;
-  }
-}
-
-// Start the server
-startServer();
-
 // Export for testing
-export default app;
+export { app, startServer };
+
+// Start server if not in test mode
+if (Configuration.server.nodeEnv !== "test") {
+  startServer().catch((error) => {
+    logger.error("Failed to start server:", {
+      error,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined
+    });
+    process.exit(1);
+  });
+}

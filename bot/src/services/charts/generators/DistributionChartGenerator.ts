@@ -46,7 +46,7 @@ export class DistributionChartGenerator extends BaseChartGenerator {
 
     // Get distribution data for all characters
     const distributionData = await this.killRepository.getDistributionData(
-      characterIds.map((id) => id.toString()),
+      characterIds,
       startDate,
       endDate
     );

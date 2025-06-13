@@ -73,9 +73,9 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
     endDate: Date
   ): Promise<ChartData> {
     // Combine all character IDs from all groups
-    const allCharacterIds: string[] = [];
+    const allCharacterIds: bigint[] = [];
     for (const group of characterGroups) {
-      allCharacterIds.push(...group.characters.map((c) => c.eveId));
+      allCharacterIds.push(...group.characters.map((c) => BigInt(c.eveId)));
     }
 
     if (allCharacterIds.length === 0) {
@@ -185,9 +185,9 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
     endDate: Date
   ): Promise<ChartData> {
     // Combine all character IDs from all groups
-    const allCharacterIds: string[] = [];
+    const allCharacterIds: bigint[] = [];
     for (const group of characterGroups) {
-      allCharacterIds.push(...group.characters.map((c) => c.eveId));
+      allCharacterIds.push(...group.characters.map((c) => BigInt(c.eveId)));
     }
 
     if (allCharacterIds.length === 0) {

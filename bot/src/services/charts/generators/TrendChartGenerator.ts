@@ -92,7 +92,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
       const group = characterGroups[i];
 
       // Get all character IDs for this group
-      const characterIds = group.characters.map((char) => char.eveId);
+      const characterIds = group.characters.map((char) => BigInt(char.eveId));
 
       if (characterIds.length === 0) {
         continue;
@@ -234,7 +234,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
       const group = characterGroups[i];
 
       // Get all character IDs for this group
-      const characterIds = group.characters.map((char) => char.eveId);
+      const characterIds = group.characters.map((char) => BigInt(char.eveId));
 
       if (characterIds.length === 0) {
         continue;
@@ -359,11 +359,11 @@ export class TrendChartGenerator extends BaseChartGenerator {
     endDate: Date
   ): Promise<ChartData> {
     // Combine all groups for a total view
-    const allCharacterIds: string[] = [];
+    const allCharacterIds: bigint[] = [];
 
     // Extract all character IDs from all groups
     for (const group of characterGroups) {
-      allCharacterIds.push(...group.characters.map((char) => char.eveId));
+      allCharacterIds.push(...group.characters.map((char) => BigInt(char.eveId)));
     }
 
     if (allCharacterIds.length === 0) {

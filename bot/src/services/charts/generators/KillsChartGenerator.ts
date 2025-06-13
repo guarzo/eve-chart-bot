@@ -65,7 +65,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
 
     // Get kills for all characters - use the new method that includes participation as attackers
     const kills = await this.killRepository.getAllKillsForCharacters(
-      characterIds.map((id) => id.toString()),
+      characterIds,
       startDate,
       endDate
     );

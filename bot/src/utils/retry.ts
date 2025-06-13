@@ -47,9 +47,9 @@ export async function retryOperation<T>(
 
       // Log the error with appropriate context
       if (isTimeout) {
-        logger.error(`ZKillboard request timeout:`);
+        logger.error(`Request timeout for ${description}:`);
       } else if (isRateLimit) {
-        logger.error(`ZKillboard rate limit hit:`);
+        logger.error(`Rate limit hit for ${description}:`);
       }
 
       if (attempt < maxRetries) {

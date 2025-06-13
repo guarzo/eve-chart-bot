@@ -166,9 +166,13 @@ export class ChartService extends BaseRepository {
     try {
       // Find all related characters via character groups
       const allCharactersNested = await Promise.all(
-        characterIdStrings.map((id: string) =>
-          this.characterRepository.getCharactersByGroup(id)
-        )
+        characterIdStrings.map(async (id: string) => {
+          const character = await this.characterRepository.getCharacter(BigInt(id));
+          if (character?.characterGroupId) {
+            return this.characterRepository.getCharactersByGroup(character.characterGroupId);
+          }
+          return character ? [character] : [];
+        })
       );
       const allCharacters = allCharactersNested.flat();
       const allCharacterIdStrings = allCharacters.map(
@@ -181,7 +185,7 @@ export class ChartService extends BaseRepository {
       // Get kills for each character using the updated schema
       logger.info("Querying killFact table with expanded character list...");
       const killsQuery = await this.killRepository.getKillsForCharacters(
-        allCharacterIdStrings,
+        allCharacterIdStrings.map(id => BigInt(id)),
         startDate,
         new Date()
       );
@@ -198,7 +202,7 @@ export class ChartService extends BaseRepository {
             // Try to get character name
             try {
               const character = await this.characterRepository.getCharacter(
-                characterId.toString()
+                characterId
               );
 
               return {
@@ -277,7 +281,7 @@ export class ChartService extends BaseRepository {
 
       for (const characterId of characterIds) {
         const character = await this.characterRepository.getCharacter(
-          characterId.toString()
+          characterId
         );
 
         if (!character) {
@@ -286,9 +290,9 @@ export class ChartService extends BaseRepository {
         }
 
         // Find all alts for this character
-        const alts = await this.characterRepository.getCharactersByGroup(
-          character.eveId
-        );
+        const alts = character.characterGroupId 
+          ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+          : [];
 
         // Get all character IDs (main + alts)
         const allIds = [
@@ -348,9 +352,8 @@ export class ChartService extends BaseRepository {
       const datasets = await Promise.all(
         topCharacterIds.map(async (charItem, index) => {
           const characterId = charItem.id;
-          const characterIdString = characterId.toString();
           const character = await this.characterRepository.getCharacter(
-            characterIdString
+            characterId
           );
 
           if (!character) {
@@ -368,9 +371,9 @@ export class ChartService extends BaseRepository {
           );
 
           // Find all alts for this character
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
+          const alts = character.characterGroupId 
+            ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+            : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
@@ -501,10 +504,14 @@ export class ChartService extends BaseRepository {
     try {
       // First, get all characters including alts for the requested main characters
       const allCharacters = await Promise.all(
-        characterIdStrings.map((id) =>
-          this.characterRepository.getCharactersByGroup(id)
-        )
-      );
+        characterIdStrings.map(async (id) => {
+          const character = await this.characterRepository.getCharacter(BigInt(id));
+          if (character?.characterGroupId) {
+            return this.characterRepository.getCharactersByGroup(character.characterGroupId);
+          }
+          return character ? [character] : [];
+        })
+      ).then(results => results.flat());
 
       const allCharacterIdStrings = allCharacters
         .flat()
@@ -576,9 +583,8 @@ export class ChartService extends BaseRepository {
       );
       const datasets = await Promise.all(
         characterIds.map(async (characterId) => {
-          const characterIdString = characterId.toString();
           const character = await this.characterRepository.getCharacter(
-            characterIdString
+            characterId
           );
 
           if (!character) {
@@ -596,9 +602,9 @@ export class ChartService extends BaseRepository {
           );
 
           // Find all alts for this character
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
+          const alts = character.characterGroupId 
+            ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+            : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
@@ -769,15 +775,11 @@ export class ChartService extends BaseRepository {
         let mainCharacter = null;
 
         // First, check if any character in the group is set as a main character
-        for (const character of group.characters) {
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
-          const hasAlts = alts.length > 0;
-          if (hasAlts) {
-            mainCharacter = character;
-            break;
-          }
+        // Get all characters in this group using the group ID
+        const groupCharacters = await this.characterRepository.getCharactersByGroup(group.groupId);
+        const hasCharacters = groupCharacters.length > 0;
+        if (hasCharacters && group.characters.length > 0) {
+          mainCharacter = group.characters[0];
         }
 
         // If still no main was found, just use the first character
@@ -845,7 +847,7 @@ export class ChartService extends BaseRepository {
 
         // Count kills for these characters (faster than fetching all data)
         const kills = await this.killRepository.getKillsForCharacters(
-          characterIds.map((id) => id.toString()),
+          characterIds,
           startDate,
           endDate
         );
@@ -1053,15 +1055,11 @@ export class ChartService extends BaseRepository {
         let mainCharacter = null;
 
         // First, check if any character in the group is set as a main character
-        for (const character of group.characters) {
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
-          const hasAlts = alts.length > 0;
-          if (hasAlts) {
-            mainCharacter = character;
-            break;
-          }
+        // Get all characters in this group using the group ID
+        const groupCharacters = await this.characterRepository.getCharactersByGroup(group.groupId);
+        const hasCharacters = groupCharacters.length > 0;
+        if (hasCharacters && group.characters.length > 0) {
+          mainCharacter = group.characters[0];
         }
 
         // If no main was found, just use the first character
@@ -1342,7 +1340,9 @@ export class ChartService extends BaseRepository {
             // For each group, get its characters
             const characters = await Promise.all(
               group.characters.map((c: Character) =>
-                this.characterRepository.getCharactersByGroup(c.eveId)
+                c.characterGroupId 
+                  ? this.characterRepository.getCharactersByGroup(c.characterGroupId)
+                  : Promise.resolve([])
               )
             ).then((results) => results.flat());
 
@@ -1605,14 +1605,24 @@ export class ChartService extends BaseRepository {
     averageValue: number;
     soloKills: number;
   }> {
-    const stats = await this.killRepository.getGroupKillStats(
+    const kills = await this.killRepository.getKillsForGroup(
       groupId,
       startDate,
       endDate
     );
+    
+    const totalKills = kills.length;
+    const totalValue = kills.reduce((sum, kill) => sum + BigInt(kill.total_value || 0), BigInt(0));
+    const averageValue = totalKills > 0 ? Number(totalValue) / totalKills : 0;
+    
+    // Count solo kills (simplified - just check if solo flag is true)
+    const soloKills = kills.filter(kill => kill.solo).length;
+    
     return {
-      ...stats,
-      averageValue: Number(stats.averageValue),
+      totalKills,
+      totalValue,
+      averageValue,
+      soloKills,
     };
   }
 

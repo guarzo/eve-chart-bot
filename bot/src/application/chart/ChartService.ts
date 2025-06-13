@@ -130,7 +130,7 @@ export class ChartService {
 
           // Get top ship types used for kills
           const topShips = await killRepository.getTopShipTypesUsed(
-            characterIds,
+            characterIds.map(id => BigInt(id)),
             startDate,
             endDate,
             10 // Limit to top 10 ships

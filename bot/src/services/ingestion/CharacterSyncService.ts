@@ -22,7 +22,7 @@ export class CharacterSyncService {
     maxRetries: number = 3,
     retryDelay: number = 5000
   ) {
-    this.characterRepository = new CharacterRepository();
+    this.characterRepository = new CharacterRepository(prisma);
     this.esiService = new ESIService();
     this.map = new MapClient(mapApiUrl, mapApiKey);
     this.maxRetries = maxRetries;
@@ -251,7 +251,7 @@ export class CharacterSyncService {
     try {
       // Check if character already exists
       const existingCharacter = await this.characterRepository.getCharacter(
-        eveId
+        BigInt(eveId)
       );
 
       let characterName: string;
@@ -290,7 +290,15 @@ export class CharacterSyncService {
       });
 
       // Save character using repository
-      await this.characterRepository.saveCharacter(character);
+      await this.characterRepository.upsertCharacter({
+        eveId: BigInt(character.eveId),
+        name: character.name,
+        corporationId: character.corporationId,
+        corporationTicker: character.corporationTicker,
+        allianceId: character.allianceId,
+        allianceTicker: character.allianceTicker,
+        characterGroupId: character.characterGroupId,
+      });
       return "synced";
     } catch (error: any) {
       logger.error(`Error syncing character ${eveId}: ${error.message}`);

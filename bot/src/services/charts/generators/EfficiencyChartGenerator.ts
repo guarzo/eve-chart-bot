@@ -44,7 +44,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
     // Get kills and losses for all characters
     const [kills, losses] = await Promise.all([
       this.killRepository.getKillsForCharacters(
-        characterIds.map((id) => id.toString()),
+        characterIds.map((id) => BigInt(id)),
         startDate,
         endDate
       ),

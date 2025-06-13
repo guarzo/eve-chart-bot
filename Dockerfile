@@ -1,5 +1,5 @@
 # Multi-stage Dockerfile that supports both development and production builds
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 
 # Development target
 FROM node:${NODE_VERSION} AS development

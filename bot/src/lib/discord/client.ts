@@ -10,7 +10,7 @@ import { handleKillsCommand, handleMapCommand } from "./handlers";
 import { handleChartsCommand } from "./chartHandlers";
 
 export class DiscordClient {
-  private client: Client;
+  public client: Client;
 
   constructor() {
     this.client = new Client({

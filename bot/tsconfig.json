@@ -53,6 +53,6 @@
   },
 
   /* Files & Folders */
-  "include": ["src", "vite.config.ts", "env.d.ts"],
+  "include": ["src/**/*", "src/**/*.d.ts", "vite.config.ts", "env.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

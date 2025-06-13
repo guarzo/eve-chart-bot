@@ -23,6 +23,7 @@ export const config = {
 // Environment-based configuration
 export const REDIS_URL = process.env.REDIS_URL ?? "redis://localhost:6379";
 export const CACHE_TTL = Number(process.env.CACHE_TTL) || 300; // seconds
+// Legacy URLs (to be removed)
 export const ESI_BASE_URL =
   process.env.ESI_BASE_URL ?? "https://esi.evetech.net/latest";
 export const ZKILLBOARD_BASE_URL =
@@ -63,8 +64,8 @@ export const MAP_API_URL = process.env.MAP_API_URL || "https://api.eve-map.net";
 export const MAP_API_KEY = process.env.MAP_API_KEY || "";
 export const MAP_NAME = process.env.MAP_NAME;
 
-// Ingestion Configuration
-export const ENABLE_BACKFILL = process.env.ENABLE_BACKFILL === "true";
+// WebSocket Configuration
+export const WANDERER_KILLS_URL = process.env.WANDERER_KILLS_URL || "ws://localhost:4004";
 
 // Retry Configuration
 export const MAX_RETRIES = Number(process.env.MAX_RETRIES) || 3;
@@ -109,16 +110,20 @@ export const Configuration = {
     cacheTtl: CACHE_TTL,
   },
   apis: {
-    esi: {
-      baseUrl: ESI_BASE_URL,
-    },
-    zkillboard: {
-      baseUrl: ZKILLBOARD_BASE_URL,
+    wandererKills: {
+      url: WANDERER_KILLS_URL,
     },
     map: {
       url: MAP_API_URL,
       key: MAP_API_KEY,
       name: MAP_NAME,
+    },
+    // Legacy APIs (to be removed)
+    esi: {
+      baseUrl: ESI_BASE_URL,
+    },
+    zkillboard: {
+      baseUrl: ZKILLBOARD_BASE_URL,
     },
   },
   http: {
@@ -138,10 +143,18 @@ export const Configuration = {
   discord: {
     token: DISCORD_BOT_TOKEN,
   },
-  ingestion: {
-    enableBackfill: ENABLE_BACKFILL,
-    maxRetries: MAX_RETRIES,
-    retryDelay: RETRY_DELAY,
+  websocket: {
+    url: WANDERER_KILLS_URL,
+    reconnectIntervalMs: 5000,
+    maxReconnectAttempts: 10,
+    timeout: 10000,
+    preload: {
+      enabled: true,
+      limitPerSystem: 100,
+      sinceHours: 168, // 7 days
+      deliveryBatchSize: 10,
+      deliveryIntervalMs: 1000,
+    },
   },
   sentry: {
     dsn: SENTRY_DSN,
@@ -159,5 +172,4 @@ export type RateLimitConfig = ConfigurationType["rateLimit"];
 export type FeatureFlags = ConfigurationType["features"];
 export type LoggingConfig = ConfigurationType["logging"];
 export type DiscordConfig = ConfigurationType["discord"];
-export type IngestionConfig = ConfigurationType["ingestion"];
 export type SentryConfig = ConfigurationType["sentry"];

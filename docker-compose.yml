@@ -9,7 +9,8 @@ services:
       - "${API_PORT:-3000}:3000"
     environment:
       - DISCORD_TOKEN=${DISCORD_TOKEN}
-      - ENABLE_BACKFILL=${ENABLE_BACKFILL:-false}
+      - WANDERER_KILLS_URL=${WANDERER_KILLS_URL:-ws://wanderer-kills:4004}
+      - MAP_NAME=${MAP_NAME}
     depends_on:
       - postgres
       - redis

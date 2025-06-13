@@ -48,7 +48,7 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
 
     // Get ship types for all characters
     const shipTypes = await this.killRepository.getTopShipTypesDestroyed(
-      characterIds.map((id) => id.toString()),
+      characterIds,
       startDate,
       endDate
     );
