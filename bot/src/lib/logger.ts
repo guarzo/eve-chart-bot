@@ -14,7 +14,7 @@ const LOG_LEVELS = {
 } as const;
 
 // Get log level from environment or default to info
-const logLevel = (process.env.LOG_LEVEL || "info").toLowerCase();
+const logLevel = (process.env.LOG_LEVEL || "debug").toLowerCase();
 
 // Validate log level
 if (!Object.keys(LOG_LEVELS).includes(logLevel)) {

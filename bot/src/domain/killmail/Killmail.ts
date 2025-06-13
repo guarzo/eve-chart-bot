@@ -101,11 +101,11 @@ export class KillmailAttacker {
 @Exclude()
 export class Killmail {
   @Expose()
-  @Transform(({ value }) => value.toString())
+  @Transform(({ value }) => value?.toString())
   readonly killmailId!: bigint;
 
   @Expose()
-  @Transform(({ value }) => value.toISOString())
+  @Transform(({ value }) => value?.toISOString())
   readonly killTime!: Date;
 
   @Expose()
@@ -127,7 +127,7 @@ export class Killmail {
   readonly labels!: string[];
 
   @Expose()
-  @Transform(({ value }) => value.toString())
+  @Transform(({ value }) => value?.toString())
   readonly totalValue!: bigint;
 
   @Expose()
@@ -148,15 +148,15 @@ export class Killmail {
    */
   toJSON(): Record<string, any> {
     return {
-      killmailId: this.killmailId.toString(),
-      killTime: this.killTime.toISOString(),
+      killmailId: this.killmailId?.toString() ?? "",
+      killTime: this.killTime?.toISOString() ?? new Date().toISOString(),
       npc: this.npc,
       solo: this.solo,
       awox: this.awox,
       shipTypeId: this.shipTypeId,
       systemId: this.systemId,
       labels: this.labels,
-      totalValue: this.totalValue.toString(),
+      totalValue: this.totalValue?.toString() ?? "0",
       points: this.points,
       attackers: this.attackers?.map((a) => a.toJSON()),
       victim: this.victim?.toJSON(),

@@ -1,10 +1,16 @@
-import { Client, GatewayIntentBits, Events, Partials } from "discord.js";
+import {
+  Client,
+  GatewayIntentBits,
+  Events,
+  Partials,
+  MessageFlags,
+} from "discord.js";
 import { logger } from "../logger";
 import { handleKillsCommand, handleMapCommand } from "./handlers";
 import { handleChartsCommand } from "./chartHandlers";
 
 export class DiscordClient {
-  private client: Client;
+  public client: Client;
 
   constructor() {
     this.client = new Client({
@@ -115,7 +121,7 @@ export class DiscordClient {
             logger.warn(`Unknown command: ${interaction.commandName}`);
             await interaction.reply({
               content: "Unknown command",
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
         }
       } catch (error) {
@@ -138,10 +144,13 @@ export class DiscordClient {
           if (interaction.replied || interaction.deferred) {
             await interaction.followUp({
               content: errorMessage,
-              ephemeral: true,
+              flags: MessageFlags.Ephemeral,
             });
           } else {
-            await interaction.reply({ content: errorMessage, ephemeral: true });
+            await interaction.reply({
+              content: errorMessage,
+              flags: MessageFlags.Ephemeral,
+            });
           }
         } catch (followupError) {
           logger.error("Error sending error response:", {

@@ -8,14 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Tracks the ingestion checkpoint for each stream (e.g. RedisQ)
-model IngestionCheckpoint {
-  streamName   String   @id
-  lastSeenId   BigInt
-  lastSeenTime DateTime
-
-  @@map("ingestion_checkpoints")
-}
 
 model Character {
   eveId              BigInt          @id @map("eve_id")
@@ -25,7 +17,6 @@ model Character {
   corporationId      Int             @map("corporation_id")
   corporationTicker  String          @map("corporation_ticker")
   characterGroupId   String?         @map("character_group_id")
-  lastBackfillAt     DateTime?       @map("last_backfill_at")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
   groupMainCharacter CharacterGroup? @relation("GroupMainCharacter")
@@ -34,7 +25,6 @@ model Character {
   // Relationships
   losses            LossFact[]
   mapActivity       MapActivity[]
-  killCharacters    KillCharacter[]
 
   @@index([characterGroupId])
   @@index([corporationId])
@@ -44,13 +34,14 @@ model Character {
 
 model CharacterGroup {
   id              String      @id @default(uuid())
-  slug            String      @unique
+  map_name        String      @map("map_name")
   mainCharacterId BigInt?     @unique @map("main_character_id")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
   mainCharacter   Character?  @relation("GroupMainCharacter", fields: [mainCharacterId], references: [eveId])
   characters      Character[] @relation("GroupCharacters")
 
+  @@index([map_name])
   @@map("character_groups")
 }
 
@@ -71,20 +62,21 @@ model MapActivity {
 }
 
 model KillFact {
-  killmail_id  BigInt         @id
-  kill_time    DateTime
-  npc          Boolean
-  solo         Boolean
-  awox         Boolean
-  ship_type_id Int
-  system_id    Int
-  labels       String[]
-  total_value  BigInt
-  points       Int
-  attackers    KillAttacker[]
-  victims      KillVictim[]
-  characters   KillCharacter[]
+  killmail_id      BigInt         @id
+  kill_time        DateTime
+  npc              Boolean
+  solo             Boolean
+  awox             Boolean
+  ship_type_id     Int
+  system_id        Int
+  labels           String[]
+  total_value      BigInt
+  points           Int
+  attackers        KillAttacker[]
+  victims          KillVictim[]
+  characters       KillCharacter[]
 
+  @@index([kill_time])
   @@map("KillFact")
 }
 
@@ -119,6 +111,7 @@ model KillAttacker {
 
   @@index([killmail_id])
   @@index([character_id])
+  @@index([character_id, killmail_id])
   @@map("KillAttacker")
 }
 
@@ -135,6 +128,7 @@ model KillVictim {
 
   @@index([killmail_id])
   @@index([character_id])
+  @@index([character_id, killmail_id])
   @@map("KillVictim")
 }
 
@@ -145,7 +139,6 @@ model KillCharacter {
 
   // Relationships
   kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
-  character      Character @relation(fields: [character_id], references: [eveId], onDelete: Cascade)
 
   @@id([killmail_id, character_id])
   @@index([character_id])

@@ -3,6 +3,7 @@ import { CharacterGroup } from "../domain/character/CharacterGroup";
 import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
 import { logger } from "../lib/logger";
 import { ESIService } from "./ESIService";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * Service for handling character-related business logic
@@ -12,7 +13,8 @@ export class CharacterService {
   private esiService: ESIService;
 
   constructor() {
-    this.characterRepository = new CharacterRepository();
+    const prisma = new PrismaClient();
+    this.characterRepository = new CharacterRepository(prisma);
     this.esiService = new ESIService();
   }
 
@@ -20,7 +22,7 @@ export class CharacterService {
    * Get a character by ID
    */
   async getCharacter(characterId: string): Promise<Character | null> {
-    return this.characterRepository.getCharacter(characterId);
+    return this.characterRepository.getCharacter(BigInt(characterId));
   }
 
   /**
@@ -55,42 +57,56 @@ export class CharacterService {
    * Save a character
    */
   async saveCharacter(character: Character): Promise<Character> {
-    return this.characterRepository.saveCharacter(character);
+    return this.characterRepository.upsertCharacter({
+      eveId: BigInt(character.eveId),
+      name: character.name,
+      corporationId: character.corporationId,
+      corporationTicker: character.corporationTicker,
+      allianceId: character.allianceId,
+      allianceTicker: character.allianceTicker,
+      characterGroupId: character.characterGroupId,
+    });
   }
 
   /**
    * Save a character group
    */
   async saveCharacterGroup(group: CharacterGroup): Promise<CharacterGroup> {
-    return this.characterRepository.saveCharacterGroup(group);
+    return this.characterRepository.createCharacterGroup({
+      map_name: group.map_name,
+      mainCharacterId: group.mainCharacterId ? BigInt(group.mainCharacterId) : null,
+    });
   }
 
   /**
    * Delete a character
    */
   async deleteCharacter(characterId: string): Promise<void> {
-    await this.characterRepository.deleteCharacter(characterId);
+    await this.characterRepository.deleteCharacter(BigInt(characterId));
   }
 
   /**
    * Delete a character group
    */
-  async deleteCharacterGroup(groupId: string): Promise<void> {
-    await this.characterRepository.deleteCharacterGroup(groupId);
+  async deleteCharacterGroup(_groupId: string): Promise<void> {
+    // This method needs to be implemented in CharacterRepository
+    throw new Error('deleteCharacterGroup not implemented');
   }
 
   /**
    * Set a character as the main character in a group
    */
-  async setMainCharacter(characterId: string): Promise<CharacterGroup> {
-    return this.characterRepository.setMainCharacter(characterId);
+  async setMainCharacter(_characterId: string): Promise<CharacterGroup> {
+    // This method needs to be implemented in CharacterRepository
+    throw new Error('setMainCharacter not implemented');
   }
 
   /**
    * Remove a character from a group
    */
-  async removeFromGroup(characterId: string): Promise<Character> {
-    return this.characterRepository.removeFromGroup(characterId);
+  async removeFromGroup(_characterId: string): Promise<Character> {
+    // This method needs to be implemented in CharacterRepository
+    throw new Error('removeFromGroup not implemented');
   }
 
   /**

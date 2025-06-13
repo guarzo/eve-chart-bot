@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/devcontainers/javascript-node:18
+FROM mcr.microsoft.com/devcontainers/javascript-node:22
 
 # Install system dependencies
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>{{title}}</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: {{backgroundColor}};
+        color: {{textColor}};
+        margin: 0;
+        padding: 20px;
+      }
+      .chart-container {
+        width: {{width}}px;
+        max-width: 100%;
+        margin: 0 auto;
+      }
+      h1 {
+        text-align: center;
+      }
+      .legend {
+        display: {{legendDisplay}};
+        margin-top: 20px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      .color-box {
+        width: 20px;
+        height: 20px;
+        margin-right: 8px;
+      }
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+      .data-table th, .data-table td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+      }
+      .data-table th {
+        background-color: {{headerBackgroundColor}};
+      }
+    </style>
+  </head>
+  <body>
+    <div class="chart-container">
+      <h1>{{title}}</h1>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            {{datasetHeaders}}
+          </tr>
+        </thead>
+        <tbody>
+          {{dataRows}}
+        </tbody>
+      </table>
+
+      {{legendSection}}
+    </div>
+  </body>
+</html>

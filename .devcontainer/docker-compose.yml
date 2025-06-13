@@ -4,7 +4,10 @@ services:
   app:
     build:
       context: ..
-      dockerfile: .devcontainer/Dockerfile
+      dockerfile: Dockerfile
+      target: development
+      args:
+        NODE_VERSION: 20
     volumes:
       - ..:/workspace:cached
     command: sleep infinity

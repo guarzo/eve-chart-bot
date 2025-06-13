@@ -2,6 +2,7 @@ import { CharacterRepository } from "./CharacterRepository";
 import { KillRepository } from "./KillRepository";
 import { LossRepository } from "./LossRepository";
 import { MapActivityRepository } from "./MapActivityRepository";
+import { PrismaClient } from "@prisma/client";
 
 /**
  * Manager for repository instances to facilitate dependency injection
@@ -12,13 +13,16 @@ export class RepositoryManager {
   private lossRepository?: LossRepository;
   private mapActivityRepository?: MapActivityRepository;
 
+  private prisma: PrismaClient;
+
   /**
    * Create a new RepositoryManager
    */
   constructor() {
-    // Initialize repositories with their model names
-    this.characterRepository = new CharacterRepository();
-    this.killRepository = new KillRepository();
+    this.prisma = new PrismaClient();
+    // Initialize repositories with PrismaClient
+    this.characterRepository = new CharacterRepository(this.prisma);
+    this.killRepository = new KillRepository(this.prisma);
     this.lossRepository = new LossRepository();
     this.mapActivityRepository = new MapActivityRepository();
   }

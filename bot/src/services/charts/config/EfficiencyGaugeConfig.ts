@@ -18,7 +18,7 @@ export const EfficiencyGaugeConfig: ChartConfiguration<"doughnut"> = {
       {
         // filled portion = efficiency, empty = remainder
         data: efficiencyPercents.map((p) => [p, 100 - p]).flat(),
-        backgroundColor: efficiencyPercents.flatMap((p, i) => [
+        backgroundColor: efficiencyPercents.flatMap((_p, _i) => [
           chartPalette[2],
           "rgba(255,255,255,0.1)",
         ]),

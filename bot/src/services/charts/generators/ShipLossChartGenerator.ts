@@ -84,7 +84,7 @@ export class ShipLossChartGenerator extends BaseChartGenerator {
   ): Promise<ChartData> {
     const characterIds = characterGroups
       .flatMap((group) => group.characters)
-      .map((character) => character.eveId);
+      .map((character) => BigInt(character.eveId));
     if (characterIds.length === 0) {
       throw new Error("No characters found in the provided groups");
     }

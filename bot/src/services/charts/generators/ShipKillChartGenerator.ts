@@ -84,7 +84,7 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
   ): Promise<ChartData> {
     const characterIds = characterGroups
       .flatMap((group) => group.characters)
-      .map((character) => character.eveId);
+      .map((character) => BigInt(character.eveId));
     if (characterIds.length === 0) {
       throw new Error("No characters found in the provided groups");
     }
@@ -174,7 +174,7 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
   ): Promise<ChartData> {
     const characterIds = characterGroups
       .flatMap((group) => group.characters)
-      .map((character) => character.eveId);
+      .map((character) => BigInt(character.eveId));
     if (characterIds.length === 0) {
       throw new Error("No characters found in the provided groups");
     }
@@ -182,7 +182,7 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
       characterIds,
       startDate,
       endDate,
-      5
+      "day" // interval should be a string
     );
     if (Object.keys(shipTypesTimeData).length === 0) {
       throw new Error("No ship type time data found for the specified period");
@@ -195,7 +195,9 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
         const current = shipTypeTotals.get(shipTypeId) || {
           total: 0,
         };
-        current.total += data.count;
+        if (data && typeof data === 'object' && 'count' in data) {
+          current.total += (data as any).count;
+        }
         shipTypeTotals.set(shipTypeId, current);
       }
     }
@@ -228,7 +230,9 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
     for (const date of dates) {
       const dateData = shipTypesTimeData[date];
       for (const data of Object.values(dateData)) {
-        totalDestroyed += data.count;
+        if (data && typeof data === 'object' && 'count' in data) {
+          totalDestroyed += (data as any).count;
+        }
       }
     }
     const chartData: ChartData = {

@@ -1,6 +1,8 @@
 import { logger } from "../../lib/logger";
 import { flags } from "../../utils/feature-flags";
 import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
+import { CacheAdapter } from "../../cache/CacheAdapter";
+import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
 
 /**
  * Chart rendering options
@@ -52,12 +54,19 @@ interface ShipDataEntry {
  */
 export class ChartService {
   private repositoryManager: RepositoryManager;
+  private cache: CacheAdapter;
 
   /**
    * Create a new ChartService
    */
-  constructor() {
+  constructor(cache?: CacheAdapter) {
     this.repositoryManager = new RepositoryManager();
+    this.cache =
+      cache ||
+      new CacheRedisAdapter(
+        process.env.REDIS_URL || "redis://localhost:6379",
+        3600
+      );
   }
 
   /**
@@ -111,18 +120,17 @@ export class ChartService {
             // Get characters from the group
             const characterRepository =
               this.repositoryManager.getCharacterRepository();
-            const group = await characterRepository.getGroupWithCharacters(
-              groupId
-            );
+            const groups = await characterRepository.getAllCharacterGroups();
+            const group = groups.find((g) => g.id === groupId);
 
             if (group && group.characters) {
-              characterIds = group.characters.map((char) => char.eveId);
+              characterIds = group.characters.map((char: any) => char.eveId);
             }
           }
 
           // Get top ship types used for kills
           const topShips = await killRepository.getTopShipTypesUsed(
-            characterIds,
+            characterIds.map(id => BigInt(id)),
             startDate,
             endDate,
             10 // Limit to top 10 ships
@@ -177,6 +185,22 @@ export class ChartService {
         ],
       };
 
+      // Generate cache key
+      const cacheKey = `ship-usage-${characterId}-${days}`;
+
+      // Check cache
+      const cachedData = await this.cache.get<ChartData>(cacheKey);
+      if (cachedData) {
+        logger.info(
+          `Retrieved ship usage chart from cache for key: ${cacheKey}`
+        );
+        return cachedData;
+      }
+
+      // Store in cache
+      await this.cache.set(cacheKey, chartData, 3600); // Cache for 1 hour
+      logger.info(`Stored ship usage chart in cache for key: ${cacheKey}`);
+
       return chartData;
     } catch (error) {
       logger.error(
@@ -197,7 +221,7 @@ export class ChartService {
    * @returns Buffer containing the PNG image or null if rendering failed
    */
   async renderChart(
-    chartData: ChartData,
+    _chartData: ChartData,
     options: Partial<ChartOptions> = {}
   ): Promise<Buffer | null> {
     try {

@@ -56,6 +56,7 @@ process.env.DATABASE_URL =
   "postgresql://postgres:postgres@localhost:5432/eve_test";
 process.env.MAP_API_URL = "https://example.com/map-api";
 process.env.MAP_API_KEY = "test-api-key";
+process.env.MAP_NAME = "mock-map";
 
 // Mock Chart.js to avoid issues with Node.js canvas
 jest.mock("chart.js", () => {
@@ -186,7 +187,6 @@ process.env.DISCORD_BOT_TOKEN = "mock-token";
 process.env.ZKILLBOARD_API_URL = "http://mock-zkill-api.test";
 process.env.MAP_API_URL = "http://mock-map-api.test";
 process.env.MAP_API_KEY = "mock-map-key";
-process.env.MAP_NAME = "mock-map";
 process.env.REDIS_URL = "redis://mock";
 process.env.CACHE_TTL = "300";
 
@@ -201,3 +201,34 @@ global.console = {
   warn: console.warn,
   info: jest.fn(),
 };
+
+// Simple in-memory test double for CacheAdapter
+export class TestMemoryCache {
+  private store = new Map<string, any>();
+
+  async get<T>(key: string): Promise<T | null> {
+    return this.store.has(key) ? this.store.get(key) : null;
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    this.store.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    this.store.clear();
+  }
+
+  // Optional: for compatibility with some tests
+  async del(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  // Optional: for compatibility with some tests
+  dispose() {
+    this.store.clear();
+  }
+}

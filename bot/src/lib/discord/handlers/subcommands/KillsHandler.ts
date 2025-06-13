@@ -137,7 +137,7 @@ export class KillsHandler extends BaseChartHandler {
           callbacks: {
             label: (context) => {
               const label = context.dataset.label || "";
-              const value = context.parsed.y;
+              const value = context.parsed?.x ?? context.parsed?.y ?? 0;
               return `${label}: ${value}`;
             },
           },

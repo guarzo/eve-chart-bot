@@ -1,8 +1,16 @@
+import { BaseEntity } from "../BaseEntity";
+import { ensureRequiredBigInt, ensureBigInt } from "../../utils/conversion";
+import {
+  validateRequired,
+  validatePositive,
+  validateNonNegative,
+} from "../../utils/validation";
+
 /**
  * KillFact domain entity
  * Represents a character's kill in EVE Online
  */
-export class KillFact {
+export class KillFact extends BaseEntity {
   /** Killmail ID from EVE Online */
   readonly killmailId: bigint;
 
@@ -54,22 +62,17 @@ export class KillFact {
     awox: boolean;
     shipTypeId: number;
     systemId: number;
-    labels: string[];
+    labels?: string[];
     totalValue: bigint | string;
     points: number;
     attackers?: KillAttacker[];
     victim?: KillVictim;
   }) {
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
+    super();
 
-    this.characterId =
-      typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureRequiredBigInt(props.characterId);
 
     this.killTime = props.killTime;
     this.npc = props.npc;
@@ -78,12 +81,7 @@ export class KillFact {
     this.shipTypeId = props.shipTypeId;
     this.systemId = props.systemId;
     this.labels = props.labels || [];
-
-    this.totalValue =
-      typeof props.totalValue === "string"
-        ? BigInt(props.totalValue)
-        : props.totalValue;
-
+    this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.points = props.points;
 
     if (props.attackers) {
@@ -98,33 +96,16 @@ export class KillFact {
   }
 
   /**
-   * Validate the kill fact data
+   * Validate the kill fact data using shared validation utilities
    * @throws Error if data is invalid
    */
   private validate(): void {
-    if (!this.killmailId) {
-      throw new Error("KillFact must have a killmail ID");
-    }
-
-    if (!this.characterId) {
-      throw new Error("KillFact must have a character ID");
-    }
-
-    if (!this.killTime) {
-      throw new Error("KillFact must have a kill time");
-    }
-
-    if (this.shipTypeId <= 0) {
-      throw new Error("KillFact must have a valid ship type ID");
-    }
-
-    if (this.systemId <= 0) {
-      throw new Error("KillFact must have a valid system ID");
-    }
-
-    if (this.points < 0) {
-      throw new Error("KillFact points cannot be negative");
-    }
+    validateRequired("killmailId", this.killmailId);
+    validateRequired("characterId", this.characterId);
+    validateRequired("killTime", this.killTime);
+    validatePositive("shipTypeId", this.shipTypeId);
+    validatePositive("systemId", this.systemId);
+    validateNonNegative("points", this.points);
   }
 
   /**
@@ -211,51 +192,6 @@ export class KillFact {
   }
 
   /**
-   * Add a label to this kill
-   */
-  addLabel(label: string): void {
-    if (!this.labels.includes(label)) {
-      this.labels.push(label);
-    }
-  }
-
-  /**
-   * Remove a label from this kill
-   */
-  removeLabel(label: string): void {
-    const index = this.labels.indexOf(label);
-    if (index >= 0) {
-      this.labels.splice(index, 1);
-    }
-  }
-
-  /**
-   * Check if this kill has a specific label
-   */
-  hasLabel(label: string): boolean {
-    return this.labels.includes(label);
-  }
-
-  /**
-   * Convert to a plain object for persistence
-   */
-  toObject() {
-    return {
-      killmailId: this.killmailId,
-      characterId: this.characterId,
-      killTime: this.killTime,
-      npc: this.npc,
-      solo: this.solo,
-      awox: this.awox,
-      shipTypeId: this.shipTypeId,
-      systemId: this.systemId,
-      labels: this.labels,
-      totalValue: this.totalValue,
-      points: this.points,
-    };
-  }
-
-  /**
    * Create a KillFact domain entity from a database model
    */
   static fromModel(model: any, attackers?: any[], victim?: any): KillFact {
@@ -334,32 +270,11 @@ export class KillAttacker {
   }) {
     this.id = props.id;
 
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
-
-    this.characterId =
-      props.characterId === null || props.characterId === undefined
-        ? null
-        : typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
-
-    this.corporationId =
-      props.corporationId === null || props.corporationId === undefined
-        ? null
-        : typeof props.corporationId === "string"
-        ? BigInt(props.corporationId)
-        : props.corporationId;
-
-    this.allianceId =
-      props.allianceId === null || props.allianceId === undefined
-        ? null
-        : typeof props.allianceId === "string"
-        ? BigInt(props.allianceId)
-        : props.allianceId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureBigInt(props.characterId);
+    this.corporationId = ensureBigInt(props.corporationId);
+    this.allianceId = ensureBigInt(props.allianceId);
 
     this.damageDone = props.damageDone;
     this.finalBlow = props.finalBlow;

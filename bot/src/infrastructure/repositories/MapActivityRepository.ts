@@ -1,6 +1,5 @@
-import { BaseRepository } from "./BaseRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
-import { PrismaMapper } from "../mapper/PrismaMapper";
+import { BaseRepository } from "./BaseRepository";
 import { logger } from "../../lib/logger";
 
 /**
@@ -32,7 +31,19 @@ export class MapActivityRepository extends BaseRepository {
           timestamp: "desc",
         },
       });
-      return PrismaMapper.mapArray(activities, MapActivity);
+
+      // Map activities with proper field name conversion from snake_case to camelCase
+      return activities.map((activity: any) => {
+        return new MapActivity({
+          characterId: activity.characterId || activity.character_id,
+          timestamp: activity.timestamp,
+          signatures: activity.signatures,
+          connections: activity.connections,
+          passages: activity.passages,
+          allianceId: activity.allianceId || activity.alliance_id,
+          corporationId: activity.corporationId || activity.corporation_id,
+        });
+      });
     });
   }
 
@@ -45,10 +56,34 @@ export class MapActivityRepository extends BaseRepository {
     endDate: Date
   ): Promise<MapActivity[]> {
     return this.executeQuery(async () => {
+      // Filter out invalid character IDs and convert valid ones to BigInt
+      const validCharacterIds = characterIds
+        .filter((id) => id && id !== "" && id !== "undefined" && id !== "null")
+        .map((id) => {
+          try {
+            return BigInt(id);
+          } catch (error) {
+            logger.warn(`Invalid character ID for BigInt conversion: ${id}`);
+            return null;
+          }
+        })
+        .filter((id): id is bigint => id !== null);
+
+      if (validCharacterIds.length === 0) {
+        logger.warn(
+          "No valid character IDs provided to getActivityForCharacters"
+        );
+        return [];
+      }
+
+      logger.debug(
+        `Querying map activity for ${validCharacterIds.length} valid character IDs`
+      );
+
       const activities = await this.prisma.mapActivity.findMany({
         where: {
           characterId: {
-            in: characterIds.map((id) => BigInt(id)),
+            in: validCharacterIds,
           },
           timestamp: {
             gte: startDate,
@@ -59,7 +94,30 @@ export class MapActivityRepository extends BaseRepository {
           timestamp: "desc",
         },
       });
-      return PrismaMapper.mapArray(activities, MapActivity);
+
+      logger.debug(`Raw activities from database:`, activities.slice(0, 2)); // Log first 2 records
+
+      try {
+        // Map activities with proper field name conversion from snake_case to camelCase
+        return activities.map((activity: any) => {
+          return new MapActivity({
+            characterId: activity.characterId || activity.character_id,
+            timestamp: activity.timestamp,
+            signatures: activity.signatures,
+            connections: activity.connections,
+            passages: activity.passages,
+            allianceId: activity.allianceId || activity.alliance_id,
+            corporationId: activity.corporationId || activity.corporation_id,
+          });
+        });
+      } catch (error) {
+        logger.error(
+          `Error mapping activities to MapActivity domain objects:`,
+          error
+        );
+        logger.error(`Sample raw activity data:`, activities.slice(0, 1));
+        throw error;
+      }
     });
   }
 
@@ -304,7 +362,7 @@ export class MapActivityRepository extends BaseRepository {
    * Create or update a map activity record
    */
   async upsertMapActivity(
-    characterId: string,
+    characterId: bigint,
     timestamp: Date,
     signatures: number,
     connections: number,
@@ -312,35 +370,29 @@ export class MapActivityRepository extends BaseRepository {
     allianceId: number | null,
     corporationId: number | null
   ): Promise<void> {
-    if (corporationId === null) {
-      throw new Error("corporationId is required");
-    }
-
-    await this.executeQuery(async () => {
-      await this.prisma.mapActivity.upsert({
-        where: {
-          characterId_timestamp: {
-            characterId: BigInt(characterId),
-            timestamp,
-          },
-        },
-        update: {
-          signatures,
-          connections,
-          passages,
-          allianceId,
-          corporationId,
-        },
-        create: {
-          characterId: BigInt(characterId),
+    await this.prisma.mapActivity.upsert({
+      where: {
+        characterId_timestamp: {
+          characterId,
           timestamp,
-          signatures,
-          connections,
-          passages,
-          allianceId,
-          corporationId,
         },
-      });
+      },
+      update: {
+        signatures,
+        connections,
+        passages,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
+      },
+      create: {
+        characterId,
+        timestamp,
+        signatures,
+        connections,
+        passages,
+        allianceId: allianceId ?? undefined,
+        corporationId: corporationId ?? 0,
+      },
     });
   }
 

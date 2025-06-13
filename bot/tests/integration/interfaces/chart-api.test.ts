@@ -2,11 +2,11 @@ import {
   ChartService,
   ChartData,
 } from "../../../src/application/chart/ChartService";
-import { MemoryCache } from "../../../src/infrastructure/cache/MemoryCache";
+import { TestMemoryCache } from "../../setup";
 import { prismaMock } from "../../setup";
 
-// Use memory cache for tests to avoid Redis dependencies
-const memoryCache = new MemoryCache();
+// Use test double for cache to avoid Redis dependencies
+const memoryCache = new TestMemoryCache();
 const chartService = new ChartService(memoryCache);
 
 describe("Chart API Integration", () => {
@@ -22,7 +22,7 @@ describe("Chart API Integration", () => {
 
       // Request a chart
       const chartData = await chartService.generateShipUsageChart(
-        "12345",
+        12345n,
         undefined,
         30
       );
@@ -57,7 +57,7 @@ describe("Chart API Integration", () => {
 
       // Request the same chart
       const result = await chartService.generateShipUsageChart(
-        "12345",
+        12345n,
         undefined,
         30
       );

@@ -5,6 +5,7 @@ import { logger } from "../../lib/logger";
 import { MapActivityResponseSchema } from "../../types/ingestion";
 import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
 import { MapActivity } from "../../domain/activity/MapActivity";
+import { Configuration } from "../../config";
 
 export class MapActivityService {
   private readonly map: MapClient;
@@ -26,6 +27,30 @@ export class MapActivityService {
     this.mapActivityRepository = new MapActivityRepository();
     this.maxRetries = maxRetries;
     this.retryDelay = retryDelay;
+  }
+
+  /**
+   * Start the map activity service
+   */
+  public async start(): Promise<void> {
+    logger.info("Starting map activity service...");
+
+    // Get map name from centralized configuration
+    const mapName = Configuration.apis.map.name;
+    if (!mapName) {
+      logger.warn(
+        "MAP_NAME environment variable not set, skipping map activity ingestion"
+      );
+      return;
+    }
+
+    try {
+      // Fetch map activity data for the entire map (not per character)
+      await this.ingestMapActivity(mapName, 7); // Last 7 days
+      logger.info("Map activity service started successfully");
+    } catch (error) {
+      logger.error(`Error ingesting map activity for map ${mapName}:`, error);
+    }
   }
 
   public async ingestMapActivity(slug: string, days = 7): Promise<void> {
@@ -120,7 +145,7 @@ export class MapActivityService {
         });
 
         await this.upsertMapActivity(
-          mapActivity.characterId.toString(),
+          mapActivity.characterId,
           mapActivity.timestamp,
           mapActivity.signatures,
           mapActivity.connections,
@@ -144,7 +169,7 @@ export class MapActivityService {
   }
 
   async upsertMapActivity(
-    characterId: string,
+    characterId: bigint,
     timestamp: Date,
     signatures: number,
     connections: number,
@@ -152,10 +177,6 @@ export class MapActivityService {
     allianceId: number | null,
     corporationId: number | null
   ): Promise<void> {
-    if (corporationId === null) {
-      throw new Error("corporationId is required");
-    }
-
     await this.mapActivityRepository.upsertMapActivity(
       characterId,
       timestamp,

@@ -2,8 +2,8 @@
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
-  roots: ["<rootDir>/src"],
-  testMatch: ["**/__tests__/**/*.test.ts"],
+  roots: ["<rootDir>"],
+  testMatch: ["**/tests/**/*.test.ts"],
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
@@ -13,7 +13,7 @@ module.exports = {
     ],
   },
   moduleFileExtensions: ["ts", "tsx", "js", "jsx", "json", "node"],
-  setupFiles: ["<rootDir>/src/__tests__/setup.ts"],
+  setupFilesAfterEnv: ["<rootDir>/tests/setup.ts"],
   // Force exit after tests complete to prevent hanging
   forceExit: true,
   // Set a reasonable default timeout for all tests

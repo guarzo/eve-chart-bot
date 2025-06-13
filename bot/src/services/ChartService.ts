@@ -166,9 +166,13 @@ export class ChartService extends BaseRepository {
     try {
       // Find all related characters via character groups
       const allCharactersNested = await Promise.all(
-        characterIdStrings.map((id: string) =>
-          this.characterRepository.getCharactersByGroup(id)
-        )
+        characterIdStrings.map(async (id: string) => {
+          const character = await this.characterRepository.getCharacter(BigInt(id));
+          if (character?.characterGroupId) {
+            return this.characterRepository.getCharactersByGroup(character.characterGroupId);
+          }
+          return character ? [character] : [];
+        })
       );
       const allCharacters = allCharactersNested.flat();
       const allCharacterIdStrings = allCharacters.map(
@@ -181,7 +185,7 @@ export class ChartService extends BaseRepository {
       // Get kills for each character using the updated schema
       logger.info("Querying killFact table with expanded character list...");
       const killsQuery = await this.killRepository.getKillsForCharacters(
-        allCharacterIdStrings,
+        allCharacterIdStrings.map(id => BigInt(id)),
         startDate,
         new Date()
       );
@@ -198,7 +202,7 @@ export class ChartService extends BaseRepository {
             // Try to get character name
             try {
               const character = await this.characterRepository.getCharacter(
-                characterId.toString()
+                characterId
               );
 
               return {
@@ -277,7 +281,7 @@ export class ChartService extends BaseRepository {
 
       for (const characterId of characterIds) {
         const character = await this.characterRepository.getCharacter(
-          characterId.toString()
+          characterId
         );
 
         if (!character) {
@@ -286,9 +290,9 @@ export class ChartService extends BaseRepository {
         }
 
         // Find all alts for this character
-        const alts = await this.characterRepository.getCharactersByGroup(
-          character.eveId
-        );
+        const alts = character.characterGroupId 
+          ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+          : [];
 
         // Get all character IDs (main + alts)
         const allIds = [
@@ -348,9 +352,8 @@ export class ChartService extends BaseRepository {
       const datasets = await Promise.all(
         topCharacterIds.map(async (charItem, index) => {
           const characterId = charItem.id;
-          const characterIdString = characterId.toString();
           const character = await this.characterRepository.getCharacter(
-            characterIdString
+            characterId
           );
 
           if (!character) {
@@ -368,9 +371,9 @@ export class ChartService extends BaseRepository {
           );
 
           // Find all alts for this character
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
+          const alts = character.characterGroupId 
+            ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+            : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
@@ -501,10 +504,14 @@ export class ChartService extends BaseRepository {
     try {
       // First, get all characters including alts for the requested main characters
       const allCharacters = await Promise.all(
-        characterIdStrings.map((id) =>
-          this.characterRepository.getCharactersByGroup(id)
-        )
-      );
+        characterIdStrings.map(async (id) => {
+          const character = await this.characterRepository.getCharacter(BigInt(id));
+          if (character?.characterGroupId) {
+            return this.characterRepository.getCharactersByGroup(character.characterGroupId);
+          }
+          return character ? [character] : [];
+        })
+      ).then(results => results.flat());
 
       const allCharacterIdStrings = allCharacters
         .flat()
@@ -576,9 +583,8 @@ export class ChartService extends BaseRepository {
       );
       const datasets = await Promise.all(
         characterIds.map(async (characterId) => {
-          const characterIdString = characterId.toString();
           const character = await this.characterRepository.getCharacter(
-            characterIdString
+            characterId
           );
 
           if (!character) {
@@ -596,9 +602,9 @@ export class ChartService extends BaseRepository {
           );
 
           // Find all alts for this character
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
+          const alts = character.characterGroupId 
+            ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
+            : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
@@ -769,15 +775,11 @@ export class ChartService extends BaseRepository {
         let mainCharacter = null;
 
         // First, check if any character in the group is set as a main character
-        for (const character of group.characters) {
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
-          const hasAlts = alts.length > 0;
-          if (hasAlts) {
-            mainCharacter = character;
-            break;
-          }
+        // Get all characters in this group using the group ID
+        const groupCharacters = await this.characterRepository.getCharactersByGroup(group.groupId);
+        const hasCharacters = groupCharacters.length > 0;
+        if (hasCharacters && group.characters.length > 0) {
+          mainCharacter = group.characters[0];
         }
 
         // If still no main was found, just use the first character
@@ -845,7 +847,7 @@ export class ChartService extends BaseRepository {
 
         // Count kills for these characters (faster than fetching all data)
         const kills = await this.killRepository.getKillsForCharacters(
-          characterIds.map((id) => id.toString()),
+          characterIds,
           startDate,
           endDate
         );
@@ -1053,15 +1055,11 @@ export class ChartService extends BaseRepository {
         let mainCharacter = null;
 
         // First, check if any character in the group is set as a main character
-        for (const character of group.characters) {
-          const alts = await this.characterRepository.getCharactersByGroup(
-            character.eveId
-          );
-          const hasAlts = alts.length > 0;
-          if (hasAlts) {
-            mainCharacter = character;
-            break;
-          }
+        // Get all characters in this group using the group ID
+        const groupCharacters = await this.characterRepository.getCharactersByGroup(group.groupId);
+        const hasCharacters = groupCharacters.length > 0;
+        if (hasCharacters && group.characters.length > 0) {
+          mainCharacter = group.characters[0];
         }
 
         // If no main was found, just use the first character
@@ -1111,24 +1109,53 @@ export class ChartService extends BaseRepository {
     try {
       // For each group, get the map activity statistics
       for (const group of displayGroups) {
-        // Get all character IDs in this group
-        const characterIds = group.characters.map((c) => BigInt(c.eveId));
+        // Debug log all characters in this group
+        logger.info(`Processing group ${group.displayName}:`);
+        group.characters.forEach((char, i) => {
+          logger.info(
+            `  Character ${i}: eveId=${char.eveId}, name=${
+              char.name
+            }, eveIdType=${typeof char.eveId}`
+          );
+        });
 
-        if (characterIds.length === 0) {
-          logger.info(`No characters in group ${group.displayName}, skipping`);
+        // Filter out characters with undefined eveId and convert valid ones to BigInt
+        const validCharacters = group.characters.filter((c) => {
+          if (!c.eveId || c.eveId === undefined) {
+            logger.warn(
+              `Skipping character with undefined eveId: ${JSON.stringify(c)}`
+            );
+            return false;
+          }
+          return true;
+        });
+
+        logger.info(
+          `After filtering, group ${group.displayName} has ${validCharacters.length} valid characters out of ${group.characters.length} total`
+        );
+
+        if (validCharacters.length === 0) {
+          logger.info(
+            `No valid characters in group ${group.displayName}, skipping`
+          );
           continue;
         }
 
+        const characterIds = validCharacters.map((c) => BigInt(c.eveId));
+
+        logger.info(
+          `Valid character IDs for group ${group.displayName}: ${characterIds
+            .map((id) => id.toString())
+            .join(", ")}`
+        );
+
         // Get all map activities for these characters
-        const activities = await Promise.all(
-          characterIds.map((id) =>
-            this.mapActivityRepository.getActivityForGroup(
-              id.toString(),
-              startDate,
-              endDate
-            )
-          )
-        ).then((results) => results.flat());
+        const activities =
+          await this.mapActivityRepository.getActivityForCharacters(
+            characterIds.map((id) => id.toString()),
+            startDate,
+            endDate
+          );
 
         if (activities.length === 0) {
           logger.info(`No map activities found for group ${group.displayName}`);
@@ -1313,14 +1340,16 @@ export class ChartService extends BaseRepository {
             // For each group, get its characters
             const characters = await Promise.all(
               group.characters.map((c: Character) =>
-                this.characterRepository.getCharactersByGroup(c.eveId)
+                c.characterGroupId 
+                  ? this.characterRepository.getCharactersByGroup(c.characterGroupId)
+                  : Promise.resolve([])
               )
             ).then((results) => results.flat());
 
             if (characters.length > 0) {
               result.push({
                 groupId: group.id,
-                name: group.slug || `Group ${group.id.substring(0, 8)}`,
+                name: group.name || `Group ${group.id.substring(0, 8)}`,
                 characters,
               });
             }
@@ -1342,15 +1371,60 @@ export class ChartService extends BaseRepository {
       const validGroups = groups.filter((group) => group.characters.length > 0);
       logger.info(`${validGroups.length} groups have at least one character`);
 
-      return validGroups.map((group) => ({
-        groupId: group.id,
-        name: group.slug || `Group ${group.id.substring(0, 8)}`,
-        characters: group.characters.map((char) => ({
-          eveId: char.eveId,
-          name: char.name,
-        })),
-        mainCharacterId: group.mainCharacterId || undefined,
-      }));
+      return validGroups
+        .map((group) => {
+          // Debug log the raw group data
+          logger.debug(`Processing group ${group.id}:`, {
+            groupId: group.id,
+            name: group.name,
+            characterCount: group.characters?.length || 0,
+            firstCharacter: group.characters?.[0]
+              ? {
+                  eveId: group.characters[0].eveId,
+                  eveIdType: typeof group.characters[0].eveId,
+                  name: group.characters[0].name,
+                }
+              : null,
+          });
+
+          // Filter and transform characters, ensuring eveId is a valid string
+          const validCharacters = group.characters
+            .map((char) => {
+              // Ensure eveId is properly converted to string
+              const eveId =
+                char.eveId?.toString?.() || String(char.eveId || "");
+              const name = char.name || `Character ${eveId}`;
+
+              return { eveId, name };
+            })
+            .filter((char) => {
+              // Filter out characters with invalid eveId
+              if (
+                !char.eveId ||
+                char.eveId === "" ||
+                char.eveId === "undefined" ||
+                char.eveId === "null"
+              ) {
+                logger.warn(`Skipping character with invalid eveId:`, char);
+                return false;
+              }
+              return true;
+            });
+
+          logger.debug(
+            `Group ${group.id} has ${validCharacters.length} valid characters`
+          );
+
+          return {
+            groupId: group.id,
+            name: group.name || `Group ${group.id.substring(0, 8)}`,
+            characters: validCharacters,
+            mainCharacterId:
+              group.mainCharacterId?.toString?.() ||
+              String(group.mainCharacterId || ""),
+          };
+        })
+        .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
     } catch (error: unknown) {
       logger.error("Error fetching character groups:", {
         error: error instanceof Error ? error.message : String(error),
@@ -1374,7 +1448,7 @@ export class ChartService extends BaseRepository {
           string,
           {
             characters: Array<{ eveId: string; name: string }>;
-            slug?: string;
+            name?: string;
             mainCharacterId?: string;
           }
         >();
@@ -1386,21 +1460,35 @@ export class ChartService extends BaseRepository {
             groupMap.set(char.characterGroupId, { characters: [] });
           }
 
-          groupMap.get(char.characterGroupId)!.characters.push({
-            eveId: char.eveId,
-            name: char.name,
-          });
+          // Ensure eveId is properly converted to string
+          const eveId = char.eveId?.toString?.() || String(char.eveId || "");
+          const name = char.name || `Character ${eveId}`;
+
+          // Only add if eveId is valid
+          if (
+            eveId &&
+            eveId !== "" &&
+            eveId !== "undefined" &&
+            eveId !== "null"
+          ) {
+            groupMap.get(char.characterGroupId)!.characters.push({
+              eveId,
+              name,
+            });
+          }
         }
 
         // Convert to the expected format
-        const result = Array.from(groupMap.entries()).map(
-          ([groupId, data]) => ({
+        const result = Array.from(groupMap.entries())
+          .map(([groupId, data]) => ({
             groupId,
-            name: data.slug || `Group ${groupId.substring(0, 8)}`,
+            name: data.name || `Group ${groupId.substring(0, 8)}`,
             characters: data.characters,
-            mainCharacterId: data.mainCharacterId, // Include mainCharacterId
-          })
-        );
+            mainCharacterId:
+              data.mainCharacterId?.toString?.() ||
+              String(data.mainCharacterId || ""),
+          }))
+          .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
 
         logger.info(
           `Alternative approach found ${result.length} character groups`
@@ -1517,14 +1605,24 @@ export class ChartService extends BaseRepository {
     averageValue: number;
     soloKills: number;
   }> {
-    const stats = await this.killRepository.getGroupKillStats(
+    const kills = await this.killRepository.getKillsForGroup(
       groupId,
       startDate,
       endDate
     );
+    
+    const totalKills = kills.length;
+    const totalValue = kills.reduce((sum, kill) => sum + BigInt(kill.total_value || 0), BigInt(0));
+    const averageValue = totalKills > 0 ? Number(totalValue) / totalKills : 0;
+    
+    // Count solo kills (simplified - just check if solo flag is true)
+    const soloKills = kills.filter(kill => kill.solo).length;
+    
     return {
-      ...stats,
-      averageValue: Number(stats.averageValue),
+      totalKills,
+      totalValue,
+      averageValue,
+      soloKills,
     };
   }
 

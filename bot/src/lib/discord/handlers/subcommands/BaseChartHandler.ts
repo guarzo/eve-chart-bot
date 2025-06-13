@@ -4,6 +4,7 @@ import { CharacterRepository } from "../../../../infrastructure/repositories/Cha
 import { logger } from "../../../logger";
 import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
 import { CharacterGroup } from "../../../../domain/character/CharacterGroup";
+import { MessageFlags } from "discord.js";
 
 /**
  * Base class for all chart command handlers
@@ -56,10 +57,16 @@ export abstract class BaseChartHandler {
     }>
   > {
     try {
+      logger.info(
+        "BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()"
+      );
       const groups = await this.characterRepository.getAllCharacterGroups();
+      logger.info(
+        `BaseChartHandler.getCharacterGroups() - got ${groups.length} raw groups from repository`
+      );
 
       // Filter out groups with no characters and transform to expected format
-      return groups
+      const result = groups
         .filter((group: CharacterGroup) => group.characters.length > 0)
         .map((group: CharacterGroup) => ({
           groupId: group.id,
@@ -70,8 +77,24 @@ export abstract class BaseChartHandler {
           })),
           mainCharacterId: group.mainCharacterId,
         }));
+
+      logger.info(
+        `BaseChartHandler.getCharacterGroups() - returning ${result.length} filtered groups`
+      );
+      return result;
     } catch (error) {
-      logger.error("Error fetching character groups:", error);
+      logger.error("Error fetching character groups:", {
+        error:
+          error instanceof Error
+            ? {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              }
+            : error,
+        errorType: typeof error,
+        errorString: String(error),
+      });
       return [];
     }
   }
@@ -84,23 +107,43 @@ export abstract class BaseChartHandler {
     error: any
   ): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(`Error handling chart command: ${errorMessage}`, error);
+    logger.error(`Error handling chart command: ${errorMessage}`, {
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : error,
+      interactionId: interaction.id,
+      commandName: interaction.commandName,
+      subcommand: interaction.isChatInputCommand()
+        ? interaction.options.getSubcommand(false)
+        : "unknown",
+      replied: interaction.replied,
+      deferred: interaction.deferred,
+    });
 
-    // Reply with error if interaction is still valid
-    if (interaction.replied) {
-      await interaction.followUp({
-        content: `Error generating chart: ${errorMessage}`,
-        ephemeral: true,
-      });
-    } else if (interaction.deferred) {
-      await interaction.editReply({
-        content: `Error generating chart: ${errorMessage}`,
-      });
-    } else {
-      await interaction.reply({
-        content: `Error generating chart: ${errorMessage}`,
-        ephemeral: true,
-      });
+    try {
+      // Reply with error message
+      const content = `❌ Error generating chart: ${errorMessage}`;
+
+      if (interaction.deferred) {
+        await interaction.editReply({ content });
+      } else if (!interaction.replied) {
+        await interaction.reply({
+          content,
+          flags: MessageFlags.Ephemeral,
+        });
+      } else {
+        await interaction.followUp({
+          content,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
+    } catch (replyError) {
+      logger.error("Error sending error response:", replyError);
     }
   }
 }
