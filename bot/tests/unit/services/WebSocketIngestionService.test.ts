@@ -57,7 +57,6 @@ describe("WebSocketIngestionService", () => {
         isConnected: false,
         subscribedCharacters: 0,
         subscribedSystems: 0,
-        reconnectAttempts: 0,
       });
     });
   });
