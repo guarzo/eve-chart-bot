@@ -1,9 +1,9 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
-import { logger } from "../../../lib/logger";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData } from '../../../types/chart';
+import { logger } from '../../../lib/logger';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 
 /**
  * Generator for kill-death ratio charts
@@ -36,7 +36,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    logger.info("Generating kill-death ratio chart");
+    logger.info('Generating kill-death ratio chart');
 
     const { startDate, endDate, characterGroups } = options;
 
@@ -46,20 +46,11 @@ export class RatioChartGenerator extends BaseChartGenerator {
     const efficiencies: number[] = [];
 
     for (const group of characterGroups) {
-      const characterIds = group.characters.map((char) => BigInt(char.eveId));
+      const characterIds = group.characters.map(char => BigInt(char.eveId));
       if (characterIds.length === 0) continue;
       // Compute stats manually
-      const kills = await this.killRepository.getKillsForCharacters(
-        characterIds,
-        startDate,
-        endDate
-      );
-      const lossesSummary =
-        await this.lossRepository.getLossesSummaryByCharacters(
-          characterIds,
-          startDate,
-          endDate
-        );
+      const kills = await this.killRepository.getKillsForCharacters(characterIds, startDate, endDate);
+      const lossesSummary = await this.lossRepository.getLossesSummaryByCharacters(characterIds, startDate, endDate);
       const totalKills = kills.length;
       const totalLosses = lossesSummary.totalLosses;
       // Only include groups with at least one kill or death
@@ -67,9 +58,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
         // Use main character name if available
         let label = group.name;
         if (group.mainCharacterId) {
-          const mainChar = group.characters.find(
-            (c) => c.eveId === group.mainCharacterId
-          );
+          const mainChar = group.characters.find(c => c.eveId === group.mainCharacterId);
           if (mainChar) label = mainChar.name;
         } else if (group.characters.length > 0) {
           label = group.characters[0].name;
@@ -106,21 +95,21 @@ export class RatioChartGenerator extends BaseChartGenerator {
       labels: filteredLabels,
       datasets: [
         {
-          label: "K/D Ratio",
+          label: 'K/D Ratio',
           data: kdRatios,
-          backgroundColor: "#3366CC",
-          borderColor: "#3366CC",
+          backgroundColor: '#3366CC',
+          borderColor: '#3366CC',
         },
         {
-          label: "Efficiency %",
+          label: 'Efficiency %',
           data: efficiencies,
-          backgroundColor: "#DC3912",
-          borderColor: "#DC3912",
+          backgroundColor: '#DC3912',
+          borderColor: '#DC3912',
         },
       ],
       title: `Kill-Death Ratio - ${timeRangeText}`,
       summary,
-      displayType: "bar",
+      displayType: 'bar',
     };
   }
 
@@ -128,16 +117,14 @@ export class RatioChartGenerator extends BaseChartGenerator {
    * Get a formatted string describing the time range
    */
   private getTimeRangeText(startDate: Date, endDate: Date): string {
-    const diffDays = Math.floor(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDays <= 1) {
-      return "Last 24 hours";
+      return 'Last 24 hours';
     } else if (diffDays <= 7) {
-      return "Last 7 days";
+      return 'Last 7 days';
     } else if (diffDays <= 30) {
-      return "Last 30 days";
+      return 'Last 30 days';
     } else {
       return `${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
     }

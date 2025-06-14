@@ -1,15 +1,15 @@
-import { BaseRepository } from "./BaseRepository";
-import { logger } from "../../lib/logger";
-import { LossFact } from "../../domain/killmail/LossFact";
-import { PrismaMapper } from "../mapper/PrismaMapper";
-import { buildWhereFilter } from "../../utils/query-helper";
+import { BaseRepository } from './BaseRepository';
+import { logger } from '../../lib/logger';
+import { LossFact } from '../../domain/killmail/LossFact';
+import { PrismaMapper } from '../mapper/PrismaMapper';
+import { buildWhereFilter } from '../../utils/query-helper';
 
 /**
  * Repository for accessing ship loss data
  */
 export class LossRepository extends BaseRepository {
   constructor() {
-    super("lossFact");
+    super('lossFact');
   }
 
   /**
@@ -18,15 +18,9 @@ export class LossRepository extends BaseRepository {
    * @param startDate Start date for query range
    * @param endDate End date for query range
    */
-  async getLossesByCharacter(
-    characterId: bigint,
-    startDate: Date,
-    endDate: Date
-  ): Promise<number> {
+  async getLossesByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<number> {
     return this.executeQuery(async () => {
-      logger.debug(
-        `Fetching losses for character ${characterId} from ${startDate} to ${endDate}`
-      );
+      logger.debug(`Fetching losses for character ${characterId} from ${startDate} to ${endDate}`);
 
       const where = buildWhereFilter({
         character_id: characterId,
@@ -56,9 +50,7 @@ export class LossRepository extends BaseRepository {
     valueThreshold: bigint = BigInt(100000000) // 100M ISK default threshold
   ): Promise<number> {
     return this.executeQuery(async () => {
-      logger.debug(
-        `Fetching high value losses for character ${characterId} from ${startDate} to ${endDate}`
-      );
+      logger.debug(`Fetching high value losses for character ${characterId} from ${startDate} to ${endDate}`);
 
       const where = buildWhereFilter({
         character_id: characterId,
@@ -83,15 +75,9 @@ export class LossRepository extends BaseRepository {
    * @param startDate Start date for query range
    * @param endDate End date for query range
    */
-  async getTotalValueLostByCharacter(
-    characterId: bigint,
-    startDate: Date,
-    endDate: Date
-  ): Promise<bigint> {
+  async getTotalValueLostByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<bigint> {
     return this.executeQuery(async () => {
-      logger.debug(
-        `Fetching total value lost for character ${characterId} from ${startDate} to ${endDate}`
-      );
+      logger.debug(`Fetching total value lost for character ${characterId} from ${startDate} to ${endDate}`);
 
       const where = buildWhereFilter({
         character_id: characterId,
@@ -109,10 +95,7 @@ export class LossRepository extends BaseRepository {
       });
 
       // Sum up the total values
-      return results.reduce(
-        (sum, result) => sum + result.total_value,
-        BigInt(0)
-      );
+      return results.reduce((sum, result) => sum + result.total_value, BigInt(0));
     });
   }
 
@@ -132,9 +115,7 @@ export class LossRepository extends BaseRepository {
     totalValueLost: bigint;
   }> {
     return this.executeQuery(async () => {
-      logger.debug(
-        `Fetching losses summary for ${characterIds.length} characters from ${startDate} to ${endDate}`
-      );
+      logger.debug(`Fetching losses summary for ${characterIds.length} characters from ${startDate} to ${endDate}`);
 
       // Get all losses for these characters
       const where = buildWhereFilter({
@@ -152,13 +133,8 @@ export class LossRepository extends BaseRepository {
 
       // Calculate summary
       const totalLosses = lossFacts.length;
-      const highValueLosses = lossFacts.filter(
-        (loss) => loss.totalValue >= BigInt(100000000)
-      ).length;
-      const totalValueLost = lossFacts.reduce(
-        (sum, loss) => sum + loss.totalValue,
-        BigInt(0)
-      );
+      const highValueLosses = lossFacts.filter(loss => loss.totalValue >= BigInt(100000000)).length;
+      const totalValueLost = lossFacts.reduce((sum, loss) => sum + loss.totalValue, BigInt(0));
 
       return {
         totalLosses,
@@ -192,11 +168,7 @@ export class LossRepository extends BaseRepository {
    * @param startDate Start date for query range
    * @param endDate End date for query range
    */
-  async getLossesForCharacter(
-    characterId: bigint,
-    startDate: Date,
-    endDate: Date
-  ): Promise<LossFact[]> {
+  async getLossesForCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<LossFact[]> {
     return this.executeQuery(async () => {
       const losses = await this.prisma.lossFact.findMany({
         where: {
@@ -207,7 +179,7 @@ export class LossRepository extends BaseRepository {
           },
         },
         orderBy: {
-          kill_time: "desc",
+          kill_time: 'desc',
         },
       });
 
@@ -272,10 +244,7 @@ export class LossRepository extends BaseRepository {
    * @param startDate Start date for query range
    * @param endDate End date for query range
    */
-  async getLossesByTimeRange(
-    startDate: Date,
-    endDate: Date
-  ): Promise<LossFact[]> {
+  async getLossesByTimeRange(startDate: Date, endDate: Date): Promise<LossFact[]> {
     return this.executeQuery(async () => {
       const losses = await this.prisma.lossFact.findMany({
         where: {
@@ -285,7 +254,7 @@ export class LossRepository extends BaseRepository {
           },
         },
         orderBy: {
-          kill_time: "desc",
+          kill_time: 'desc',
         },
       });
 
@@ -296,7 +265,7 @@ export class LossRepository extends BaseRepository {
   /**
    * Count total loss records
    */
-  async count(): Promise<number> {
+  override async count(): Promise<number> {
     return this.executeQuery(async () => {
       return this.prisma.lossFact.count();
     });
@@ -316,7 +285,7 @@ export class LossRepository extends BaseRepository {
       const losses = await this.prisma.lossFact.findMany({
         where: {
           character_id: {
-            in: characterIds.map((id) => BigInt(id)),
+            in: characterIds.map(id => BigInt(id)),
           },
           kill_time: {
             gte: startDate,
@@ -331,10 +300,7 @@ export class LossRepository extends BaseRepository {
       const shipTypeCounts = new Map<string, number>();
       for (const loss of losses) {
         const shipTypeId = loss.ship_type_id.toString();
-        shipTypeCounts.set(
-          shipTypeId,
-          (shipTypeCounts.get(shipTypeId) || 0) + 1
-        );
+        shipTypeCounts.set(shipTypeId, (shipTypeCounts.get(shipTypeId) ?? 0) + 1);
       }
       return Array.from(shipTypeCounts.entries())
         .map(([shipTypeId, count]) => ({ shipTypeId, count }))

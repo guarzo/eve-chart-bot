@@ -1,12 +1,12 @@
-import { ESIService } from "../ESIService";
-import { retryOperation } from "../../utils/retry";
-import { logger } from "../../lib/logger";
-import { Character } from "../../domain/character/Character";
-import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
-import { MapClient } from "../../infrastructure/http/MapClient";
-import { PrismaClient } from "@prisma/client";
-import prisma from "../../infrastructure/persistence/client";
-import { Configuration } from "../../config";
+import { ESIService } from '../ESIService';
+import { retryOperation } from '../../utils/retry';
+import { logger } from '../../lib/logger';
+import { Character } from '../../domain/character/Character';
+import { CharacterRepository } from '../../infrastructure/repositories/CharacterRepository';
+import { MapClient } from '../../infrastructure/http/MapClient';
+import { PrismaClient } from '@prisma/client';
+import prisma from '../../infrastructure/persistence/client';
+import { Configuration } from '../../config';
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;
@@ -16,12 +16,7 @@ export class CharacterSyncService {
   private readonly retryDelay: number;
   private readonly prisma: PrismaClient;
 
-  constructor(
-    mapApiUrl: string,
-    mapApiKey: string,
-    maxRetries: number = 3,
-    retryDelay: number = 5000
-  ) {
+  constructor(mapApiUrl: string, mapApiKey: string, maxRetries: number = 3, retryDelay: number = 5000) {
     this.characterRepository = new CharacterRepository(prisma);
     this.esiService = new ESIService();
     this.map = new MapClient(mapApiUrl, mapApiKey);
@@ -34,13 +29,11 @@ export class CharacterSyncService {
    * Start the character sync service
    */
   public async start(): Promise<void> {
-    logger.info("Starting character sync service...");
+    logger.info('Starting character sync service...');
 
     const mapName = Configuration.apis.map.name;
     if (!mapName) {
-      logger.warn(
-        "MAP_NAME environment variable not set, skipping character sync"
-      );
+      logger.warn('MAP_NAME environment variable not set, skipping character sync');
       return;
     }
 
@@ -103,13 +96,10 @@ export class CharacterSyncService {
       // Sync each character
       for (const [eveId, characterData] of uniqueCharacters) {
         try {
-          const result = await this.syncCharacter(
-            eveId.toString(),
-            characterData
-          );
-          if (result === "synced") {
+          const result = await this.syncCharacter(eveId.toString(), characterData);
+          if (result === 'synced') {
             syncedCount++;
-          } else if (result === "skipped") {
+          } else if (result === 'skipped') {
             skippedCount++;
           }
         } catch (error) {
@@ -153,7 +143,7 @@ export class CharacterSyncService {
       // Process each user group
       for (let i = 0; i < mapData.data.length; i++) {
         const user = mapData.data[i];
-        const userCharacters = user.characters || [];
+        const userCharacters = user.characters ?? [];
 
         if (userCharacters.length === 0) {
           continue;
@@ -223,9 +213,7 @@ export class CharacterSyncService {
               data: { characterGroupId: groupId },
             });
           } catch (error) {
-            logger.warn(
-              `Could not assign character ${character.eve_id} to group ${groupName}: ${error}`
-            );
+            logger.warn(`Could not assign character ${character.eve_id} to group ${groupName}: ${error}`);
           }
         }
       }
@@ -236,23 +224,15 @@ export class CharacterSyncService {
         updated: updatedCount,
       };
     } catch (error) {
-      logger.error(
-        "Error creating character groups from Map API users:",
-        error
-      );
+      logger.error('Error creating character groups from Map API users:', error);
       throw error;
     }
   }
 
-  private async syncCharacter(
-    eveId: string,
-    mapCharacterData: any
-  ): Promise<"synced" | "skipped"> {
+  private async syncCharacter(eveId: string, mapCharacterData: any): Promise<'synced' | 'skipped'> {
     try {
       // Check if character already exists
-      const existingCharacter = await this.characterRepository.getCharacter(
-        BigInt(eveId)
-      );
+      const existingCharacter = await this.characterRepository.getCharacter(BigInt(eveId));
 
       let characterName: string;
       if (existingCharacter) {
@@ -272,7 +252,7 @@ export class CharacterSyncService {
 
         if (!esiData) {
           logger.warn(`No ESI data available for character ${eveId}`);
-          return "skipped";
+          return 'skipped';
         }
         characterName = esiData.name;
       }
@@ -282,10 +262,10 @@ export class CharacterSyncService {
         eveId,
         name: characterName,
         corporationId: mapCharacterData.corporation_id,
-        corporationTicker: mapCharacterData.corporation_ticker || "",
+        corporationTicker: mapCharacterData.corporation_ticker ?? '',
         allianceId: mapCharacterData.alliance_id,
-        allianceTicker: mapCharacterData.alliance_ticker || "",
-        createdAt: existingCharacter?.createdAt || new Date(),
+        allianceTicker: mapCharacterData.alliance_ticker ?? '',
+        createdAt: existingCharacter?.createdAt ?? new Date(),
         updatedAt: new Date(),
       });
 
@@ -299,7 +279,7 @@ export class CharacterSyncService {
         allianceTicker: character.allianceTicker,
         characterGroupId: character.characterGroupId,
       });
-      return "synced";
+      return 'synced';
     } catch (error: any) {
       logger.error(`Error syncing character ${eveId}: ${error.message}`);
       throw error;

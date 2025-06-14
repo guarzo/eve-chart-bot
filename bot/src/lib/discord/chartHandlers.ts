@@ -1,8 +1,8 @@
-import { CommandInteraction } from "discord.js";
-import { logger } from "../logger";
-import { ChartService } from "../../services/ChartService";
-import { ChartRenderer } from "../../services/ChartRenderer";
-import { ChartsCommandHandler } from "./handlers/ChartsCommandHandler";
+import { CommandInteraction } from 'discord.js';
+import { logger } from '../logger';
+import { ChartService } from '../../services/ChartService';
+import { ChartRenderer } from '../../services/ChartRenderer';
+import { ChartsCommandHandler } from './handlers/ChartsCommandHandler';
 
 const chartService = new ChartService();
 const chartRenderer = new ChartRenderer();
@@ -22,16 +22,14 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
 
   try {
-    logger.info(
-      "Legacy /kills command used - consider using /charts kills instead"
-    );
+    logger.info('Legacy /kills command used - consider using /charts kills instead');
 
     // Get the display type from options
-    const displayType = interaction.options.getString("type") ?? "line";
+    const displayType = interaction.options.getString('type') ?? 'line';
 
     await handleLegacyKillCommand(interaction, displayType);
   } catch (error) {
-    logger.error("Error handling legacy kill command:", error);
+    logger.error('Error handling legacy kill command:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (interaction.replied) {
@@ -56,16 +54,14 @@ export async function handleMapCommand(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
 
   try {
-    logger.info(
-      "Legacy /map command used - consider using /charts map instead"
-    );
+    logger.info('Legacy /map command used - consider using /charts map instead');
 
     // Get the display type from options
-    const displayType = interaction.options.getString("type") ?? "line";
+    const displayType = interaction.options.getString('type') ?? 'line';
 
     await handleLegacyMapCommand(interaction, displayType);
   } catch (error) {
-    logger.error("Error handling legacy map command:", error);
+    logger.error('Error handling legacy map command:', error);
     const errorMessage = error instanceof Error ? error.message : String(error);
 
     if (interaction.replied) {
@@ -87,10 +83,7 @@ export async function handleMapCommand(interaction: CommandInteraction) {
 }
 
 // Helper function for legacy kill command
-async function handleLegacyKillCommand(
-  interaction: CommandInteraction,
-  displayType: string
-) {
+async function handleLegacyKillCommand(interaction: CommandInteraction, displayType: string) {
   await interaction.deferReply();
 
   // Get tracked characters
@@ -98,8 +91,7 @@ async function handleLegacyKillCommand(
 
   if (characterIds.length === 0) {
     await interaction.editReply({
-      content:
-        "No characters are currently being tracked. Please add characters first.",
+      content: 'No characters are currently being tracked. Please add characters first.',
     });
     return;
   }
@@ -111,9 +103,9 @@ async function handleLegacyKillCommand(
 
   // Generate chart using legacy chart service
   const chartData = await chartService.generateChart({
-    type: "kills",
+    type: 'kills',
     characterIds,
-    period: "7d",
+    period: '7d',
     displayType: displayType as any,
   });
 
@@ -128,24 +120,20 @@ async function handleLegacyKillCommand(
       },
       legend: {
         display: true,
-        position: "top",
+        position: 'top',
       },
     },
   });
 
   // Send chart
   await interaction.editReply({
-    content:
-      "Here is your kill chart (consider using /charts kills for enhanced charts):",
-    files: [{ attachment: buffer, name: "kill-chart.png" }],
+    content: 'Here is your kill chart (consider using /charts kills for enhanced charts):',
+    files: [{ attachment: buffer, name: 'kill-chart.png' }],
   });
 }
 
 // Helper function for legacy map command
-async function handleLegacyMapCommand(
-  interaction: CommandInteraction,
-  displayType: string
-) {
+async function handleLegacyMapCommand(interaction: CommandInteraction, displayType: string) {
   await interaction.deferReply();
 
   // Get tracked characters
@@ -153,8 +141,7 @@ async function handleLegacyMapCommand(
 
   if (characterIds.length === 0) {
     await interaction.editReply({
-      content:
-        "No characters are currently being tracked. Please add characters first.",
+      content: 'No characters are currently being tracked. Please add characters first.',
     });
     return;
   }
@@ -166,9 +153,9 @@ async function handleLegacyMapCommand(
 
   // Generate chart using legacy chart service
   const chartData = await chartService.generateChart({
-    type: "map_activity",
+    type: 'map_activity',
     characterIds,
-    period: "7d",
+    period: '7d',
     displayType: displayType as any,
   });
 
@@ -183,21 +170,20 @@ async function handleLegacyMapCommand(
       },
       legend: {
         display: true,
-        position: "top",
+        position: 'top',
       },
     },
   });
 
   // Send chart
   await interaction.editReply({
-    content:
-      "Here is your map activity chart (consider using /charts map for enhanced charts):",
-    files: [{ attachment: buffer, name: "map-chart.png" }],
+    content: 'Here is your map activity chart (consider using /charts map for enhanced charts):',
+    files: [{ attachment: buffer, name: 'map-chart.png' }],
   });
 }
 
 // Helper function for getting character data
 async function getTrackedCharacters(): Promise<bigint[]> {
   const characters = await chartService.getTrackedCharacters();
-  return characters.map((c) => BigInt(c.eveId));
+  return characters.map(c => BigInt(c.eveId));
 }

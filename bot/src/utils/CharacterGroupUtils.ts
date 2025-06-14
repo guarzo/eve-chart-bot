@@ -1,5 +1,5 @@
-import { PrismaClient } from "@prisma/client";
-import { logger } from "../lib/logger";
+import { PrismaClient } from '@prisma/client';
+import { logger } from '../lib/logger';
 
 /**
  * Utility class for safely managing character groups
@@ -23,7 +23,7 @@ export class CharacterGroupUtils {
     try {
       // Validate inputs
       if (!mapName) {
-        logger.error("Cannot create group: missing map name");
+        logger.error('Cannot create group: missing map name');
         return null;
       }
 
@@ -33,7 +33,7 @@ export class CharacterGroupUtils {
       }
 
       // Convert character IDs to BigInt for database queries
-      const characterIdsBigInt = characterIds.map((id) => BigInt(id));
+      const characterIdsBigInt = characterIds.map(id => BigInt(id));
 
       // First, check if any of these characters already belong to a group
       const existingCharacters = await prisma.character.findMany({
@@ -55,7 +55,7 @@ export class CharacterGroupUtils {
         // Use the first character's group as the target group for all characters
         const existingGroup = existingCharacters[0].characterGroup;
         if (!existingGroup) {
-          logger.warn("Character has null characterGroup");
+          logger.warn('Character has null characterGroup');
           return null;
         }
         logger.info(
@@ -64,7 +64,7 @@ export class CharacterGroupUtils {
 
         // Update all provided characters to use this group
         await Promise.all(
-          characterIdsBigInt.map((charId) =>
+          characterIdsBigInt.map(charId =>
             prisma.character.updateMany({
               where: { eveId: charId },
               data: { characterGroupId: existingGroup.id },
@@ -93,18 +93,14 @@ export class CharacterGroupUtils {
       });
 
       if (charactersInDb.length === 0) {
-        logger.warn(
-          `Cannot create group '${mapName}': no valid characters found`
-        );
+        logger.warn(`Cannot create group '${mapName}': no valid characters found`);
         return null;
       }
 
-      logger.info(
-        `Creating character group '${mapName}' with ${charactersInDb.length} characters`
-      );
+      logger.info(`Creating character group '${mapName}' with ${charactersInDb.length} characters`);
 
       // Use a transaction to ensure atomicity
-      const result = await prisma.$transaction(async (tx) => {
+      const result = await prisma.$transaction(async tx => {
         // Create the group first
         const group = await tx.characterGroup.create({
           data: {
@@ -115,7 +111,7 @@ export class CharacterGroupUtils {
 
         // Associate characters with the group
         await Promise.all(
-          charactersInDb.map((char) =>
+          charactersInDb.map(char =>
             tx.character.update({
               where: { eveId: char.eveId },
               data: { characterGroupId: group.id },
@@ -126,9 +122,7 @@ export class CharacterGroupUtils {
         return group;
       });
 
-      logger.info(
-        `Successfully created character group ${result.id} with ${charactersInDb.length} characters`
-      );
+      logger.info(`Successfully created character group ${result.id} with ${charactersInDb.length} characters`);
       return result.id;
     } catch (error) {
       logger.error(
@@ -160,7 +154,7 @@ export class CharacterGroupUtils {
       // First, check if any of these characters already belong to a group
       if (characterIds && characterIds.length > 0) {
         // Convert character IDs to BigInt for database queries
-        const characterIdsBigInt = characterIds.map((id) => BigInt(id));
+        const characterIdsBigInt = characterIds.map(id => BigInt(id));
 
         const existingCharacters = await prisma.character.findMany({
           where: {
@@ -181,7 +175,7 @@ export class CharacterGroupUtils {
           // Use the first character's group as the target group for all characters
           const existingGroup = existingCharacters[0].characterGroup;
           if (!existingGroup) {
-            logger.warn("Character has null characterGroup");
+            logger.warn('Character has null characterGroup');
             return null;
           }
           logger.info(
@@ -190,26 +184,21 @@ export class CharacterGroupUtils {
 
           // Update all provided characters to use this group
           await Promise.all(
-            characterIdsBigInt.map((charId) =>
+            characterIdsBigInt.map(charId =>
               prisma.character
                 .update({
                   where: { eveId: charId },
                   data: { characterGroupId: existingGroup.id },
                 })
-                .catch((e) => {
-                  logger.warn(
-                    `Could not update character ${charId}: ${e.message}`
-                  );
+                .catch(e => {
+                  logger.warn(`Could not update character ${charId}: ${e.message}`);
                   return null;
                 })
             )
           );
 
           // Update main character if provided
-          if (
-            mainCharacterId &&
-            existingGroup.mainCharacterId?.toString() !== mainCharacterId
-          ) {
+          if (mainCharacterId && existingGroup.mainCharacterId?.toString() !== mainCharacterId) {
             await prisma.characterGroup.update({
               where: { id: existingGroup.id },
               data: { mainCharacterId: BigInt(mainCharacterId) },
@@ -230,20 +219,18 @@ export class CharacterGroupUtils {
         // Group exists but may need character updates
         if (characterIds && characterIds.length > 0) {
           // Convert character IDs to BigInt
-          const characterIdsBigInt = characterIds.map((id) => BigInt(id));
+          const characterIdsBigInt = characterIds.map(id => BigInt(id));
 
           // Update characters to belong to this group
           await Promise.all(
-            characterIdsBigInt.map((charId) =>
+            characterIdsBigInt.map(charId =>
               prisma.character
                 .update({
                   where: { eveId: charId },
                   data: { characterGroupId: existingGroupByMapName.id },
                 })
-                .catch((e) => {
-                  logger.warn(
-                    `Could not update character ${charId}: ${e.message}`
-                  );
+                .catch(e => {
+                  logger.warn(`Could not update character ${charId}: ${e.message}`);
                   return null;
                 })
             )
@@ -251,10 +238,7 @@ export class CharacterGroupUtils {
         }
 
         // Update main character if provided
-        if (
-          mainCharacterId &&
-          existingGroupByMapName.mainCharacterId?.toString() !== mainCharacterId
-        ) {
+        if (mainCharacterId && existingGroupByMapName.mainCharacterId?.toString() !== mainCharacterId) {
           await prisma.characterGroup.update({
             where: { id: existingGroupByMapName.id },
             data: { mainCharacterId: BigInt(mainCharacterId) },
@@ -265,12 +249,7 @@ export class CharacterGroupUtils {
       }
 
       // No existing group found, create new one using safe method
-      return await CharacterGroupUtils.createCharacterGroupSafely(
-        prisma,
-        mapName,
-        characterIds,
-        mainCharacterId
-      );
+      return await CharacterGroupUtils.createCharacterGroupSafely(prisma, mapName, characterIds, mainCharacterId);
     } catch (error) {
       logger.error(
         {
@@ -288,9 +267,7 @@ export class CharacterGroupUtils {
    * @param prisma Prisma client instance
    * @returns Number of groups deleted
    */
-  static async cleanupEmptyCharacterGroups(
-    prisma: PrismaClient
-  ): Promise<number> {
+  static async cleanupEmptyCharacterGroups(prisma: PrismaClient): Promise<number> {
     try {
       // Find all groups that have no characters
       const emptyGroups = await prisma.characterGroup.findMany({
@@ -306,32 +283,30 @@ export class CharacterGroupUtils {
       });
 
       if (emptyGroups.length === 0) {
-        logger.info("No empty character groups found");
+        logger.info('No empty character groups found');
         return 0;
       }
 
-      logger.info(
-        `Found ${emptyGroups.length} empty character groups to delete`
-      );
+      logger.info(`Found ${emptyGroups.length} empty character groups to delete`);
 
       // Delete all empty groups
       const deletedCount = await prisma.characterGroup.deleteMany({
         where: {
           id: {
-            in: emptyGroups.map((group) => group.id),
+            in: emptyGroups.map(group => group.id),
           },
         },
       });
 
       logger.info(
         `Deleted ${deletedCount.count} empty character groups: ${emptyGroups
-          .map((g) => `${g.map_name} (${g.id})`)
-          .join(", ")}`
+          .map(g => `${g.map_name} (${g.id})`)
+          .join(', ')}`
       );
 
       return deletedCount.count;
     } catch (error) {
-      logger.error("Failed to cleanup empty character groups:", error);
+      logger.error('Failed to cleanup empty character groups:', error);
       return 0;
     }
   }

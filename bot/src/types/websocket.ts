@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // WebSocket victim schema
 export const WebSocketVictimSchema = z.object({
@@ -109,11 +109,11 @@ export type WebSocketKillmailUpdate = z.infer<typeof WebSocketKillmailUpdateSche
 // WebSocket event types
 export type WebSocketEvent =
   | {
-      type: "killmail_update";
+      type: 'killmail_update';
       payload: WebSocketKillmailUpdate;
     }
   | {
-      type: "kill_count_update";
+      type: 'kill_count_update';
       payload: {
         system_id: number;
         count: number;

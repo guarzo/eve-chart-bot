@@ -1,34 +1,34 @@
-import { ChartOptions } from "../../../types/chart";
+import { ChartOptions } from '../../../types/chart';
 
 /**
  * Configuration for Corps charts
  */
 export const CorpsChartConfig = {
-  title: "Top Enemy Corporations",
-  description: "Shows horizontal bar chart of top enemy corporations",
+  title: 'Top Enemy Corporations',
+  description: 'Shows horizontal bar chart of top enemy corporations',
 
   horizontalBarOptions: {
-    indexAxis: "y",
+    indexAxis: 'y',
     responsive: true,
     maintainAspectRatio: false,
     aspectRatio: 2.5,
     plugins: {
       title: {
         display: true,
-        text: "Top Enemy Corporations",
+        text: 'Top Enemy Corporations',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: false, // No legend needed for single dataset
-        position: "top",
+        position: 'top',
       },
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.dataset.label || "";
+            const label = context.dataset.label || '';
             const value = context.parsed.x;
             return `${label}: ${value.toLocaleString()} kills`;
           },
@@ -40,15 +40,15 @@ export const CorpsChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Kill Count",
+          text: 'Kill Count',
           font: {
             size: 16,
           },
         },
         ticks: {
           callback: function (value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+            if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
             return value.toString();
           },
         },
@@ -57,7 +57,7 @@ export const CorpsChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Corporation",
+          text: 'Corporation',
           font: {
             size: 16,
           },
@@ -67,27 +67,27 @@ export const CorpsChartConfig = {
   } as ChartOptions,
 
   verticalBarOptions: {
-    indexAxis: "x",
+    indexAxis: 'x',
     responsive: true,
     maintainAspectRatio: false,
     aspectRatio: 1.5,
     plugins: {
       title: {
         display: true,
-        text: "Top Enemy Corporations",
+        text: 'Top Enemy Corporations',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: false,
-        position: "top",
+        position: 'top',
       },
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.dataset.label || "";
+            const label = context.dataset.label || '';
             const value = context.parsed.y;
             return `${label}: ${value.toLocaleString()} kills`;
           },
@@ -99,15 +99,15 @@ export const CorpsChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Kill Count",
+          text: 'Kill Count',
           font: {
             size: 16,
           },
         },
         ticks: {
           callback: function (value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+            if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
             return value.toString();
           },
         },
@@ -116,7 +116,7 @@ export const CorpsChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Corporation",
+          text: 'Corporation',
           font: {
             size: 16,
           },
@@ -131,15 +131,15 @@ export const CorpsChartConfig = {
     plugins: {
       title: {
         display: true,
-        text: "Kill Distribution by Enemy Corporation",
+        text: 'Kill Distribution by Enemy Corporation',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: true,
-        position: "right",
+        position: 'right',
         labels: {
           font: {
             size: 14,
@@ -149,12 +149,10 @@ export const CorpsChartConfig = {
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.label || "";
+            const label = context.label || '';
             const value = context.raw;
             const percentage = context.parsed;
-            return `${label}: ${value.toLocaleString()} kills (${(
-              percentage * 100
-            ).toFixed(1)}%)`;
+            return `${label}: ${value.toLocaleString()} kills (${(percentage * 100).toFixed(1)}%)`;
           },
         },
       },
@@ -162,33 +160,27 @@ export const CorpsChartConfig = {
   } as ChartOptions,
 
   // Get default summary based on corp kill data
-  getDefaultSummary: (
-    totalCorps: number,
-    totalKills: number,
-    topCorpName: string,
-    topCorpKills: number
-  ): string => {
-    const topCorpPercent =
-      totalKills > 0 ? ((topCorpKills / totalKills) * 100).toFixed(1) : "0";
+  getDefaultSummary: (totalCorps: number, totalKills: number, topCorpName: string, topCorpKills: number): string => {
+    const topCorpPercent = totalKills > 0 ? ((topCorpKills / totalKills) * 100).toFixed(1) : '0';
     return `Showing top ${totalCorps} enemy corporations (${totalKills.toLocaleString()} total kills). Leading corporation: ${topCorpName} (${topCorpPercent}%)`;
   },
 
   // Color palette for corporations
   colors: [
-    "#3366CC", // deep blue
-    "#DC3912", // red
-    "#FF9900", // orange
-    "#109618", // green
-    "#990099", // purple
-    "#0099C6", // teal
-    "#DD4477", // pink
-    "#66AA00", // lime
-    "#B82E2E", // dark red
-    "#316395", // navy
-    "#994499", // violet
-    "#22AA99", // seafoam
-    "#AAAA11", // olive
-    "#6633CC", // indigo
-    "#E67300", // amber
+    '#3366CC', // deep blue
+    '#DC3912', // red
+    '#FF9900', // orange
+    '#109618', // green
+    '#990099', // purple
+    '#0099C6', // teal
+    '#DD4477', // pink
+    '#66AA00', // lime
+    '#B82E2E', // dark red
+    '#316395', // navy
+    '#994499', // violet
+    '#22AA99', // seafoam
+    '#AAAA11', // olive
+    '#6633CC', // indigo
+    '#E67300', // amber
   ],
 };

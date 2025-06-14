@@ -1,7 +1,7 @@
-import { UnifiedESIClient } from "../infrastructure/http/UnifiedESIClient";
-import { CacheRedisAdapter } from "../cache/CacheRedisAdapter";
-import { logger } from "../lib/logger";
-import { Configuration } from "../config";
+import { UnifiedESIClient } from '../infrastructure/http/UnifiedESIClient';
+import { CacheRedisAdapter } from '../cache/CacheRedisAdapter';
+import { logger } from '../lib/logger';
+import { Configuration } from '../config';
 
 /**
  * Service for interacting with EVE Online's ESI API
@@ -16,10 +16,7 @@ export class ESIService {
    */
   constructor() {
     // Initialize the ESI client with Redis caching
-    this.cache = new CacheRedisAdapter(
-      Configuration.redis.url,
-      Configuration.redis.cacheTtl
-    );
+    this.cache = new CacheRedisAdapter(Configuration.redis.url, Configuration.redis.cacheTtl);
     this.esiClient = new UnifiedESIClient({}, this.cache);
   }
 
@@ -105,7 +102,7 @@ export class ESIService {
       const uniqueTypeIds = Array.from(new Set(typeIds));
 
       // Create caching key for this list
-      const cacheKey = `ship-types-${uniqueTypeIds.sort().join("-")}`;
+      const cacheKey = `ship-types-${uniqueTypeIds.sort().join('-')}`;
 
       // Try to get from cache
       const cached = await this.cache.get<Record<number, string>>(cacheKey);
@@ -122,7 +119,7 @@ export class ESIService {
         const batch = uniqueTypeIds.slice(i, i + batchSize);
 
         // Fetch each type in parallel
-        const promises = batch.map((typeId) => this.getShipType(typeId));
+        const promises = batch.map(typeId => this.getShipType(typeId));
         const types = await Promise.all(promises);
 
         // Map type IDs to names
@@ -138,7 +135,7 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      logger.error("Error mapping ship type IDs to names:", error);
+      logger.error('Error mapping ship type IDs to names:', error);
       throw error;
     }
   }
@@ -146,20 +143,16 @@ export class ESIService {
   /**
    * Map a list of corporation IDs to their names and tickers
    */
-  async getCorporationDetails(
-    corpIds: number[]
-  ): Promise<Record<number, { name: string; ticker: string }>> {
+  async getCorporationDetails(corpIds: number[]): Promise<Record<number, { name: string; ticker: string }>> {
     try {
       // Deduplicate corp IDs
       const uniqueCorpIds = Array.from(new Set(corpIds));
 
       // Create caching key for this list
-      const cacheKey = `corp-details-${uniqueCorpIds.sort().join("-")}`;
+      const cacheKey = `corp-details-${uniqueCorpIds.sort().join('-')}`;
 
       // Try to get from cache
-      const cached = await this.cache.get<
-        Record<number, { name: string; ticker: string }>
-      >(cacheKey);
+      const cached = await this.cache.get<Record<number, { name: string; ticker: string }>>(cacheKey);
       if (cached) {
         return cached;
       }
@@ -173,7 +166,7 @@ export class ESIService {
         const batch = uniqueCorpIds.slice(i, i + batchSize);
 
         // Fetch each corporation in parallel
-        const promises = batch.map((corpId) => this.getCorporation(corpId));
+        const promises = batch.map(corpId => this.getCorporation(corpId));
         const corps = await Promise.all(promises);
 
         // Map corporation IDs to names and tickers
@@ -182,7 +175,7 @@ export class ESIService {
           const corp = corps[j];
           result[corpId] = {
             name: corp?.name || `Unknown Corp ${corpId}`,
-            ticker: corp?.ticker || "????",
+            ticker: corp?.ticker || '????',
           };
         }
       }
@@ -192,7 +185,7 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      logger.error("Error mapping corporation IDs to details:", error);
+      logger.error('Error mapping corporation IDs to details:', error);
       throw error;
     }
   }

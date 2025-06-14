@@ -1,9 +1,9 @@
-import { BaseChartHandler } from "./BaseChartHandler";
-import { CommandInteraction } from "discord.js";
-import { ChartData } from "../../../../types/chart";
-import { ChartRenderer } from "../../../../services/ChartRenderer";
-import { logger } from "../../../logger";
-import { ChartFactory } from "../../../../services/charts";
+import { BaseChartHandler } from './BaseChartHandler';
+import { CommandInteraction } from 'discord.js';
+import { ChartData } from '../../../../types/chart';
+import { ChartRenderer } from '../../../../services/ChartRenderer';
+import { logger } from '../../../logger';
+import { ChartFactory } from '../../../../services/charts';
 
 /**
  * Handler for the /charts ratio command
@@ -23,7 +23,7 @@ export class RatioHandler extends BaseChartHandler {
       await interaction.deferReply();
 
       // Get time period from command options
-      const time = interaction.options.getString("time") ?? "7";
+      const time = interaction.options.getString('time') ?? '7';
       const { startDate, endDate } = this.getTimeRange(time);
 
       logger.info(`Generating kill-death ratio chart for ${time} days`);
@@ -33,21 +33,20 @@ export class RatioHandler extends BaseChartHandler {
 
       if (groups.length === 0) {
         await interaction.editReply({
-          content:
-            "No character groups found. Please add characters to groups first.",
+          content: 'No character groups found. Please add characters to groups first.',
         });
         return;
       }
 
       // Get the chart generator from the factory
-      const ratioGenerator = ChartFactory.createGenerator("ratio");
+      const ratioGenerator = ChartFactory.createGenerator('ratio');
 
       // Generate chart data
       const chartData = await ratioGenerator.generateChart({
         characterGroups: groups,
         startDate,
         endDate,
-        displayType: "horizontalBar",
+        displayType: 'horizontalBar',
       });
 
       // Render chart to buffer
@@ -55,11 +54,11 @@ export class RatioHandler extends BaseChartHandler {
 
       // Send the chart with summary
       await interaction.editReply({
-        content: chartData.summary || "Kill/Death Ratio chart",
-        files: [{ attachment: buffer, name: "ratio-chart.png" }],
+        content: chartData.summary ?? 'Kill/Death Ratio chart',
+        files: [{ attachment: buffer, name: 'ratio-chart.png' }],
       });
 
-      logger.info("Successfully sent kill-death ratio chart");
+      logger.info('Successfully sent kill-death ratio chart');
     } catch (error) {
       await this.handleError(interaction, error);
     }
@@ -70,17 +69,17 @@ export class RatioHandler extends BaseChartHandler {
    */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
     const options = {
-      indexAxis: "y" as const,
+      indexAxis: 'y' as const,
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         title: {
           display: true,
-          text: chartData.title || "Kill/Loss Ratio by Character Group",
+          text: chartData.title ?? 'Kill/Loss Ratio by Character Group',
         },
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
       },
       scales: {
@@ -88,7 +87,7 @@ export class RatioHandler extends BaseChartHandler {
           stacked: true,
           title: {
             display: true,
-            text: "Ratio",
+            text: 'Ratio',
           },
         },
         y: {
@@ -96,7 +95,7 @@ export class RatioHandler extends BaseChartHandler {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Character",
+            text: 'Character',
           },
         },
       },

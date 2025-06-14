@@ -1,6 +1,6 @@
-import { CommandInteraction, MessageFlags } from "discord.js";
-import { ChartCommandRegistry } from "./registry";
-import { logger } from "../../logger";
+import { CommandInteraction, MessageFlags } from 'discord.js';
+import { ChartCommandRegistry } from './registry';
+import { logger } from '../../logger';
 
 /**
  * Main handler for the /charts command
@@ -22,9 +22,9 @@ export class ChartsCommandHandler {
     );
 
     if (!interaction.isChatInputCommand()) {
-      logger.info("Interaction is not a chat input command");
+      logger.info('Interaction is not a chat input command');
       await interaction.reply({
-        content: "This command can only be used as a slash command.",
+        content: 'This command can only be used as a slash command.',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -40,16 +40,12 @@ export class ChartsCommandHandler {
     const handler = this.registry.getHandler(subcommand);
 
     if (handler) {
-      logger.info(
-        `Found handler for subcommand: ${subcommand}, calling handler.handle()`
-      );
+      logger.info(`Found handler for subcommand: ${subcommand}, calling handler.handle()`);
       await handler.handle(interaction);
       logger.info(`Handler completed for subcommand: ${subcommand}`);
     } else {
       logger.warn(`No handler found for subcommand: ${subcommand}`);
-      const availableCommands = this.registry
-        .getAvailableSubcommands()
-        .join(", ");
+      const availableCommands = this.registry.getAvailableSubcommands().join(', ');
 
       await interaction.reply({
         content: `Unknown chart command: "${subcommand}". Available options: ${availableCommands}`,

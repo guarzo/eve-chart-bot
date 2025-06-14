@@ -1,9 +1,9 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { ChartLayoutUtils } from "../utils/ChartLayoutUtils";
-import { TimeUtils } from "../utils/TimeUtils";
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData } from '../../../types/chart';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { ChartLayoutUtils } from '../utils/ChartLayoutUtils';
+import { TimeUtils } from '../utils/TimeUtils';
 
 interface ShipTypeData {
   shipTypeId: string;
@@ -42,29 +42,20 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
     const { startDate, endDate, characterGroups } = options;
 
     // Get all character IDs from all groups
-    const characterIds = characterGroups.flatMap((group) =>
-      group.characters.map((c) => BigInt(c.eveId))
-    );
+    const characterIds = characterGroups.flatMap(group => group.characters.map(c => BigInt(c.eveId)));
 
     // Get ship types for all characters
-    const shipTypes = await this.killRepository.getTopShipTypesDestroyed(
-      characterIds,
-      startDate,
-      endDate
-    );
+    const shipTypes = await this.killRepository.getTopShipTypesDestroyed(characterIds, startDate, endDate);
 
     // Group ship types by character group
-    const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
+    const groupData = characterGroups.map(group => {
+      const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
       const groupShipTypes = shipTypes.filter((data: ShipTypeData) =>
         groupCharacterIds.includes(BigInt(data.shipTypeId))
       );
 
       // Calculate total ships
-      const totalShips = groupShipTypes.reduce(
-        (sum: number, data: ShipTypeData) => sum + data.count,
-        0
-      );
+      const totalShips = groupShipTypes.reduce((sum: number, data: ShipTypeData) => sum + data.count, 0);
 
       return {
         group,
@@ -78,12 +69,12 @@ export class ShipTypesChartGenerator extends BaseChartGenerator {
 
     // Create chart data using the layout utility
     return ChartLayoutUtils.createHorizontalBarLayout(
-      groupData.map((data) => this.getGroupDisplayName(data.group)),
+      groupData.map(data => this.getGroupDisplayName(data.group)),
       [
         {
-          label: "Total Ships",
-          data: groupData.map((data) => data.totalShips),
-          backgroundColor: this.getDatasetColors("shiptypes").primary,
+          label: 'Total Ships',
+          data: groupData.map(data => data.totalShips),
+          backgroundColor: this.getDatasetColors('shiptypes').primary,
         },
       ],
       `Ship Types Destroyed (${TimeUtils.formatTimeRange(startDate, endDate)})`

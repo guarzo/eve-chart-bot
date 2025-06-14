@@ -1,10 +1,6 @@
-import { BaseEntity } from "../BaseEntity";
-import { ensureRequiredBigInt, ensureBigInt } from "../../utils/conversion";
-import {
-  validateRequired,
-  validatePositive,
-  validateNonNegative,
-} from "../../utils/validation";
+import { BaseEntity } from '../BaseEntity';
+import { ensureRequiredBigInt, ensureBigInt } from '../../utils/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../utils/validation';
 
 /**
  * KillFact domain entity
@@ -35,8 +31,7 @@ export class KillFact extends BaseEntity {
   /** Solar system ID where the kill occurred */
   systemId: number;
 
-  /** Labels or tags applied to this kill */
-  labels: string[];
+  // Labels are inherited from BaseEntity
 
   /** Total ISK value of the kill */
   totalValue: bigint;
@@ -80,7 +75,8 @@ export class KillFact extends BaseEntity {
     this.awox = props.awox;
     this.shipTypeId = props.shipTypeId;
     this.systemId = props.systemId;
-    this.labels = props.labels || [];
+    // Set labels using the inherited property from BaseEntity
+    this.labels = props.labels ?? [];
     this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.points = props.points;
 
@@ -100,12 +96,12 @@ export class KillFact extends BaseEntity {
    * @throws Error if data is invalid
    */
   private validate(): void {
-    validateRequired("killmailId", this.killmailId);
-    validateRequired("characterId", this.characterId);
-    validateRequired("killTime", this.killTime);
-    validatePositive("shipTypeId", this.shipTypeId);
-    validatePositive("systemId", this.systemId);
-    validateNonNegative("points", this.points);
+    validateRequired('killmailId', this.killmailId);
+    validateRequired('characterId', this.characterId);
+    validateRequired('killTime', this.killTime);
+    validatePositive('shipTypeId', this.shipTypeId);
+    validatePositive('systemId', this.systemId);
+    validateNonNegative('points', this.points);
   }
 
   /**
@@ -113,7 +109,7 @@ export class KillFact extends BaseEntity {
    */
   get attackers(): KillAttacker[] {
     if (!this._attackers) {
-      throw new Error("Attackers not loaded for this kill");
+      throw new Error('Attackers not loaded for this kill');
     }
     return this._attackers;
   }
@@ -130,7 +126,7 @@ export class KillFact extends BaseEntity {
    */
   get victim(): KillVictim {
     if (!this._victim) {
-      throw new Error("Victim not loaded for this kill");
+      throw new Error('Victim not loaded for this kill');
     }
     return this._victim;
   }
@@ -162,7 +158,7 @@ export class KillFact extends BaseEntity {
    */
   get attackerCount(): number {
     if (!this._attackers) {
-      throw new Error("Attackers not loaded for this kill");
+      throw new Error('Attackers not loaded for this kill');
     }
     return this._attackers.length;
   }
@@ -178,10 +174,7 @@ export class KillFact extends BaseEntity {
     }
 
     // Solo means only one attacker (the character)
-    return (
-      this._attackers.length === 1 &&
-      this._attackers[0].characterId === this.characterId
-    );
+    return this._attackers.length === 1 && this._attackers[0].characterId === this.characterId;
   }
 
   /**
@@ -204,13 +197,13 @@ export class KillFact extends BaseEntity {
       awox: model.awox,
       shipTypeId: model.ship_type_id,
       systemId: model.system_id,
-      labels: model.labels || [],
+      labels: model.labels ?? [],
       totalValue: model.total_value,
       points: model.points,
     });
 
     if (attackers) {
-      killFact.attackers = attackers.map((a) => KillAttacker.fromModel(a));
+      killFact.attackers = attackers.map(a => KillAttacker.fromModel(a));
     }
 
     if (victim) {

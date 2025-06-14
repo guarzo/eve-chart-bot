@@ -1,12 +1,8 @@
-import {
-  WebSocketKillmail,
-  WebSocketVictim,
-  WebSocketAttacker,
-} from "../../types/websocket";
-import { KillFact } from "@prisma/client";
+import { WebSocketKillmail, WebSocketVictim, WebSocketAttacker } from '../../types/websocket';
+import { KillFact } from '@prisma/client';
 
 interface MappedKillData {
-  killFact: Omit<KillFact, "killmail_id"> & { killmail_id: bigint };
+  killFact: Omit<KillFact, 'killmail_id'> & { killmail_id: bigint };
   victim: {
     character_id?: bigint;
     corporation_id?: bigint;
@@ -26,7 +22,7 @@ interface MappedKillData {
   }>;
   involvedCharacters: Array<{
     character_id: bigint;
-    role: "attacker" | "victim";
+    role: 'attacker' | 'victim';
   }>;
 }
 
@@ -36,7 +32,7 @@ export class WebSocketDataMapper {
    */
   mapKillmail(killmail: WebSocketKillmail): MappedKillData {
     // Map the main kill fact
-    const killFact: MappedKillData["killFact"] = {
+    const killFact: MappedKillData['killFact'] = {
       killmail_id: BigInt(killmail.killmail_id),
       kill_time: new Date(killmail.kill_time),
       npc: killmail.zkb.npc,
@@ -44,7 +40,7 @@ export class WebSocketDataMapper {
       awox: killmail.zkb.awox,
       ship_type_id: killmail.victim.ship_type_id,
       system_id: killmail.system_id,
-      labels: killmail.zkb.labels || [],
+      labels: killmail.zkb.labels ?? [],
       total_value: BigInt(Math.floor(killmail.zkb.total_value)),
       points: killmail.zkb.points,
     };
@@ -53,7 +49,7 @@ export class WebSocketDataMapper {
     const victim = this.mapVictim(killmail.victim);
 
     // Map attackers
-    const attackers = killmail.attackers.map((attacker) => this.mapAttacker(attacker));
+    const attackers = killmail.attackers.map(attacker => this.mapAttacker(attacker));
 
     // Collect all involved characters
     const involvedCharacters = this.collectInvolvedCharacters(killmail);
@@ -66,7 +62,7 @@ export class WebSocketDataMapper {
     };
   }
 
-  private mapVictim(victim: WebSocketVictim): MappedKillData["victim"] {
+  private mapVictim(victim: WebSocketVictim): MappedKillData['victim'] {
     return {
       character_id: victim.character_id ? BigInt(victim.character_id) : undefined,
       corporation_id: victim.corporation_id ? BigInt(victim.corporation_id) : undefined,
@@ -76,7 +72,7 @@ export class WebSocketDataMapper {
     };
   }
 
-  private mapAttacker(attacker: WebSocketAttacker): MappedKillData["attackers"][0] {
+  private mapAttacker(attacker: WebSocketAttacker): MappedKillData['attackers'][0] {
     return {
       character_id: attacker.character_id ? BigInt(attacker.character_id) : undefined,
       corporation_id: attacker.corporation_id ? BigInt(attacker.corporation_id) : undefined,
@@ -89,16 +85,14 @@ export class WebSocketDataMapper {
     };
   }
 
-  private collectInvolvedCharacters(
-    killmail: WebSocketKillmail
-  ): MappedKillData["involvedCharacters"] {
-    const characters: MappedKillData["involvedCharacters"] = [];
+  private collectInvolvedCharacters(killmail: WebSocketKillmail): MappedKillData['involvedCharacters'] {
+    const characters: MappedKillData['involvedCharacters'] = [];
 
     // Add victim if it's a character
     if (killmail.victim.character_id) {
       characters.push({
         character_id: BigInt(killmail.victim.character_id),
-        role: "victim",
+        role: 'victim',
       });
     }
 
@@ -107,7 +101,7 @@ export class WebSocketDataMapper {
       if (attacker.character_id) {
         characters.push({
           character_id: BigInt(attacker.character_id),
-          role: "attacker",
+          role: 'attacker',
         });
       }
     }
@@ -141,7 +135,7 @@ export class WebSocketDataMapper {
         system_id: killmail.system_id,
         total_value: BigInt(Math.floor(killmail.zkb.total_value)),
         attacker_count: killmail.attackers.length,
-        labels: killmail.zkb.labels || [],
+        labels: killmail.zkb.labels ?? [],
       };
     }
 
@@ -151,7 +145,7 @@ export class WebSocketDataMapper {
   /**
    * Maps WebSocket position data to database format
    */
-  mapPosition(position?: WebSocketKillmail["position"]): any | null {
+  mapPosition(position?: WebSocketKillmail['position']): any | null {
     if (!position) {
       return null;
     }
@@ -171,7 +165,7 @@ export class WebSocketDataMapper {
       return null;
     }
 
-    return victim.items.map((item) => ({
+    return victim.items.map(item => ({
       type_id: item.type_id,
       type_name: item.type_name,
       singleton: item.singleton,

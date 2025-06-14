@@ -1,10 +1,6 @@
-import { BaseEntity } from "../BaseEntity";
-import { ensureRequiredBigInt } from "../../utils/conversion";
-import {
-  validateRequired,
-  validatePositive,
-  validateNonNegative,
-} from "../../utils/validation";
+import { BaseEntity } from '../BaseEntity';
+import { ensureRequiredBigInt } from '../../utils/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../utils/validation';
 
 /**
  * LossFact domain entity
@@ -32,8 +28,7 @@ export class LossFact extends BaseEntity {
   /** Number of attackers on the killmail */
   attackerCount: number;
 
-  /** Labels or tags applied to this loss */
-  labels: string[];
+  // Labels are inherited from BaseEntity
 
   /**
    * Create a new LossFact instance
@@ -59,7 +54,7 @@ export class LossFact extends BaseEntity {
     this.systemId = props.systemId;
     this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.attackerCount = props.attackerCount;
-    this.labels = props.labels || [];
+    this.labels = props.labels ?? [];
 
     this.validate();
   }
@@ -69,12 +64,12 @@ export class LossFact extends BaseEntity {
    * @throws Error if data is invalid
    */
   private validate(): void {
-    validateRequired("killmailId", this.killmailId);
-    validateRequired("characterId", this.characterId);
-    validateRequired("killTime", this.killTime);
-    validatePositive("shipTypeId", this.shipTypeId);
-    validatePositive("systemId", this.systemId);
-    validateNonNegative("attackerCount", this.attackerCount);
+    validateRequired('killmailId', this.killmailId);
+    validateRequired('characterId', this.characterId);
+    validateRequired('killTime', this.killTime);
+    validatePositive('shipTypeId', this.shipTypeId);
+    validatePositive('systemId', this.systemId);
+    validateNonNegative('attackerCount', this.attackerCount);
   }
 
   /**
@@ -102,17 +97,17 @@ export class LossFact extends BaseEntity {
    * Get the loss type category based on ISK value
    * @returns 'cheap', 'moderate', 'expensive', or 'blingy'
    */
-  getLossCategory(): "cheap" | "moderate" | "expensive" | "blingy" {
+  getLossCategory(): 'cheap' | 'moderate' | 'expensive' | 'blingy' {
     const valueMillions = this.iskValueMillions;
 
     if (valueMillions < 10) {
-      return "cheap";
+      return 'cheap';
     } else if (valueMillions < 100) {
-      return "moderate";
+      return 'moderate';
     } else if (valueMillions < 1000) {
-      return "expensive";
+      return 'expensive';
     } else {
-      return "blingy";
+      return 'blingy';
     }
   }
 
@@ -128,7 +123,7 @@ export class LossFact extends BaseEntity {
       systemId: model.system_id,
       totalValue: model.total_value,
       attackerCount: model.attacker_count,
-      labels: model.labels || [],
+      labels: model.labels ?? [],
     });
   }
 }

@@ -19,17 +19,18 @@
  */
 
 // Expose a Node WebSocket implementation for phoenix‑websocket.
-import { WebSocket } from "ws";
+import { WebSocket } from 'ws';
 (global as any).WebSocket ??= WebSocket; // Required in a pure‑Node context ([npmjs.com](https://www.npmjs.com/package/phoenix-websocket))
 
-import { PhoenixWebsocket } from "phoenix-websocket";
+import { PhoenixWebsocket } from 'phoenix-websocket';
 
-import { logger } from "../../lib/logger";
-import { CharacterRepository } from "../../infrastructure/repositories/CharacterRepository";
-import { KillRepository } from "../../infrastructure/repositories/KillRepository";
-import { WebSocketKillmail, WebSocketKillmailUpdate } from "../../types/websocket";
-import { WebSocketDataMapper } from "./WebSocketDataMapper";
-import { PrismaClient } from "@prisma/client";
+/* eslint-disable max-lines */
+import { logger } from '../../lib/logger';
+import { CharacterRepository } from '../../infrastructure/repositories/CharacterRepository';
+import { KillRepository } from '../../infrastructure/repositories/KillRepository';
+import { WebSocketKillmail, WebSocketKillmailUpdate } from '../../types/websocket';
+import { WebSocketDataMapper } from './WebSocketDataMapper';
+import { PrismaClient } from '@prisma/client';
 
 interface WebSocketPreloadConfig {
   enabled: boolean;
@@ -51,7 +52,7 @@ export class WebSocketIngestionService {
   /** Phoenix‑WebSocket client instance */
   private socket: PhoenixWebsocket | null = null;
   /** Constant topic we work with */
-  private readonly TOPIC = "killmails:lobby";
+  private readonly TOPIC = 'killmails:lobby';
 
   private characterRepository: CharacterRepository;
   private killRepository: KillRepository;
@@ -83,18 +84,18 @@ export class WebSocketIngestionService {
 
   async start(): Promise<void> {
     if (this.isRunning) {
-      logger.warn("WebSocket ingestion service is already running");
+      logger.warn('WebSocket ingestion service is already running');
       return;
     }
 
     this.isRunning = true;
-    logger.info("Starting WebSocket ingestion service");
+    logger.info('Starting WebSocket ingestion service');
 
     try {
       await this.connect();
       await this.subscribeToTrackedCharacters();
     } catch (error) {
-      logger.error("Failed to start WebSocket ingestion service", {
+      logger.error('Failed to start WebSocket ingestion service', {
         error,
         url: this.config.url,
         message: error instanceof Error ? error.message : String(error),
@@ -108,14 +109,14 @@ export class WebSocketIngestionService {
   async stop(): Promise<void> {
     if (!this.isRunning) return;
 
-    logger.info("Stopping WebSocket ingestion service");
+    logger.info('Stopping WebSocket ingestion service');
     this.isRunning = false;
 
     if (this.socket) {
       try {
-        await this.socket.unsubscribeToTopic(this.TOPIC);
+        this.socket.unsubscribeToTopic(this.TOPIC);
       } catch (err) {
-        logger.debug("Topic unsubscribe threw (ignoring)", err);
+        logger.debug('Topic unsubscribe threw (ignoring)', err);
       }
       this.socket.disconnect();
       this.socket = null;
@@ -133,21 +134,17 @@ export class WebSocketIngestionService {
   private async connect(): Promise<void> {
     logger.info(`Connecting to Phoenix WebSocket at ${this.config.url}`);
 
-    this.socket = new PhoenixWebsocket(
-      this.config.url,
-      { client_identifier: "eve-chart-bot" },
-      this.config.timeout
-    );
+    this.socket = new PhoenixWebsocket(this.config.url, { client_identifier: 'eve-chart-bot' }, this.config.timeout);
 
     // Track connection status for metrics.
     this.socket.onConnectedCallback = () => {
       this.connected = true;
-      logger.info("WebSocket connected");
+      logger.info('WebSocket connected');
     };
 
     this.socket.onDisconnectedCallback = () => {
       this.connected = false;
-      logger.warn("WebSocket disconnected – library will retry automatically");
+      logger.warn('WebSocket disconnected – library will retry automatically');
     };
 
     // Establish the low‑level connection.
@@ -158,12 +155,12 @@ export class WebSocketIngestionService {
   }
 
   private async joinLobby(): Promise<void> {
-    if (!this.socket) throw new Error("Socket not initialised");
+    if (!this.socket) throw new Error('Socket not initialised');
 
     const preload = this.getPreloadConfig();
     const params = preload ? { preload } : undefined;
 
-    logger.info("Subscribing to lobby topic", { params });
+    logger.info('Subscribing to lobby topic', { params });
 
     await this.socket.subscribeToTopic(
       this.TOPIC,
@@ -176,51 +173,51 @@ export class WebSocketIngestionService {
             logger.info(`Received killmail update for system ${payload.system_id}`, {
               killmailCount: payload.killmails.length,
               preload: payload.preload,
-              timestamp: payload.timestamp
+              timestamp: payload.timestamp,
             });
-            
+
             // Log each individual killmail
             payload.killmails.forEach((killmail, index) => {
               logger.info(`Killmail ${index + 1}/${payload.killmails.length}:`, {
                 killmailId: killmail.killmail_id,
                 systemId: killmail.system_id,
                 killTime: killmail.kill_time,
-                victimName: killmail.victim?.character_name || 'Unknown',
-                victimShip: killmail.victim?.ship_name || 'Unknown',
-                attackerCount: killmail.attackers?.length || 0,
-                finalBlowBy: killmail.attackers?.find(a => a.final_blow)?.character_name || 'Unknown',
-                totalValue: killmail.zkb?.total_value ? `${(killmail.zkb.total_value / 1000000).toFixed(2)}M ISK` : 'Unknown'
+                victimName: killmail.victim?.character_name ?? 'Unknown',
+                victimShip: killmail.victim?.ship_name ?? 'Unknown',
+                attackerCount: killmail.attackers?.length ?? 0,
+                finalBlowBy: killmail.attackers?.find(a => a.final_blow)?.character_name ?? 'Unknown',
+                totalValue: killmail.zkb?.total_value
+                  ? `${(killmail.zkb.total_value / 1000000).toFixed(2)}M ISK`
+                  : 'Unknown',
               });
             });
-            
-            await this.processKillmails(payload.killmails, payload.preload || false);
+
+            await this.processKillmails(payload.killmails, payload.preload ?? false);
           } catch (err) {
-            logger.error("Failed to process killmail update", err);
+            logger.error('Failed to process killmail update', err);
           }
         },
         kill_count_update: (data?: { [key: string]: any }) => {
           if (!data) return;
-          logger.debug(
-            `Kill count update for system ${data.system_id}: ${data.count} kills`
-          );
+          logger.debug(`Kill count update for system ${data.system_id}: ${data.count} kills`);
         },
       },
       // Reconnect handler – ensure character/system subscriptions are replayed
       async (reconnectPromise: Promise<void>) => {
         try {
           await reconnectPromise;
-          logger.info("Re‑joined lobby after reconnect – refreshing subscriptions");
+          logger.info('Re‑joined lobby after reconnect – refreshing subscriptions');
           await this.subscribeToTrackedCharacters();
           if (this.subscribedSystems.size) {
             await this.subscribeToSystems(Array.from(this.subscribedSystems));
           }
         } catch (error) {
-          logger.error("Failed to re‑join lobby", error);
+          logger.error('Failed to re‑join lobby', error);
         }
       }
     );
 
-    logger.info("Joined lobby topic successfully");
+    logger.info('Joined lobby topic successfully');
   }
 
   /* ------------------------------------------------------------------
@@ -228,13 +225,13 @@ export class WebSocketIngestionService {
    * ---------------------------------------------------------------- */
 
   private async subscribeToTrackedCharacters(): Promise<void> {
-    if (!this.socket) throw new Error("Socket not initialized");
+    if (!this.socket) throw new Error('Socket not initialized');
 
     const characters = await this.characterRepository.getAllCharacters();
-    const characterIds = characters.map((c) => Number(c.eveId));
+    const characterIds = characters.map(c => Number(c.eveId));
 
     if (characterIds.length === 0) {
-      logger.warn("No tracked characters found");
+      logger.warn('No tracked characters found');
       return;
     }
 
@@ -244,40 +241,37 @@ export class WebSocketIngestionService {
 
     logger.info(`Subscribing to ${characterIds.length} characters...`, {
       sampleIds: characterIds.slice(0, 5),
-      preloadEnabled: !!preload
+      preloadEnabled: !!preload,
     });
-    
+
     try {
       const startTime = Date.now();
-      const response = await this.socket.sendMessage(this.TOPIC, "subscribe_characters", payload);
+      const response = await this.socket.sendMessage(this.TOPIC, 'subscribe_characters', payload);
       const duration = Date.now() - startTime;
-      
-      characterIds.forEach((id) => this.subscribedCharacters.add(id));
+
+      characterIds.forEach(id => this.subscribedCharacters.add(id));
       logger.info(
-        `Successfully subscribed to ${characterIds.length} characters in ${duration}ms${preload ? " with preload" : ""}`,
-        { 
+        `Successfully subscribed to ${characterIds.length} characters in ${duration}ms${preload ? ' with preload' : ''}`,
+        {
           response,
           characterIds: characterIds.slice(0, 10), // Log first 10 for debugging
           totalCount: characterIds.length,
-          duration
+          duration,
         }
       );
     } catch (error) {
-      logger.error("Failed to subscribe to characters", { 
+      logger.error('Failed to subscribe to characters', {
         error,
         characterCount: characterIds.length,
-        errorMessage: error instanceof Error ? error.message : String(error)
+        errorMessage: error instanceof Error ? error.message : String(error),
       });
       throw error;
     }
   }
 
-  async updateCharacterSubscriptions(
-    addCharacterIds: number[] = [],
-    removeCharacterIds: number[] = []
-  ): Promise<void> {
+  async updateCharacterSubscriptions(addCharacterIds: number[] = [], removeCharacterIds: number[] = []): Promise<void> {
     if (!this.socket) {
-      logger.warn("Socket not initialised – cannot update subscriptions");
+      logger.warn('Socket not initialised – cannot update subscriptions');
       return;
     }
 
@@ -288,31 +282,31 @@ export class WebSocketIngestionService {
       const payload: any = { character_ids: addCharacterIds };
       if (preload) payload.preload = preload;
       await this.socket
-        .sendMessage(this.TOPIC, "subscribe_characters", payload)
+        .sendMessage(this.TOPIC, 'subscribe_characters', payload)
         .then(() => {
-          addCharacterIds.forEach((id) => this.subscribedCharacters.add(id));
+          addCharacterIds.forEach(id => this.subscribedCharacters.add(id));
           logger.info(
-            `Successfully added subscription for ${addCharacterIds.length} characters${preload ? " with preload" : ""}`,
+            `Successfully added subscription for ${addCharacterIds.length} characters${preload ? ' with preload' : ''}`,
             { totalSubscribed: this.subscribedCharacters.size }
           );
         })
         .catch((error: any) => {
-          logger.error("Failed to add character subscriptions", error);
+          logger.error('Failed to add character subscriptions', error);
           throw error;
         });
     }
 
     if (removeCharacterIds.length) {
       await this.socket
-        .sendMessage(this.TOPIC, "unsubscribe_characters", {
+        .sendMessage(this.TOPIC, 'unsubscribe_characters', {
           character_ids: removeCharacterIds,
         })
         .then(() => {
-          removeCharacterIds.forEach((id) => this.subscribedCharacters.delete(id));
+          removeCharacterIds.forEach(id => this.subscribedCharacters.delete(id));
           logger.info(`Removed subscription for ${removeCharacterIds.length} characters`);
         })
         .catch((error: any) => {
-          logger.error("Failed to remove character subscriptions", error);
+          logger.error('Failed to remove character subscriptions', error);
           throw error;
         });
     }
@@ -326,19 +320,16 @@ export class WebSocketIngestionService {
     if (preload) payload.preload = preload;
 
     logger.info(`Subscribing to ${systemIds.length} systems...`);
-    
+
     try {
-      await this.socket.sendMessage(this.TOPIC, "subscribe_systems", payload);
-      systemIds.forEach((id) => this.subscribedSystems.add(id));
-      logger.info(
-        `Successfully subscribed to ${systemIds.length} systems${preload ? " with preload" : ""}`,
-        {
-          systemIds: systemIds.slice(0, 10), // Log first 10 for debugging
-          totalCount: systemIds.length
-        }
-      );
+      await this.socket.sendMessage(this.TOPIC, 'subscribe_systems', payload);
+      systemIds.forEach(id => this.subscribedSystems.add(id));
+      logger.info(`Successfully subscribed to ${systemIds.length} systems${preload ? ' with preload' : ''}`, {
+        systemIds: systemIds.slice(0, 10), // Log first 10 for debugging
+        totalCount: systemIds.length,
+      });
     } catch (error) {
-      logger.error("Failed to subscribe to systems", error);
+      logger.error('Failed to subscribe to systems', error);
       throw error;
     }
   }
@@ -347,21 +338,13 @@ export class WebSocketIngestionService {
    * Killmail processing
    * ---------------------------------------------------------------- */
 
-  private async processKillmails(
-    killmails: WebSocketKillmail[],
-    isPreload: boolean
-  ): Promise<void> {
+  private async processKillmails(killmails: WebSocketKillmail[], isPreload: boolean): Promise<void> {
     for (const killmail of killmails) {
       try {
         const involvedCharacters = this.getInvolvedCharacters(killmail);
-        const trackedCharacters = involvedCharacters.filter((id) =>
-          this.subscribedCharacters.has(id)
-        );
+        const trackedCharacters = involvedCharacters.filter(id => this.subscribedCharacters.has(id));
 
-        if (
-          trackedCharacters.length === 0 &&
-          !this.subscribedSystems.has(killmail.system_id)
-        ) {
+        if (trackedCharacters.length === 0 && !this.subscribedSystems.has(killmail.system_id)) {
           continue; // Skip if not relevant
         }
 

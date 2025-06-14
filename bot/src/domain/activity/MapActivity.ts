@@ -55,31 +55,31 @@ export class MapActivity {
    */
   private validate(): void {
     if (!this.characterId) {
-      throw new Error("Map activity must have a character ID");
+      throw new Error('Map activity must have a character ID');
     }
 
     if (!this.timestamp) {
-      throw new Error("Map activity must have a timestamp");
+      throw new Error('Map activity must have a timestamp');
     }
 
     if (this.signatures < 0) {
-      throw new Error("Signatures count cannot be negative");
+      throw new Error('Signatures count cannot be negative');
     }
 
     if (this.connections < 0) {
-      throw new Error("Connections count cannot be negative");
+      throw new Error('Connections count cannot be negative');
     }
 
     if (this.passages < 0) {
-      throw new Error("Passages count cannot be negative");
+      throw new Error('Passages count cannot be negative');
     }
 
     if (this.corporationId <= 0) {
-      throw new Error("Map activity must have a valid corporation ID");
+      throw new Error('Map activity must have a valid corporation ID');
     }
 
     if (this.allianceId !== null && this.allianceId <= 0) {
-      throw new Error("If alliance ID is provided, it must be valid");
+      throw new Error('If alliance ID is provided, it must be valid');
     }
   }
 
@@ -109,17 +109,15 @@ export class MapActivity {
    * @param format Optional format (day|hour|raw)
    * @returns Formatted date string
    */
-  getTimeKey(format: "day" | "hour" | "raw" = "day"): string {
+  getTimeKey(format: 'day' | 'hour' | 'raw' = 'day'): string {
     const date = this.timestamp;
 
     switch (format) {
-      case "hour":
-        return `${date.getFullYear()}-${
-          date.getMonth() + 1
-        }-${date.getDate()}-${date.getHours()}`;
-      case "day":
+      case 'hour':
+        return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}-${date.getHours()}`;
+      case 'day':
         return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-      case "raw":
+      case 'raw':
       default:
         return this.timestamp.toISOString();
     }

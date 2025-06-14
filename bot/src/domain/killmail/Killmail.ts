@@ -1,4 +1,4 @@
-import { Exclude, Expose, Transform } from "class-transformer";
+import { Exclude, Expose, Transform } from 'class-transformer';
 
 /**
  * Killmail victim domain entity
@@ -148,7 +148,7 @@ export class Killmail {
    */
   toJSON(): Record<string, any> {
     return {
-      killmailId: this.killmailId?.toString() ?? "",
+      killmailId: this.killmailId?.toString() ?? '',
       killTime: this.killTime?.toISOString() ?? new Date().toISOString(),
       npc: this.npc,
       solo: this.solo,
@@ -156,9 +156,9 @@ export class Killmail {
       shipTypeId: this.shipTypeId,
       systemId: this.systemId,
       labels: this.labels,
-      totalValue: this.totalValue?.toString() ?? "0",
+      totalValue: this.totalValue?.toString() ?? '0',
       points: this.points,
-      attackers: this.attackers?.map((a) => a.toJSON()),
+      attackers: this.attackers?.map(a => a.toJSON()),
       victim: this.victim?.toJSON(),
     };
   }

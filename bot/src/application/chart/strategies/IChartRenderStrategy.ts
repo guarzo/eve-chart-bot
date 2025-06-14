@@ -1,4 +1,4 @@
-import { ChartData, ChartOptions } from "../ChartService";
+import { ChartData, ChartOptions } from '../ChartService';
 
 /**
  * Interface for chart rendering strategies
@@ -10,10 +10,7 @@ export interface IChartRenderStrategy {
    * @param options Rendering options
    * @returns Buffer containing the PNG image or null if rendering fails
    */
-  renderPNG(
-    chartData: ChartData,
-    options?: Partial<ChartOptions>
-  ): Promise<Buffer | null>;
+  renderPNG(chartData: ChartData, options?: Partial<ChartOptions>): Promise<Buffer | null>;
 
   /**
    * Render chart data as HTML
@@ -21,5 +18,5 @@ export interface IChartRenderStrategy {
    * @param options Rendering options
    * @returns HTML string representation of the chart
    */
-  renderHTML(chartData: ChartData, options?: Partial<ChartOptions>): string;
+  renderHTML(chartData: ChartData, options?: Partial<ChartOptions>): Promise<string>;
 }

@@ -1,23 +1,19 @@
-import { MapActivity } from "../../domain/activity/MapActivity";
-import { BaseRepository } from "./BaseRepository";
-import { logger } from "../../lib/logger";
+import { MapActivity } from '../../domain/activity/MapActivity';
+import { BaseRepository } from './BaseRepository';
+import { logger } from '../../lib/logger';
 
 /**
  * Repository for map activity data access
  */
 export class MapActivityRepository extends BaseRepository {
   constructor() {
-    super("MapActivity");
+    super('MapActivity');
   }
 
   /**
    * Get map activity for a character within a date range
    */
-  async getActivityForCharacter(
-    characterId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<MapActivity[]> {
+  async getActivityForCharacter(characterId: string, startDate: Date, endDate: Date): Promise<MapActivity[]> {
     return this.executeQuery(async () => {
       const activities = await this.prisma.mapActivity.findMany({
         where: {
@@ -28,7 +24,7 @@ export class MapActivityRepository extends BaseRepository {
           },
         },
         orderBy: {
-          timestamp: "desc",
+          timestamp: 'desc',
         },
       });
 
@@ -50,16 +46,12 @@ export class MapActivityRepository extends BaseRepository {
   /**
    * Get map activity for multiple characters within a date range
    */
-  async getActivityForCharacters(
-    characterIds: string[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<MapActivity[]> {
+  async getActivityForCharacters(characterIds: string[], startDate: Date, endDate: Date): Promise<MapActivity[]> {
     return this.executeQuery(async () => {
       // Filter out invalid character IDs and convert valid ones to BigInt
       const validCharacterIds = characterIds
-        .filter((id) => id && id !== "" && id !== "undefined" && id !== "null")
-        .map((id) => {
+        .filter(id => id && id !== '' && id !== 'undefined' && id !== 'null')
+        .map(id => {
           try {
             return BigInt(id);
           } catch (error) {
@@ -70,15 +62,11 @@ export class MapActivityRepository extends BaseRepository {
         .filter((id): id is bigint => id !== null);
 
       if (validCharacterIds.length === 0) {
-        logger.warn(
-          "No valid character IDs provided to getActivityForCharacters"
-        );
+        logger.warn('No valid character IDs provided to getActivityForCharacters');
         return [];
       }
 
-      logger.debug(
-        `Querying map activity for ${validCharacterIds.length} valid character IDs`
-      );
+      logger.debug(`Querying map activity for ${validCharacterIds.length} valid character IDs`);
 
       const activities = await this.prisma.mapActivity.findMany({
         where: {
@@ -91,7 +79,7 @@ export class MapActivityRepository extends BaseRepository {
           },
         },
         orderBy: {
-          timestamp: "desc",
+          timestamp: 'desc',
         },
       });
 
@@ -111,10 +99,7 @@ export class MapActivityRepository extends BaseRepository {
           });
         });
       } catch (error) {
-        logger.error(
-          `Error mapping activities to MapActivity domain objects:`,
-          error
-        );
+        logger.error(`Error mapping activities to MapActivity domain objects:`, error);
         logger.error(`Sample raw activity data:`, activities.slice(0, 1));
         throw error;
       }
@@ -124,11 +109,7 @@ export class MapActivityRepository extends BaseRepository {
   /**
    * Get map activity for a character group within a date range
    */
-  async getActivityForGroup(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<MapActivity[]> {
+  async getActivityForGroup(groupId: string, startDate: Date, endDate: Date): Promise<MapActivity[]> {
     return this.executeQuery(async () => {
       // First, get all characters in the group
       const group = await this.prisma.characterGroup.findUnique({
@@ -141,7 +122,7 @@ export class MapActivityRepository extends BaseRepository {
       }
 
       // Get character IDs and convert to strings
-      const characterIds = group.characters.map((c) => c.eveId.toString());
+      const characterIds = group.characters.map(c => c.eveId.toString());
 
       // Get activity for all characters
       return this.getActivityForCharacters(characterIds, startDate, endDate);
@@ -161,11 +142,7 @@ export class MapActivityRepository extends BaseRepository {
     averageSignaturesPerSystem: number;
   }> {
     return this.executeQuery(async () => {
-      const activities = await this.getActivityForCharacter(
-        characterId,
-        startDate,
-        endDate
-      );
+      const activities = await this.getActivityForCharacter(characterId, startDate, endDate);
 
       if (activities.length === 0) {
         return {
@@ -179,14 +156,10 @@ export class MapActivityRepository extends BaseRepository {
       const uniqueSystems = activities.length;
 
       // Sum total signatures
-      const totalSignatures = activities.reduce(
-        (sum, a) => sum + a.signatures,
-        0
-      );
+      const totalSignatures = activities.reduce((sum, a) => sum + a.signatures, 0);
 
       // Calculate average
-      const averageSignaturesPerSystem =
-        uniqueSystems > 0 ? totalSignatures / uniqueSystems : 0;
+      const averageSignaturesPerSystem = uniqueSystems > 0 ? totalSignatures / uniqueSystems : 0;
 
       return {
         totalSystems: uniqueSystems,
@@ -229,12 +202,8 @@ export class MapActivityRepository extends BaseRepository {
       }
 
       // Get character IDs
-      const characterIds = group.characters.map((c) => c.eveId);
-      logger.info(
-        `Group ${groupId} has ${
-          characterIds.length
-        } characters: ${characterIds.join(", ")}`
-      );
+      const characterIds = group.characters.map(c => c.eveId);
+      logger.info(`Group ${groupId} has ${characterIds.length} characters: ${characterIds.join(', ')}`);
 
       if (characterIds.length === 0) {
         logger.warn(`Group ${groupId} has no characters`);
@@ -245,11 +214,7 @@ export class MapActivityRepository extends BaseRepository {
         };
       }
 
-      const activities = await this.getActivityForGroup(
-        groupId,
-        startDate,
-        endDate
-      );
+      const activities = await this.getActivityForGroup(groupId, startDate, endDate);
 
       if (activities.length === 0) {
         logger.warn(`No map activities found for group ${groupId}`);
@@ -260,22 +225,16 @@ export class MapActivityRepository extends BaseRepository {
         };
       }
 
-      logger.info(
-        `Found ${activities.length} map activities for group ${groupId}`
-      );
+      logger.info(`Found ${activities.length} map activities for group ${groupId}`);
 
       // Count unique activities as a proxy for systems since systemId doesn't exist
       const uniqueSystems = activities.length;
 
       // Sum total signatures
-      const totalSignatures = activities.reduce(
-        (sum, a) => sum + a.signatures,
-        0
-      );
+      const totalSignatures = activities.reduce((sum, a) => sum + a.signatures, 0);
 
       // Calculate average
-      const averageSignaturesPerSystem =
-        uniqueSystems > 0 ? totalSignatures / uniqueSystems : 0;
+      const averageSignaturesPerSystem = uniqueSystems > 0 ? totalSignatures / uniqueSystems : 0;
 
       return {
         totalSystems: uniqueSystems,
@@ -292,15 +251,11 @@ export class MapActivityRepository extends BaseRepository {
     characterIds: string[],
     startDate: Date,
     endDate: Date,
-    groupBy: "hour" | "day" | "week" = "day"
+    groupBy: 'hour' | 'day' | 'week' = 'day'
   ): Promise<Array<{ timestamp: Date; signatures: number; systems: number }>> {
     return this.executeQuery(async () => {
       // Get all activity for the characters
-      const activities = await this.getActivityForCharacters(
-        characterIds,
-        startDate,
-        endDate
-      );
+      const activities = await this.getActivityForCharacters(characterIds, startDate, endDate);
 
       // Group by time period
       const timeMap = new Map<
@@ -315,13 +270,14 @@ export class MapActivityRepository extends BaseRepository {
       // Format string for grouping
       const getTimeKey = (date: Date): string => {
         switch (groupBy) {
-          case "hour":
+          case 'hour':
             return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}-${date.getHours()}`;
-          case "week":
+          case 'week': {
             const d = new Date(date);
             d.setDate(d.getDate() - d.getDay()); // Start of week (Sunday)
             return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-          case "day":
+          }
+          case 'day':
           default:
             return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
         }
@@ -339,17 +295,16 @@ export class MapActivityRepository extends BaseRepository {
           });
         }
 
-        const group = timeMap.get(timeKey)!;
+        const group = timeMap.get(timeKey);
+        if (!group) continue;
         group.signatures += activity.signatures;
         // Use a composite key since systemId doesn't exist
-        group.systems.add(
-          `${activity.characterId}-${activity.timestamp.toISOString()}`
-        );
+        group.systems.add(`${activity.characterId}-${activity.timestamp.toISOString()}`);
       }
 
       // Convert to array and sort by timestamp
       return Array.from(timeMap.entries())
-        .map(([_, group]) => ({
+        .map(([, group]) => ({
           timestamp: group.timestamp,
           signatures: group.signatures,
           systems: group.systems.size,
@@ -408,7 +363,7 @@ export class MapActivityRepository extends BaseRepository {
   /**
    * Count total map activity records
    */
-  async count(): Promise<number> {
+  override async count(): Promise<number> {
     return this.executeQuery(async () => {
       return this.prisma.mapActivity.count();
     });

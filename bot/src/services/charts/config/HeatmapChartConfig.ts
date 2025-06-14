@@ -1,11 +1,11 @@
-import { ChartOptions } from "../../../types/chart";
+import { ChartOptions } from '../../../types/chart';
 
 /**
  * Configuration for Heatmap charts
  */
 export const HeatmapChartConfig = {
-  title: "Kill Activity Heatmap",
-  description: "Shows heatmap of kill activity by hour and day of week",
+  title: 'Kill Activity Heatmap',
+  description: 'Shows heatmap of kill activity by hour and day of week',
 
   // Options for the basic heatmap view
   heatmapOptions: {
@@ -15,16 +15,16 @@ export const HeatmapChartConfig = {
     plugins: {
       title: {
         display: true,
-        text: "Kill Activity by Time of Day",
+        text: 'Kill Activity by Time of Day',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: true,
-        position: "right",
-        align: "center",
+        position: 'right',
+        align: 'center',
         labels: {
           boxWidth: 20,
           font: {
@@ -50,29 +50,29 @@ export const HeatmapChartConfig = {
       x: {
         title: {
           display: true,
-          text: "Day of Week",
+          text: 'Day of Week',
           font: {
             size: 16,
-            weight: "bold",
+            weight: 'bold',
           },
         },
         grid: {
           display: true,
-          color: "rgba(0, 0, 0, 0.1)",
+          color: 'rgba(0, 0, 0, 0.1)',
         },
       },
       y: {
         title: {
           display: true,
-          text: "Hour of Day",
+          text: 'Hour of Day',
           font: {
             size: 16,
-            weight: "bold",
+            weight: 'bold',
           },
         },
         grid: {
           display: true,
-          color: "rgba(0, 0, 0, 0.1)",
+          color: 'rgba(0, 0, 0, 0.1)',
         },
       },
     },
@@ -86,16 +86,16 @@ export const HeatmapChartConfig = {
     plugins: {
       title: {
         display: true,
-        text: "Calendar View of Kill Activity",
+        text: 'Calendar View of Kill Activity',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: true,
-        position: "right",
-        align: "center",
+        position: 'right',
+        align: 'center',
         labels: {
           boxWidth: 20,
           font: {
@@ -117,42 +117,26 @@ export const HeatmapChartConfig = {
   } as ChartOptions,
 
   // Days of the week for labels
-  daysOfWeek: [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-  ],
+  daysOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
 
   // Short days of the week for labels
-  shortDaysOfWeek: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+  shortDaysOfWeek: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
 
   // Hour labels (24-hour format)
-  hours: Array.from({ length: 24 }, (_, i) =>
-    i < 10 ? `0${i}:00` : `${i}:00`
-  ),
+  hours: Array.from({ length: 24 }, (_, i) => (i < 10 ? `0${i}:00` : `${i}:00`)),
 
   // Color gradient for heatmap (from low to high activity)
   colorGradient: [
-    "#EBEDF0", // very low
-    "#9BE9A8", // low
-    "#40C463", // medium
-    "#30A14E", // high
-    "#216E39", // very high
+    '#EBEDF0', // very low
+    '#9BE9A8', // low
+    '#40C463', // medium
+    '#30A14E', // high
+    '#216E39', // very high
   ],
 
   // Get default summary based on heatmap data
-  getDefaultSummary: (
-    totalKills: number,
-    peakDay: string,
-    peakHour: string,
-    peakKills: number
-  ): string => {
-    const peakPercent =
-      totalKills > 0 ? ((peakKills / totalKills) * 100).toFixed(1) : "0";
+  getDefaultSummary: (totalKills: number, peakDay: string, peakHour: string, peakKills: number): string => {
+    const peakPercent = totalKills > 0 ? ((peakKills / totalKills) * 100).toFixed(1) : '0';
     return `${totalKills.toLocaleString()} total kills. Peak activity: ${peakDay} at ${peakHour} (${peakKills} kills, ${peakPercent}% of total)`;
   },
 };

@@ -1,4 +1,4 @@
-import { logger } from "../logger";
+import { logger } from '../logger';
 
 /**
  * Circuit breaker implementation for handling failure detection and recovery
@@ -27,11 +27,8 @@ export class CircuitBreaker {
     }
 
     // Check if we should try to close the circuit
-    if (
-      this.lastFailureTime &&
-      Date.now() - this.lastFailureTime > this.timeout
-    ) {
-      logger.info("Circuit breaker timeout reached, attempting to close");
+    if (this.lastFailureTime && Date.now() - this.lastFailureTime > this.timeout) {
+      logger.info('Circuit breaker timeout reached, attempting to close');
       this._isOpen = false;
       this.failures = 0;
       return false;
@@ -57,9 +54,7 @@ export class CircuitBreaker {
     this.lastFailureTime = Date.now();
 
     if (this.failures >= this.threshold) {
-      logger.warn(
-        `Circuit breaker opened after ${this.failures} failures (threshold: ${this.threshold})`
-      );
+      logger.warn(`Circuit breaker opened after ${this.failures} failures (threshold: ${this.threshold})`);
       this._isOpen = true;
     }
   }

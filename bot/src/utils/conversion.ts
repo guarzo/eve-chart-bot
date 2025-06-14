@@ -5,25 +5,21 @@
 /**
  * Ensures a value is converted to BigInt, handling string, number, and bigint inputs
  */
-export function ensureBigInt(
-  value?: string | number | bigint | null
-): bigint | null {
-  if (value == null) return null;
-  if (typeof value === "bigint") return value;
-  if (typeof value === "number") return BigInt(value);
-  if (typeof value === "string") return BigInt(value);
+export function ensureBigInt(value?: string | number | bigint | null): bigint | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'bigint') return value;
+  if (typeof value === 'number') return BigInt(value);
+  if (typeof value === 'string') return BigInt(value);
   throw new Error(`Cannot convert ${typeof value} to BigInt`);
 }
 
 /**
  * Ensures a value is converted to BigInt, with a required non-null result
  */
-export function ensureRequiredBigInt(
-  value?: string | number | bigint | null
-): bigint {
+export function ensureRequiredBigInt(value?: string | number | bigint | null): bigint {
   const result = ensureBigInt(value);
-  if (result == null) {
-    throw new Error("Value cannot be null when BigInt is required");
+  if (result === null) {
+    throw new Error('Value cannot be null when BigInt is required');
   }
   return result;
 }

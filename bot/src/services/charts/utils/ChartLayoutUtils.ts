@@ -1,4 +1,4 @@
-import { ChartData, ChartDisplayType } from "../../../types/chart";
+import { ChartData, ChartDisplayType } from '../../../types/chart';
 
 /**
  * Utilities for creating chart layouts
@@ -19,13 +19,13 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: "horizontalBar" as ChartDisplayType,
+      displayType: 'horizontalBar' as ChartDisplayType,
       options: {
-        indexAxis: "y",
+        indexAxis: 'y',
         scales: { x: { beginAtZero: true }, y: { stacked: true } },
         plugins: {
           title: { display: true, text: title },
-          legend: { position: "top" },
+          legend: { position: 'top' },
         },
       },
     };
@@ -46,12 +46,12 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: "bar" as ChartDisplayType,
+      displayType: 'bar' as ChartDisplayType,
       options: {
         scales: { y: { beginAtZero: true } },
         plugins: {
           title: { display: true, text: title },
-          legend: { position: "top" },
+          legend: { position: 'top' },
         },
       },
     };
@@ -77,12 +77,12 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: "line" as ChartDisplayType,
+      displayType: 'line' as ChartDisplayType,
       options: {
         scales: { y: { beginAtZero: true } },
         plugins: {
           title: { display: true, text: title },
-          legend: { position: "top" },
+          legend: { position: 'top' },
         },
       },
     };
@@ -96,12 +96,7 @@ export class ChartLayoutUtils {
    * @param title The chart title
    * @returns A configured chart data object
    */
-  static createPieLayout(
-    labels: string[],
-    data: number[],
-    backgroundColor: string[],
-    title: string
-  ): ChartData {
+  static createPieLayout(labels: string[], data: number[], backgroundColor: string[], title: string): ChartData {
     return {
       labels,
       datasets: [
@@ -111,11 +106,11 @@ export class ChartLayoutUtils {
           backgroundColor,
         },
       ],
-      displayType: "pie" as ChartDisplayType,
+      displayType: 'pie' as ChartDisplayType,
       options: {
         plugins: {
           title: { display: true, text: title },
-          legend: { position: "top" },
+          legend: { position: 'top' },
         },
       },
     };

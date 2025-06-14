@@ -1,21 +1,17 @@
-import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
-import { KillRepository } from "../infrastructure/repositories/KillRepository";
-import { MapActivityRepository } from "../infrastructure/repositories/MapActivityRepository";
-import { RepositoryManager } from "../infrastructure/repositories/RepositoryManager";
-import { logger } from "../lib/logger";
-import { Character } from "../domain/character/Character";
-import { CharacterGroup } from "../domain/character/CharacterGroup";
-import { Killmail } from "../domain/killmail/Killmail";
-import { MapActivity } from "../domain/activity/MapActivity";
-import {
-  ChartConfigInput,
-  ChartData,
-  ChartDisplayType,
-  ChartMetric,
-} from "../types/chart";
-import { format } from "date-fns";
-import { BaseRepository } from "../infrastructure/repositories/BaseRepository";
-import { PrismaClient } from "@prisma/client";
+/* eslint-disable max-lines */
+import { CharacterRepository } from '../infrastructure/repositories/CharacterRepository';
+import { KillRepository } from '../infrastructure/repositories/KillRepository';
+import { MapActivityRepository } from '../infrastructure/repositories/MapActivityRepository';
+import { RepositoryManager } from '../infrastructure/repositories/RepositoryManager';
+import { logger } from '../lib/logger';
+import { Character } from '../domain/character/Character';
+import { CharacterGroup } from '../domain/character/CharacterGroup';
+import { Killmail } from '../domain/killmail/Killmail';
+import { MapActivity } from '../domain/activity/MapActivity';
+import { ChartConfigInput, ChartData, ChartDisplayType, ChartMetric } from '../types/chart';
+import { format } from 'date-fns';
+import { BaseRepository } from '../infrastructure/repositories/BaseRepository';
+import { PrismaClient } from '@prisma/client';
 
 interface KillData {
   killTime: Date;
@@ -36,27 +32,27 @@ export class ChartService extends BaseRepository {
   private readonly killRepository: KillRepository;
   private readonly mapActivityRepository: MapActivityRepository;
   private colors: string[] = [
-    "#3366CC", // deep blue
-    "#DC3912", // red
-    "#FF9900", // orange
-    "#109618", // green
-    "#990099", // purple
-    "#0099C6", // teal
-    "#DD4477", // pink
-    "#66AA00", // lime
-    "#B82E2E", // dark red
-    "#316395", // navy
-    "#994499", // violet
-    "#22AA99", // seafoam
-    "#AAAA11", // olive
-    "#6633CC", // indigo
-    "#E67300", // amber
-    "#8B0707", // maroon
+    '#3366CC', // deep blue
+    '#DC3912', // red
+    '#FF9900', // orange
+    '#109618', // green
+    '#990099', // purple
+    '#0099C6', // teal
+    '#DD4477', // pink
+    '#66AA00', // lime
+    '#B82E2E', // dark red
+    '#316395', // navy
+    '#994499', // violet
+    '#22AA99', // seafoam
+    '#AAAA11', // olive
+    '#6633CC', // indigo
+    '#E67300', // amber
+    '#8B0707', // maroon
   ];
-  protected prisma: PrismaClient;
+  protected override prisma: PrismaClient;
 
   constructor() {
-    super("Chart");
+    super('Chart');
     const repositoryManager = new RepositoryManager();
     this.characterRepository = repositoryManager.getCharacterRepository();
     this.killRepository = repositoryManager.getKillRepository();
@@ -69,25 +65,25 @@ export class ChartService extends BaseRepository {
       type,
       characterIds,
       period,
-      groupBy = "hour",
-      displayType = "line",
-      displayMetric = "value", // Default to value, but can be "kills", "value", "points", "attackers"
+      groupBy = 'hour',
+      displayType = 'line',
+      displayMetric = 'value', // Default to value, but can be "kills", "value", "points", "attackers"
       limit = 10, // Limit number of characters to display
     } = config;
 
     // Calculate start date based on period
     const startDate = new Date();
     switch (period) {
-      case "24h":
+      case '24h':
         startDate.setHours(startDate.getHours() - 24);
         break;
-      case "7d":
+      case '7d':
         startDate.setDate(startDate.getDate() - 7);
         break;
-      case "30d":
+      case '30d':
         startDate.setDate(startDate.getDate() - 30);
         break;
-      case "90d":
+      case '90d':
         startDate.setDate(startDate.getDate() - 90);
         break;
       default:
@@ -96,44 +92,26 @@ export class ChartService extends BaseRepository {
 
     // Generate chart title
     const metricLabel =
-      displayMetric === "value"
-        ? "ISK Value"
-        : displayMetric === "kills"
-        ? "Kill Count"
-        : displayMetric === "points"
-        ? "Points"
-        : "Attacker Count";
+      displayMetric === 'value'
+        ? 'ISK Value'
+        : displayMetric === 'kills'
+          ? 'Kill Count'
+          : displayMetric === 'points'
+            ? 'Points'
+            : 'Attacker Count';
 
-    const chartTitle = `${
-      type === "kills" ? "Kills" : "Map Activity"
-    } - ${metricLabel} - Last ${
-      period === "24h"
-        ? "24 Hours"
-        : period === "7d"
-        ? "7 Days"
-        : period === "30d"
-        ? "30 Days"
-        : "90 Days"
+    const chartTitle = `${type === 'kills' ? 'Kills' : 'Map Activity'} - ${metricLabel} - Last ${
+      period === '24h' ? '24 Hours' : period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
     }`;
 
     // Generate chart based on type
     let chartData;
     switch (type) {
-      case "kills":
-        chartData = await this.generateKillsChart(
-          characterIds,
-          startDate,
-          groupBy,
-          displayMetric,
-          limit
-        );
+      case 'kills':
+        chartData = await this.generateKillsChart(characterIds, startDate, groupBy, displayMetric, limit);
         break;
-      case "map_activity":
-        chartData = await this.generateMapActivityChart(
-          characterIds,
-          startDate,
-          groupBy
-        );
+      case 'map_activity':
+        chartData = await this.generateMapActivityChart(characterIds, startDate, groupBy);
         break;
       default:
         throw new Error(`Invalid chart type: ${type}`);
@@ -149,19 +127,15 @@ export class ChartService extends BaseRepository {
   private async generateKillsChart(
     characterIds: bigint[],
     startDate: Date,
-    groupBy: "hour" | "day" | "week",
-    displayMetric: ChartMetric = "value",
+    groupBy: 'hour' | 'day' | 'week',
+    displayMetric: ChartMetric = 'value',
     limit: number = 10
   ): Promise<ChartData> {
     // Convert character IDs to strings for query
-    const characterIdStrings = characterIds.map((id) => id.toString());
+    const characterIdStrings = characterIds.map(id => id.toString());
 
-    logger.info(
-      `Generating kills chart for ${
-        characterIds.length
-      } characters from ${startDate.toISOString()}`
-    );
-    logger.info(`Character IDs: ${characterIdStrings.join(", ")}`);
+    logger.info(`Generating kills chart for ${characterIds.length} characters from ${startDate.toISOString()}`);
+    logger.info(`Character IDs: ${characterIdStrings.join(', ')}`);
 
     try {
       // Find all related characters via character groups
@@ -175,15 +149,11 @@ export class ChartService extends BaseRepository {
         })
       );
       const allCharacters = allCharactersNested.flat();
-      const allCharacterIdStrings = allCharacters.map(
-        (c: Character) => c.eveId
-      );
-      logger.info(
-        `Including all characters in same groups: ${allCharacters.length} characters total`
-      );
+      const allCharacterIdStrings = allCharacters.map((c: Character) => c.eveId);
+      logger.info(`Including all characters in same groups: ${allCharacters.length} characters total`);
 
       // Get kills for each character using the updated schema
-      logger.info("Querying killFact table with expanded character list...");
+      logger.info('Querying killFact table with expanded character list...');
       const killsQuery = await this.killRepository.getKillsForCharacters(
         allCharacterIdStrings.map(id => BigInt(id)),
         startDate,
@@ -193,20 +163,16 @@ export class ChartService extends BaseRepository {
       logger.info(`Found ${killsQuery.length} kill records in database`);
 
       if (killsQuery.length === 0) {
-        logger.warn(
-          "No kills found for the specified characters and time period"
-        );
+        logger.warn('No kills found for the specified characters and time period');
         // Return empty chart data but with datasets for the requested characters
         const emptyDatasets = await Promise.all(
           characterIds.slice(0, limit).map(async (characterId, index) => {
             // Try to get character name
             try {
-              const character = await this.characterRepository.getCharacter(
-                characterId
-              );
+              const character = await this.characterRepository.getCharacter(characterId);
 
               return {
-                label: character?.name || `Character ${characterId}`,
+                label: character?.name ?? `Character ${characterId}`,
                 data: [],
                 borderColor: this.getColorForIndex(index),
                 fill: false,
@@ -226,8 +192,7 @@ export class ChartService extends BaseRepository {
         const labels = [];
         const today = new Date();
         // Determine appropriate number of days based on the groupBy parameter
-        const daysToGenerate =
-          groupBy === "hour" ? 1 : groupBy === "day" ? 7 : 4; // 1 day for hourly, 7 for daily, 4 weeks for weekly
+        const daysToGenerate = groupBy === 'hour' ? 1 : groupBy === 'day' ? 7 : 4; // 1 day for hourly, 7 for daily, 4 weeks for weekly
         for (let i = daysToGenerate - 1; i >= 0; i--) {
           const date = new Date(today);
           date.setDate(date.getDate() - i);
@@ -237,52 +202,43 @@ export class ChartService extends BaseRepository {
         return {
           labels,
           datasets: emptyDatasets,
-          title: "",
-          displayType: "line" as ChartDisplayType,
+          title: '',
+          displayType: 'line' as ChartDisplayType,
         };
       }
 
       const kills = killsQuery.map((kill: any) => {
-        logger.debug(
-          `Processing kill: ID ${kill.killmail_id}, time ${kill.kill_time}, character ${kill.character_id}`
-        );
+        logger.debug(`Processing kill: ID ${kill.killmail_id}, time ${kill.kill_time}, character ${kill.character_id}`);
         return {
           killTime: kill.kill_time,
           totalValue: kill.total_value,
-          points: kill.points || 0,
-          attackerCount: kill.attacker_count || 1,
+          points: kill.points ?? 0,
+          attackerCount: kill.attacker_count ?? 1,
           characters: [{ characterId: BigInt(kill.character_id) }],
         };
       }) as KillData[];
 
       // Group kills by time period
       logger.info(`Grouping ${kills.length} kills by ${groupBy}`);
-      const groupedData = this.groupDataByTime(
-        kills,
-        groupBy,
-        (kill: KillData) => ({
-          timestamp: kill.killTime,
-          value:
-            displayMetric === "value"
-              ? Number(kill.totalValue)
-              : displayMetric === "kills"
+      const groupedData = this.groupDataByTime(kills, groupBy, (kill: KillData) => ({
+        timestamp: kill.killTime,
+        value:
+          displayMetric === 'value'
+            ? Number(kill.totalValue)
+            : displayMetric === 'kills'
               ? 1
-              : displayMetric === "points"
-              ? kill.points
-              : kill.attackerCount,
-        })
-      );
+              : displayMetric === 'points'
+                ? kill.points
+                : kill.attackerCount,
+      }));
 
       logger.info(`Created ${groupedData.length} time groups`);
 
       // Sort character IDs by activity (total value, kill count, etc.) to show the most active characters
-      let characterActivity: { id: bigint; activity: number; name: string }[] =
-        [];
+      const characterActivity: { id: bigint; activity: number; name: string }[] = [];
 
       for (const characterId of characterIds) {
-        const character = await this.characterRepository.getCharacter(
-          characterId
-        );
+        const character = await this.characterRepository.getCharacter(characterId);
 
         if (!character) {
           logger.warn(`Character ${characterId} not found in database`);
@@ -290,26 +246,23 @@ export class ChartService extends BaseRepository {
         }
 
         // Find all alts for this character
-        const alts = character.characterGroupId 
+        const alts = character.characterGroupId
           ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
           : [];
 
         // Get all character IDs (main + alts)
-        const allIds = [
-          BigInt(character.eveId),
-          ...alts.map((alt) => BigInt(alt.eveId)),
-        ];
+        const allIds = [BigInt(character.eveId), ...alts.map(alt => BigInt(alt.eveId))];
 
         // Calculate activity based on displayMetric
         const characterKills = kills.filter((kill: KillData) =>
-          kill.characters.some((kc) => allIds.includes(BigInt(kc.characterId)))
+          kill.characters.some(kc => allIds.includes(BigInt(kc.characterId)))
         );
 
         const activity = characterKills.reduce((total, kill) => {
-          if (displayMetric === "value") return total + Number(kill.totalValue);
-          if (displayMetric === "kills") return total + 1;
-          if (displayMetric === "points") return total + kill.points;
-          if (displayMetric === "attackers") return total + kill.attackerCount;
+          if (displayMetric === 'value') return total + Number(kill.totalValue);
+          if (displayMetric === 'kills') return total + 1;
+          if (displayMetric === 'points') return total + kill.points;
+          if (displayMetric === 'attackers') return total + kill.attackerCount;
           return total;
         }, 0);
 
@@ -328,11 +281,9 @@ export class ChartService extends BaseRepository {
       const topCharacterIds = characterActivity.slice(0, limit);
 
       logger.info(
-        `Selected top ${
-          topCharacterIds.length
-        } most active characters for display: ${topCharacterIds
-          .map((c) => c.name)
-          .join(", ")}`
+        `Selected top ${topCharacterIds.length} most active characters for display: ${topCharacterIds
+          .map(c => c.name)
+          .join(', ')}`
       );
 
       // If no characters have activity, return empty chart
@@ -340,21 +291,17 @@ export class ChartService extends BaseRepository {
         return {
           labels: [],
           datasets: [],
-          title: "",
-          displayType: "line" as ChartDisplayType,
+          title: '',
+          displayType: 'line' as ChartDisplayType,
         };
       }
 
       // Create datasets for each character - now include all alts for each main character
-      logger.info(
-        "Creating datasets for each main character including their alts"
-      );
+      logger.info('Creating datasets for each main character including their alts');
       const datasets = await Promise.all(
         topCharacterIds.map(async (charItem, index) => {
           const characterId = charItem.id;
-          const character = await this.characterRepository.getCharacter(
-            characterId
-          );
+          const character = await this.characterRepository.getCharacter(characterId);
 
           if (!character) {
             logger.warn(`Character ${characterId} not found in database`);
@@ -366,105 +313,80 @@ export class ChartService extends BaseRepository {
             };
           }
 
-          logger.info(
-            `Processing main character ${character.name} (${character.eveId})`
-          );
+          logger.info(`Processing main character ${character.name} (${character.eveId})`);
 
           // Find all alts for this character
-          const alts = character.characterGroupId 
+          const alts = character.characterGroupId
             ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
             : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
           // Get all character IDs (main + alts)
-          const allIds = [
-            BigInt(character.eveId),
-            ...alts.map((alt) => BigInt(alt.eveId)),
-          ];
+          const allIds = [BigInt(character.eveId), ...alts.map(alt => BigInt(alt.eveId))];
 
           // Filter kills for this character and all its alts
           const characterKills = kills.filter((kill: KillData) =>
-            kill.characters.some((kc) =>
-              allIds.includes(BigInt(kc.characterId))
-            )
+            kill.characters.some(kc => allIds.includes(BigInt(kc.characterId)))
           );
 
-          logger.info(
-            `Found ${characterKills.length} kills for character ${character.name} and alts`
-          );
+          logger.info(`Found ${characterKills.length} kills for character ${character.name} and alts`);
 
           // Create a display name that shows activity level
           const activityText =
-            displayMetric === "value"
-              ? this.formatValue(charItem.activity)
-              : charItem.activity.toLocaleString();
+            displayMetric === 'value' ? this.formatValue(charItem.activity) : charItem.activity.toLocaleString();
 
           const metricLabel =
-            displayMetric === "value"
-              ? "ISK"
-              : displayMetric === "kills"
-              ? "kills"
-              : displayMetric === "points"
-              ? "pts"
-              : "attackers";
+            displayMetric === 'value'
+              ? 'ISK'
+              : displayMetric === 'kills'
+                ? 'kills'
+                : displayMetric === 'points'
+                  ? 'pts'
+                  : 'attackers';
 
           const displayName = `${character.name} (${activityText} ${metricLabel})`;
 
-          const characterData = this.groupDataByTime(
-            characterKills,
-            groupBy,
-            (kill: KillData) => ({
-              timestamp: kill.killTime,
-              value:
-                displayMetric === "value"
-                  ? Number(kill.totalValue)
-                  : displayMetric === "kills"
+          const characterData = this.groupDataByTime(characterKills, groupBy, (kill: KillData) => ({
+            timestamp: kill.killTime,
+            value:
+              displayMetric === 'value'
+                ? Number(kill.totalValue)
+                : displayMetric === 'kills'
                   ? 1
-                  : displayMetric === "points"
-                  ? kill.points
-                  : kill.attackerCount,
-            })
-          );
+                  : displayMetric === 'points'
+                    ? kill.points
+                    : kill.attackerCount,
+          }));
 
-          logger.info(
-            `Created ${characterData.length} data points for character ${character.name}`
-          );
+          logger.info(`Created ${characterData.length} data points for character ${character.name}`);
 
           return {
             label: displayName,
-            data: characterData.map((d) => d.value),
+            data: characterData.map(d => d.value),
             borderColor: this.getColorForIndex(index),
             fill: false,
           };
         })
       );
 
-      logger.info(
-        `Created ${datasets.length} datasets with labels: ${datasets
-          .map((d) => d.label)
-          .join(", ")}`
-      );
-      logger.info(
-        `Chart will have ${groupedData.length} labels and ${datasets.length} datasets`
-      );
+      logger.info(`Created ${datasets.length} datasets with labels: ${datasets.map(d => d.label).join(', ')}`);
+      logger.info(`Chart will have ${groupedData.length} labels and ${datasets.length} datasets`);
 
       return {
-        labels: groupedData.map((d) =>
-          format(d.timestamp, this.getDateFormat(groupBy))
-        ),
+        labels: groupedData.map(d => format(d.timestamp, this.getDateFormat(groupBy))),
         datasets,
-        title: "",
-        displayType: "line" as ChartDisplayType,
+        title: '',
+        displayType: 'line' as ChartDisplayType,
       };
     } catch (error) {
-      logger.error("Error generating kills chart:", error);
+      logger.error('Error generating kills chart:', error);
       // Return empty chart on error
       return {
         labels: [],
         datasets: [],
-        title: "",
-        displayType: "line" as ChartDisplayType,
+        title: '',
+        displayType: 'line' as ChartDisplayType,
       };
     }
   }
@@ -472,11 +394,11 @@ export class ChartService extends BaseRepository {
   // Helper function to format values with K/M/B suffixes
   private formatValue(value: number): string {
     if (value >= 1_000_000_000) {
-      return (value / 1_000_000_000).toFixed(1) + "B";
+      return `${(value / 1_000_000_000).toFixed(1)}B`;
     } else if (value >= 1_000_000) {
-      return (value / 1_000_000).toFixed(1) + "M";
+      return `${(value / 1_000_000).toFixed(1)}M`;
     } else if (value >= 1_000) {
-      return (value / 1_000).toFixed(1) + "K";
+      return `${(value / 1_000).toFixed(1)}K`;
     }
     return value.toString();
   }
@@ -489,22 +411,18 @@ export class ChartService extends BaseRepository {
   private async generateMapActivityChart(
     characterIds: bigint[],
     startDate: Date,
-    groupBy: "hour" | "day" | "week"
+    groupBy: 'hour' | 'day' | 'week'
   ): Promise<ChartData> {
     // Convert character IDs to strings for query
-    const characterIdStrings = characterIds.map((id) => id.toString());
+    const characterIdStrings = characterIds.map(id => id.toString());
 
-    logger.info(
-      `Generating map activity chart for ${
-        characterIds.length
-      } characters from ${startDate.toISOString()}`
-    );
-    logger.info(`Character IDs: ${characterIdStrings.join(", ")}`);
+    logger.info(`Generating map activity chart for ${characterIds.length} characters from ${startDate.toISOString()}`);
+    logger.info(`Character IDs: ${characterIdStrings.join(', ')}`);
 
     try {
       // First, get all characters including alts for the requested main characters
       const allCharacters = await Promise.all(
-        characterIdStrings.map(async (id) => {
+        characterIdStrings.map(async id => {
           const character = await this.characterRepository.getCharacter(BigInt(id));
           if (character?.characterGroupId) {
             return this.characterRepository.getCharactersByGroup(character.characterGroupId);
@@ -513,52 +431,38 @@ export class ChartService extends BaseRepository {
         })
       ).then(results => results.flat());
 
-      const allCharacterIdStrings = allCharacters
-        .flat()
-        .map((c: Character) => c.eveId);
-      logger.info(
-        `Including all characters and alts: ${allCharacters.length} characters total`
-      );
+      const allCharacterIdStrings = allCharacters.flat().map((c: Character) => c.eveId);
+      logger.info(`Including all characters and alts: ${allCharacters.length} characters total`);
 
       // Get map activity for each character
-      logger.info("Querying mapActivity table with expanded character list...");
-      const rawActivities =
-        await this.mapActivityRepository.getActivityForGroup(
-          allCharacterIdStrings.join(","),
+      logger.info('Querying mapActivity table with expanded character list...');
+      const rawActivities = await this.mapActivityRepository.getActivityForGroup(
+        allCharacterIdStrings.join(','),
+        startDate,
+        new Date()
+      );
+
+      logger.info(`Found ${rawActivities.length} map activity records in database`);
+
+      if (rawActivities.length === 0) {
+        logger.warn('No map activity found for the specified characters and time period');
+        // Let's check if there are any activity records at all in the database
+        const totalActivityCount = await this.mapActivityRepository.getActivityForGroup(
+          characterIdStrings[0],
           startDate,
           new Date()
         );
-
-      logger.info(
-        `Found ${rawActivities.length} map activity records in database`
-      );
-
-      if (rawActivities.length === 0) {
-        logger.warn(
-          "No map activity found for the specified characters and time period"
-        );
-        // Let's check if there are any activity records at all in the database
-        const totalActivityCount =
-          await this.mapActivityRepository.getActivityForGroup(
-            characterIdStrings[0],
-            startDate,
-            new Date()
-          );
-        logger.info(
-          `Total map activities in database: ${totalActivityCount.length}`
-        );
+        logger.info(`Total map activities in database: ${totalActivityCount.length}`);
 
         // Sample a few records to understand the data structure
         if (totalActivityCount.length > 0) {
           const sampleRecords = totalActivityCount;
-          logger.info(
-            `Sample map activity records: ${JSON.stringify(sampleRecords)}`
-          );
+          logger.info(`Sample map activity records: ${JSON.stringify(sampleRecords)}`);
         }
       }
 
       // Convert to ActivityData
-      const activities: ActivityData[] = rawActivities.map((activity) => ({
+      const activities: ActivityData[] = rawActivities.map(activity => ({
         timestamp: activity.timestamp,
         signatures: activity.signatures,
         characterId: BigInt(activity.characterId),
@@ -566,26 +470,18 @@ export class ChartService extends BaseRepository {
 
       // Group activities by time period
       logger.info(`Grouping ${activities.length} activities by ${groupBy}`);
-      const groupedData = this.groupDataByTime(
-        activities,
-        groupBy,
-        (activity: ActivityData) => ({
-          timestamp: activity.timestamp,
-          value: activity.signatures,
-        })
-      );
+      const groupedData = this.groupDataByTime(activities, groupBy, (activity: ActivityData) => ({
+        timestamp: activity.timestamp,
+        value: activity.signatures,
+      }));
 
       logger.info(`Created ${groupedData.length} time groups`);
 
       // Create datasets for each main character
-      logger.info(
-        "Creating datasets for each main character including their alts"
-      );
+      logger.info('Creating datasets for each main character including their alts');
       const datasets = await Promise.all(
-        characterIds.map(async (characterId) => {
-          const character = await this.characterRepository.getCharacter(
-            characterId
-          );
+        characterIds.map(async characterId => {
+          const character = await this.characterRepository.getCharacter(characterId);
 
           if (!character) {
             logger.warn(`Character ${characterId} not found in database`);
@@ -597,86 +493,65 @@ export class ChartService extends BaseRepository {
             };
           }
 
-          logger.info(
-            `Processing main character ${character.name} (${character.eveId})`
-          );
+          logger.info(`Processing main character ${character.name} (${character.eveId})`);
 
           // Find all alts for this character
-          const alts = character.characterGroupId 
+          const alts = character.characterGroupId
             ? await this.characterRepository.getCharactersByGroup(character.characterGroupId)
             : [];
 
           logger.info(`Found ${alts.length} alts for ${character.name}`);
 
           // Get all character IDs (main + alts)
-          const allIds = [
-            BigInt(character.eveId),
-            ...alts.map((alt) => BigInt(alt.eveId)),
-          ];
+          const allIds = [BigInt(character.eveId), ...alts.map(alt => BigInt(alt.eveId))];
 
           // Filter activities for this character and all its alts
-          const characterActivities = activities.filter(
-            (activity: ActivityData) => allIds.includes(activity.characterId)
+          const characterActivities = activities.filter((activity: ActivityData) =>
+            allIds.includes(activity.characterId)
           );
 
-          logger.info(
-            `Found ${characterActivities.length} activities for character ${character.name} and alts`
-          );
+          logger.info(`Found ${characterActivities.length} activities for character ${character.name} and alts`);
 
-          const characterData = this.groupDataByTime(
-            characterActivities,
-            groupBy,
-            (activity: ActivityData) => ({
-              timestamp: activity.timestamp,
-              value: activity.signatures,
-            })
-          );
+          const characterData = this.groupDataByTime(characterActivities, groupBy, (activity: ActivityData) => ({
+            timestamp: activity.timestamp,
+            value: activity.signatures,
+          }));
 
-          logger.info(
-            `Created ${characterData.length} data points for character ${character.name}`
-          );
+          logger.info(`Created ${characterData.length} data points for character ${character.name}`);
 
           return {
             label: character.name,
-            data: characterData.map((d) => d.value),
+            data: characterData.map(d => d.value),
             borderColor: this.getRandomColor(),
             fill: false,
           };
         })
       );
 
-      logger.info(
-        `Created ${datasets.length} datasets with labels: ${datasets
-          .map((d) => d.label)
-          .join(", ")}`
-      );
-      logger.info(
-        `Chart will have ${groupedData.length} labels and ${datasets.length} datasets`
-      );
+      logger.info(`Created ${datasets.length} datasets with labels: ${datasets.map(d => d.label).join(', ')}`);
+      logger.info(`Chart will have ${groupedData.length} labels and ${datasets.length} datasets`);
 
       return {
-        labels: groupedData.map((d) =>
-          format(d.timestamp, this.getDateFormat(groupBy))
-        ),
+        labels: groupedData.map(d => format(d.timestamp, this.getDateFormat(groupBy))),
         datasets,
-        title: "",
-        displayType: "line" as ChartDisplayType,
+        title: '',
+        displayType: 'line' as ChartDisplayType,
       };
     } catch (error) {
-      logger.error("Error generating map activity chart:", error);
+      logger.error('Error generating map activity chart:', error);
       // Return empty chart on error
       return {
         labels: [],
         datasets: [],
-        title: "",
-        displayType: "line" as ChartDisplayType,
+        title: '',
+        displayType: 'line' as ChartDisplayType,
       };
     }
   }
 
   private groupDataByTime<T>(
     data: T[],
-    groupBy: "hour" | "day" | "week",
+    groupBy: 'hour' | 'day' | 'week',
     getTimestampAndValue: (item: T) => { timestamp: Date; value: number }
   ): { timestamp: Date; value: number }[] {
     const grouped = new Map<string, { timestamp: Date; value: number }>();
@@ -695,36 +570,35 @@ export class ChartService extends BaseRepository {
         grouped.set(key, { timestamp, value: 0 });
       }
 
-      const current = grouped.get(key)!;
+      const current = grouped.get(key);
+      if (!current) continue;
       current.value += value;
     }
 
     // Sort by timestamp
-    return Array.from(grouped.values()).sort(
-      (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-    );
+    return Array.from(grouped.values()).sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
   }
 
-  private getGroupByFormat(groupBy: "hour" | "day" | "week"): string {
+  private getGroupByFormat(groupBy: 'hour' | 'day' | 'week'): string {
     switch (groupBy) {
-      case "hour":
-        return "yyyy-MM-dd HH:00";
-      case "day":
-        return "yyyy-MM-dd";
-      case "week":
+      case 'hour':
+        return 'yyyy-MM-dd HH:00';
+      case 'day':
+        return 'yyyy-MM-dd';
+      case 'week':
         return "yyyy-'W'ww";
       default:
         throw new Error(`Invalid groupBy: ${groupBy}`);
     }
   }
 
-  private getDateFormat(groupBy: "hour" | "day" | "week"): string {
+  private getDateFormat(groupBy: 'hour' | 'day' | 'week'): string {
     switch (groupBy) {
-      case "hour":
-        return "MMM d, HH:mm";
-      case "day":
-        return "MMM d";
-      case "week":
+      case 'hour':
+        return 'MMM d, HH:mm';
+      case 'day':
+        return 'MMM d';
+      case 'week':
         return "'Week' w";
       default:
         throw new Error(`Invalid groupBy: ${groupBy}`);
@@ -732,8 +606,8 @@ export class ChartService extends BaseRepository {
   }
 
   private getRandomColor(): string {
-    const letters = "0123456789ABCDEF";
-    let color = "#";
+    const letters = '0123456789ABCDEF';
+    let color = '#';
     for (let i = 0; i < 6; i++) {
       color += letters[Math.floor(Math.random() * 16)];
     }
@@ -754,23 +628,14 @@ export class ChartService extends BaseRepository {
     endDate: Date;
     displayType: string;
   }): Promise<ChartData> {
-    const {
-      characterGroups,
-      startDate,
-      endDate,
-      displayType: _displayType,
-    } = config;
+    const { characterGroups, startDate, endDate } = config;
 
-    logger.info(
-      `Generating grouped kills chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
-    logger.info(
-      `Received ${characterGroups.length} total character groups to process`
-    );
+    logger.info(`Generating grouped kills chart from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    logger.info(`Received ${characterGroups.length} total character groups to process`);
 
     // Enhanced group data with main character information
     const enhancedGroups = await Promise.all(
-      characterGroups.map(async (group) => {
+      characterGroups.map(async group => {
         // Try to find main character in the group
         let mainCharacter = null;
 
@@ -791,8 +656,8 @@ export class ChartService extends BaseRepository {
         const displayName = mainCharacter
           ? mainCharacter.name
           : group.characters.length > 0
-          ? group.characters[0].name
-          : group.name;
+            ? group.characters[0].name
+            : group.name;
 
         return {
           ...group,
@@ -803,15 +668,11 @@ export class ChartService extends BaseRepository {
     );
 
     // Get displayable groups with at least one character
-    const displayGroups = enhancedGroups.filter(
-      (group) => group.characters.length > 0
-    );
+    const displayGroups = enhancedGroups.filter(group => group.characters.length > 0);
 
     // Print the detailed group information for debugging
     if (displayGroups.length > 0) {
-      logger.info(
-        `Found ${displayGroups.length} valid character groups with at least one character`
-      );
+      logger.info(`Found ${displayGroups.length} valid character groups with at least one character`);
       displayGroups.forEach((group, index) => {
         logger.info(
           `Group ${index + 1}: "${group.displayName}" (Main: ${
@@ -820,7 +681,7 @@ export class ChartService extends BaseRepository {
         );
       });
     } else {
-      logger.warn("No valid character groups found with characters");
+      logger.warn('No valid character groups found with characters');
     }
 
     // First, collect all groups with their kill data and filter out those without kills
@@ -829,16 +690,14 @@ export class ChartService extends BaseRepository {
     let totalGroupsProcessed = 0;
 
     try {
-      logger.info(
-        `Processing ${displayGroups.length} groups to fetch kill data...`
-      );
+      logger.info(`Processing ${displayGroups.length} groups to fetch kill data...`);
 
       // For each group, get the kill statistics using enhanced stats
       for (const group of displayGroups) {
         totalGroupsProcessed++;
 
         // Get all character IDs in this group
-        const characterIds = group.characters.map((c) => BigInt(c.eveId));
+        const characterIds = group.characters.map(c => BigInt(c.eveId));
 
         if (characterIds.length === 0) {
           logger.info(`No characters in group ${group.displayName}, skipping`);
@@ -846,17 +705,11 @@ export class ChartService extends BaseRepository {
         }
 
         // Count kills for these characters (faster than fetching all data)
-        const kills = await this.killRepository.getKillsForCharacters(
-          characterIds,
-          startDate,
-          endDate
-        );
+        const kills = await this.killRepository.getKillsForCharacters(characterIds, startDate, endDate);
         const killCount = kills.length;
 
         if (killCount === 0) {
-          logger.info(
-            `No kills found for group ${group.displayName}, skipping`
-          );
+          logger.info(`No kills found for group ${group.displayName}, skipping`);
           groupsWithoutKills.push(group.displayName);
           continue;
         }
@@ -868,18 +721,14 @@ export class ChartService extends BaseRepository {
           if (!kill.attackers || kill.attackers.length === 0) continue;
 
           // Get all player attackers (those with character IDs)
-          const playerAttackers = kill.attackers.filter(
-            (a: { character_id?: string }) => a.character_id
-          );
+          const playerAttackers = kill.attackers.filter((a: { character_id?: string }) => a.character_id);
           if (playerAttackers.length === 0) continue;
 
           // Check if all attackers are from this group
-          const allFromGroup = playerAttackers.every(
-            (attacker: { character_id?: string }) => {
-              if (!attacker.character_id) return false;
-              return characterIds.includes(BigInt(attacker.character_id));
-            }
-          );
+          const allFromGroup = playerAttackers.every((attacker: { character_id?: string }) => {
+            if (!attacker.character_id) return false;
+            return characterIds.includes(BigInt(attacker.character_id));
+          });
 
           if (allFromGroup) {
             soloKills++;
@@ -889,9 +738,7 @@ export class ChartService extends BaseRepository {
         // Only add to our results if there are actually kills
         if (kills.length > 0) {
           // Always use the main character's name as the display name
-          const displayName = group.mainCharacter
-            ? group.mainCharacter.name
-            : group.displayName;
+          const displayName = group.mainCharacter ? group.mainCharacter.name : group.displayName;
 
           groupsWithData.push({
             group: {
@@ -902,28 +749,24 @@ export class ChartService extends BaseRepository {
             soloKills: soloKills,
           });
 
-          logger.info(
-            `Group ${displayName}: ${kills.length} total kills, ${soloKills} solo kills`
-          );
+          logger.info(`Group ${displayName}: ${kills.length} total kills, ${soloKills} solo kills`);
         }
       }
 
       // Log stats about our filtering
-      logger.info(
-        `Processed ${totalGroupsProcessed}/${displayGroups.length} groups`
-      );
+      logger.info(`Processed ${totalGroupsProcessed}/${displayGroups.length} groups`);
       logger.info(
         `Found ${groupsWithData.length} groups with kills and ${groupsWithoutKills.length} groups without kills`
       );
 
       // If no groups have kills, return empty chart
       if (groupsWithData.length === 0) {
-        logger.info("No groups with kills found, returning empty chart");
+        logger.info('No groups with kills found, returning empty chart');
         return {
           labels: [],
           datasets: [],
-          displayType: "horizontalBar" as ChartDisplayType,
-          summary: "No kills found in the specified time period",
+          displayType: 'horizontalBar' as ChartDisplayType,
+          summary: 'No kills found in the specified time period',
         };
       }
 
@@ -932,15 +775,13 @@ export class ChartService extends BaseRepository {
 
       logger.info(`After sorting, top 3 groups by kill count:`);
       groupsWithData.slice(0, 3).forEach((item, i) => {
-        logger.info(
-          `${i + 1}. ${item.group.displayName}: ${item.totalKills} kills`
-        );
+        logger.info(`${i + 1}. ${item.group.displayName}: ${item.totalKills} kills`);
       });
 
       // Create chart data structure from our filtered and sorted groups
-      const groupLabels = groupsWithData.map((item) => item.group.displayName);
-      const totalKillsData = groupsWithData.map((item) => item.totalKills);
-      const soloKillsData = groupsWithData.map((item) => item.soloKills);
+      const groupLabels = groupsWithData.map(item => item.group.displayName);
+      const totalKillsData = groupsWithData.map(item => item.totalKills);
+      const soloKillsData = groupsWithData.map(item => item.soloKills);
 
       // Calculate overall statistics
       const overallTotalKills = totalKillsData.reduce((a, b) => a + b, 0);
@@ -952,25 +793,23 @@ export class ChartService extends BaseRepository {
         labels: groupLabels,
         datasets: [
           {
-            label: "Total Kills",
+            label: 'Total Kills',
             data: totalKillsData,
-            backgroundColor: "#3366CC",
+            backgroundColor: '#3366CC',
           },
           {
-            label: "Solo Kills",
+            label: 'Solo Kills',
             data: soloKillsData,
-            backgroundColor: "#DC3912",
+            backgroundColor: '#DC3912',
           },
         ],
-        displayType: "horizontalBar" as ChartDisplayType,
+        displayType: 'horizontalBar' as ChartDisplayType,
         summary: `Total kills: ${overallTotalKills.toLocaleString()}\nSolo kills: ${overallSoloKills.toLocaleString()} (${
-          overallTotalKills > 0
-            ? Math.round((overallSoloKills / overallTotalKills) * 100)
-            : 0
+          overallTotalKills > 0 ? Math.round((overallSoloKills / overallTotalKills) * 100) : 0
         }%)`,
       };
     } catch (error) {
-      logger.error("Error generating kills chart:", error);
+      logger.error('Error generating kills chart:', error);
       throw error;
     }
   }
@@ -990,40 +829,36 @@ export class ChartService extends BaseRepository {
   }): Promise<ChartData> {
     const { characterGroups, startDate, endDate, displayType } = config;
 
-    logger.info(
-      `Generating grouped map activity chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
-    );
+    logger.info(`Generating grouped map activity chart from ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // If no character groups provided, get all characters
     if (!characterGroups || characterGroups.length === 0) {
-      logger.info(
-        "No character groups provided, creating default group with all characters"
-      );
+      logger.info('No character groups provided, creating default group with all characters');
       try {
         const allCharacters = await this.characterRepository.getAllCharacters();
 
         if (allCharacters.length === 0) {
-          logger.warn("No characters found in database");
+          logger.warn('No characters found in database');
           return {
-            labels: ["No Characters"],
+            labels: ['No Characters'],
             datasets: [
               {
-                label: "Signatures",
+                label: 'Signatures',
                 data: [0],
-                backgroundColor: "#3366CC",
+                backgroundColor: '#3366CC',
               },
               {
-                label: "Cosmic Anomalies",
+                label: 'Cosmic Anomalies',
                 data: [0],
-                backgroundColor: "#DC3912",
+                backgroundColor: '#DC3912',
               },
               {
-                label: "Wormholes",
+                label: 'Wormholes',
                 data: [0],
-                backgroundColor: "#FF9900",
+                backgroundColor: '#FF9900',
               },
             ],
-            displayType: "horizontalBar" as ChartDisplayType,
+            displayType: 'horizontalBar' as ChartDisplayType,
           };
         }
 
@@ -1031,8 +866,8 @@ export class ChartService extends BaseRepository {
         return this.generateGroupedMapActivityChart({
           characterGroups: [
             {
-              groupId: "default",
-              name: "All Characters",
+              groupId: 'default',
+              name: 'All Characters',
               characters: allCharacters,
             },
           ],
@@ -1041,16 +876,14 @@ export class ChartService extends BaseRepository {
           displayType,
         });
       } catch (error) {
-        logger.error("Error creating default character group:", error);
-        throw new Error(
-          "No character groups available and could not create default group"
-        );
+        logger.error('Error creating default character group:', error);
+        throw new Error('No character groups available and could not create default group');
       }
     }
 
     // Enhanced group data with main character information
     const enhancedGroups = await Promise.all(
-      characterGroups.map(async (group) => {
+      characterGroups.map(async group => {
         // Try to find main character in the group
         let mainCharacter = null;
 
@@ -1071,8 +904,8 @@ export class ChartService extends BaseRepository {
         const displayName = mainCharacter
           ? mainCharacter.name
           : group.characters.length > 0
-          ? group.characters[0].name
-          : group.name;
+            ? group.characters[0].name
+            : group.name;
 
         return {
           ...group,
@@ -1083,24 +916,16 @@ export class ChartService extends BaseRepository {
     );
 
     // Get displayable groups with at least one character
-    const displayGroups = enhancedGroups.filter(
-      (group) => group.characters.length > 0
-    );
+    const displayGroups = enhancedGroups.filter(group => group.characters.length > 0);
 
     // Print the detailed group information for debugging
     if (displayGroups.length > 0) {
-      logger.info(
-        `Found ${displayGroups.length} valid character groups with at least one character`
-      );
+      logger.info(`Found ${displayGroups.length} valid character groups with at least one character`);
       displayGroups.forEach((group, index) => {
-        logger.info(
-          `Group ${index + 1}: "${group.displayName}" - ${
-            group.characters.length
-          } characters`
-        );
+        logger.info(`Group ${index + 1}: "${group.displayName}" - ${group.characters.length} characters`);
       });
     } else {
-      logger.warn("No valid character groups found with characters");
+      logger.warn('No valid character groups found with characters');
     }
 
     // Collect all groups with their activity data first, so we can filter out empty ones
@@ -1112,19 +937,13 @@ export class ChartService extends BaseRepository {
         // Debug log all characters in this group
         logger.info(`Processing group ${group.displayName}:`);
         group.characters.forEach((char, i) => {
-          logger.info(
-            `  Character ${i}: eveId=${char.eveId}, name=${
-              char.name
-            }, eveIdType=${typeof char.eveId}`
-          );
+          logger.info(`  Character ${i}: eveId=${char.eveId}, name=${char.name}, eveIdType=${typeof char.eveId}`);
         });
 
         // Filter out characters with undefined eveId and convert valid ones to BigInt
-        const validCharacters = group.characters.filter((c) => {
+        const validCharacters = group.characters.filter(c => {
           if (!c.eveId || c.eveId === undefined) {
-            logger.warn(
-              `Skipping character with undefined eveId: ${JSON.stringify(c)}`
-            );
+            logger.warn(`Skipping character with undefined eveId: ${JSON.stringify(c)}`);
             return false;
           }
           return true;
@@ -1135,27 +954,22 @@ export class ChartService extends BaseRepository {
         );
 
         if (validCharacters.length === 0) {
-          logger.info(
-            `No valid characters in group ${group.displayName}, skipping`
-          );
+          logger.info(`No valid characters in group ${group.displayName}, skipping`);
           continue;
         }
 
-        const characterIds = validCharacters.map((c) => BigInt(c.eveId));
+        const characterIds = validCharacters.map(c => BigInt(c.eveId));
 
         logger.info(
-          `Valid character IDs for group ${group.displayName}: ${characterIds
-            .map((id) => id.toString())
-            .join(", ")}`
+          `Valid character IDs for group ${group.displayName}: ${characterIds.map(id => id.toString()).join(', ')}`
         );
 
         // Get all map activities for these characters
-        const activities =
-          await this.mapActivityRepository.getActivityForCharacters(
-            characterIds.map((id) => id.toString()),
-            startDate,
-            endDate
-          );
+        const activities = await this.mapActivityRepository.getActivityForCharacters(
+          characterIds.map(id => id.toString()),
+          startDate,
+          endDate
+        );
 
         if (activities.length === 0) {
           logger.info(`No map activities found for group ${group.displayName}`);
@@ -1163,14 +977,8 @@ export class ChartService extends BaseRepository {
         }
 
         // Sum up activity values
-        const signatures = activities.reduce(
-          (sum, act) => sum + act.signatures,
-          0
-        );
-        const connections = activities.reduce(
-          (sum, act) => sum + act.connections,
-          0
-        );
+        const signatures = activities.reduce((sum, act) => sum + act.signatures, 0);
+        const connections = activities.reduce((sum, act) => sum + act.connections, 0);
         const passages = activities.reduce((sum, act) => sum + act.passages, 0);
 
         // Only add to our results if there is actually activity
@@ -1184,37 +992,33 @@ export class ChartService extends BaseRepository {
             totalActivity,
           });
         } else {
-          logger.info(
-            `Skipping group ${group.displayName} with no activity data`
-          );
+          logger.info(`Skipping group ${group.displayName} with no activity data`);
         }
       }
 
       // Exit early if no groups have data
       if (groupsWithData.length === 0) {
-        logger.warn(
-          "No character groups have any map activity data in the specified time range"
-        );
+        logger.warn('No character groups have any map activity data in the specified time range');
         return {
-          labels: ["No Data Available"],
+          labels: ['No Data Available'],
           datasets: [
             {
-              label: "Signatures",
+              label: 'Signatures',
               data: [0],
-              backgroundColor: "#3366CC",
+              backgroundColor: '#3366CC',
             },
             {
-              label: "Connections",
+              label: 'Connections',
               data: [0],
-              backgroundColor: "#DC3912",
+              backgroundColor: '#DC3912',
             },
             {
-              label: "Passages",
+              label: 'Passages',
               data: [0],
-              backgroundColor: "#FF9900",
+              backgroundColor: '#FF9900',
             },
           ],
-          displayType: "horizontalBar" as ChartDisplayType,
+          displayType: 'horizontalBar' as ChartDisplayType,
         };
       }
 
@@ -1222,70 +1026,58 @@ export class ChartService extends BaseRepository {
       groupsWithData.sort((a, b) => b.totalActivity - a.totalActivity);
 
       // Create chart data structure from our filtered and sorted groups
-      const groupLabels = groupsWithData.map((item) => item.group.displayName);
-      const signaturesData = groupsWithData.map((item) => item.signatures);
-      const connectionsData = groupsWithData.map((item) => item.connections);
-      const passagesData = groupsWithData.map((item) => item.passages);
+      const groupLabels = groupsWithData.map(item => item.group.displayName);
+      const signaturesData = groupsWithData.map(item => item.signatures);
+      const connectionsData = groupsWithData.map(item => item.connections);
+      const passagesData = groupsWithData.map(item => item.passages);
 
       // Return the final chart data
       return {
         labels: groupLabels,
         datasets: [
           {
-            label: "Signatures",
+            label: 'Signatures',
             data: signaturesData,
-            backgroundColor: "#3366CC",
+            backgroundColor: '#3366CC',
           },
           {
-            label: "Cosmic Anomalies",
+            label: 'Cosmic Anomalies',
             data: connectionsData,
-            backgroundColor: "#DC3912",
+            backgroundColor: '#DC3912',
           },
           {
-            label: "Wormholes",
+            label: 'Wormholes',
             data: passagesData,
-            backgroundColor: "#FF9900",
+            backgroundColor: '#FF9900',
           },
         ],
-        displayType: "horizontalBar" as ChartDisplayType,
+        displayType: 'horizontalBar' as ChartDisplayType,
       };
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.error("Error generating grouped map activity chart:", error);
-      throw new Error(
-        `Failed to generate grouped map activity chart: ${errorMessage}`
-      );
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Error generating grouped map activity chart:', error);
+      throw new Error(`Failed to generate grouped map activity chart: ${errorMessage}`);
     }
   }
 
   /**
    * Gets all tracked characters
    */
-  async getTrackedCharacters(): Promise<
-    Array<{ eveId: string; name: string }>
-  > {
+  async getTrackedCharacters(): Promise<Array<{ eveId: string; name: string }>> {
     try {
       // Find main characters (where they are referenced by CharacterGroup.mainCharacterId)
       const groups = await this.characterRepository.getAllCharacterGroups();
 
       // Extract characters from groups
       const characters = groups
-        .map((g) =>
-          g.mainCharacterId
-            ? g.characters.find((c: Character) => c.eveId === g.mainCharacterId)
-            : null
-        )
+        .map(g => (g.mainCharacterId ? g.characters.find((c: Character) => c.eveId === g.mainCharacterId) : null))
         .filter((c): c is Character => c !== null);
 
-      logger.info(
-        `Found ${characters.length} tracked characters (main characters)`
-      );
+      logger.info(`Found ${characters.length} tracked characters (main characters)`);
       return characters;
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      logger.error("Error fetching tracked characters:", errorMessage);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.error('Error fetching tracked characters:', errorMessage);
       return [];
     }
   }
@@ -1303,26 +1095,20 @@ export class ChartService extends BaseRepository {
   > {
     try {
       // First, count the total number of character groups
-      const totalGroups = (
-        await this.characterRepository.getAllCharacterGroups()
-      ).length;
+      const totalGroups = (await this.characterRepository.getAllCharacterGroups()).length;
 
       logger.info(`Found ${totalGroups} character groups in database`);
 
       // If we have a suspiciously large number of groups, use a different approach
       if (totalGroups > 1000) {
-        logger.warn(
-          `Unusually high number of character groups (${totalGroups}). Using optimized approach.`
-        );
+        logger.warn(`Unusually high number of character groups (${totalGroups}). Using optimized approach.`);
 
         // Get only groups that have at least one character (using a JOIN)
-        const groupsWithCharacters = (
-          await this.characterRepository.getAllCharacterGroups()
-        ).filter((g) => g.characters.length > 0);
-
-        logger.info(
-          `Found ${groupsWithCharacters.length} groups with at least one character`
+        const groupsWithCharacters = (await this.characterRepository.getAllCharacterGroups()).filter(
+          g => g.characters.length > 0
         );
+
+        logger.info(`Found ${groupsWithCharacters.length} groups with at least one character`);
 
         // Process these groups in batches to avoid memory issues
         const result = [];
@@ -1330,35 +1116,29 @@ export class ChartService extends BaseRepository {
 
         for (let i = 0; i < groupsWithCharacters.length; i += batchSize) {
           const batch = groupsWithCharacters.slice(i, i + batchSize);
-          logger.info(
-            `Processing batch ${i / batchSize + 1} of ${Math.ceil(
-              groupsWithCharacters.length / batchSize
-            )}`
-          );
+          logger.info(`Processing batch ${i / batchSize + 1} of ${Math.ceil(groupsWithCharacters.length / batchSize)}`);
 
           for (const group of batch) {
             // For each group, get its characters
             const characters = await Promise.all(
               group.characters.map((c: Character) =>
-                c.characterGroupId 
+                c.characterGroupId
                   ? this.characterRepository.getCharactersByGroup(c.characterGroupId)
                   : Promise.resolve([])
               )
-            ).then((results) => results.flat());
+            ).then(results => results.flat());
 
             if (characters.length > 0) {
               result.push({
                 groupId: group.id,
-                name: group.name || `Group ${group.id.substring(0, 8)}`,
+                name: group.name ?? `Group ${group.id.substring(0, 8)}`,
                 characters,
               });
             }
           }
         }
 
-        logger.info(
-          `Successfully processed ${result.length} valid character groups`
-        );
+        logger.info(`Successfully processed ${result.length} valid character groups`);
         return result;
       }
 
@@ -1368,16 +1148,16 @@ export class ChartService extends BaseRepository {
       logger.info(`Found ${groups.length} character groups`);
 
       // Filter out groups with no characters
-      const validGroups = groups.filter((group) => group.characters.length > 0);
+      const validGroups = groups.filter(group => group.characters.length > 0);
       logger.info(`${validGroups.length} groups have at least one character`);
 
       return validGroups
-        .map((group) => {
+        .map(group => {
           // Debug log the raw group data
           logger.debug(`Processing group ${group.id}:`, {
             groupId: group.id,
             name: group.name,
-            characterCount: group.characters?.length || 0,
+            characterCount: group.characters?.length ?? 0,
             firstCharacter: group.characters?.[0]
               ? {
                   eveId: group.characters[0].eveId,
@@ -1389,59 +1169,45 @@ export class ChartService extends BaseRepository {
 
           // Filter and transform characters, ensuring eveId is a valid string
           const validCharacters = group.characters
-            .map((char) => {
+            .map(char => {
               // Ensure eveId is properly converted to string
-              const eveId =
-                char.eveId?.toString?.() || String(char.eveId || "");
-              const name = char.name || `Character ${eveId}`;
+              const eveId = char.eveId?.toString?.() ?? String(char.eveId ?? '');
+              const name = char.name ?? `Character ${eveId}`;
 
               return { eveId, name };
             })
-            .filter((char) => {
+            .filter(char => {
               // Filter out characters with invalid eveId
-              if (
-                !char.eveId ||
-                char.eveId === "" ||
-                char.eveId === "undefined" ||
-                char.eveId === "null"
-              ) {
+              if (!char.eveId || char.eveId === '' || char.eveId === 'undefined' || char.eveId === 'null') {
                 logger.warn(`Skipping character with invalid eveId:`, char);
                 return false;
               }
               return true;
             });
 
-          logger.debug(
-            `Group ${group.id} has ${validCharacters.length} valid characters`
-          );
+          logger.debug(`Group ${group.id} has ${validCharacters.length} valid characters`);
 
           return {
             groupId: group.id,
-            name: group.name || `Group ${group.id.substring(0, 8)}`,
+            name: group.name ?? `Group ${group.id.substring(0, 8)}`,
             characters: validCharacters,
-            mainCharacterId:
-              group.mainCharacterId?.toString?.() ||
-              String(group.mainCharacterId || ""),
+            mainCharacterId: group.mainCharacterId?.toString?.() ?? String(group.mainCharacterId ?? ''),
           };
         })
-        .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
+        .filter(group => group.characters.length > 0); // Filter out groups with no valid characters
     } catch (error: unknown) {
-      logger.error("Error fetching character groups:", {
+      logger.error('Error fetching character groups:', {
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
 
       // If we encounter an error, try a different approach to get at least some valid groups
       try {
-        logger.info(
-          "Attempting alternative approach to fetch character groups"
-        );
+        logger.info('Attempting alternative approach to fetch character groups');
 
         // Get characters that belong to a group
         const allCharacters = await this.characterRepository.getAllCharacters();
-        const characters = allCharacters.filter(
-          (c) => c.characterGroupId !== null
-        );
+        const characters = allCharacters.filter(c => c.characterGroupId !== null);
 
         // Manually group them
         const groupMap = new Map<
@@ -1461,20 +1227,18 @@ export class ChartService extends BaseRepository {
           }
 
           // Ensure eveId is properly converted to string
-          const eveId = char.eveId?.toString?.() || String(char.eveId || "");
-          const name = char.name || `Character ${eveId}`;
+          const eveId = char.eveId?.toString?.() ?? String(char.eveId ?? '');
+          const name = char.name ?? `Character ${eveId}`;
 
           // Only add if eveId is valid
-          if (
-            eveId &&
-            eveId !== "" &&
-            eveId !== "undefined" &&
-            eveId !== "null"
-          ) {
-            groupMap.get(char.characterGroupId)!.characters.push({
-              eveId,
-              name,
-            });
+          if (eveId && eveId !== '' && eveId !== 'undefined' && eveId !== 'null') {
+            const group = groupMap.get(char.characterGroupId);
+            if (group) {
+              group.characters.push({
+                eveId,
+                name,
+              });
+            }
           }
         }
 
@@ -1482,26 +1246,19 @@ export class ChartService extends BaseRepository {
         const result = Array.from(groupMap.entries())
           .map(([groupId, data]) => ({
             groupId,
-            name: data.name || `Group ${groupId.substring(0, 8)}`,
+            name: data.name ?? `Group ${groupId.substring(0, 8)}`,
             characters: data.characters,
-            mainCharacterId:
-              data.mainCharacterId?.toString?.() ||
-              String(data.mainCharacterId || ""),
+            mainCharacterId: data.mainCharacterId?.toString?.() ?? String(data.mainCharacterId ?? ''),
           }))
-          .filter((group) => group.characters.length > 0); // Filter out groups with no valid characters
+          .filter(group => group.characters.length > 0); // Filter out groups with no valid characters
 
-        logger.info(
-          `Alternative approach found ${result.length} character groups`
-        );
+        logger.info(`Alternative approach found ${result.length} character groups`);
         return result;
       } catch (fallbackError) {
-        logger.error(
-          "Error with alternative character group approach:",
-          fallbackError
-        );
+        logger.error('Error with alternative character group approach:', fallbackError);
 
         // Last resort: return an empty array instead of a default group
-        logger.info("No valid character groups found, returning empty array");
+        logger.info('No valid character groups found, returning empty array');
         return [];
       }
     }
@@ -1510,34 +1267,18 @@ export class ChartService extends BaseRepository {
   /**
    * Get kills for a character group within a date range
    */
-  async getKillsForGroup(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<Killmail[]> {
-    const kills = await this.killRepository.getKillsForGroup(
-      groupId,
-      startDate,
-      endDate
-    );
-    return kills.map((kill) => new Killmail(kill));
+  async getKillsForGroup(groupId: string, startDate: Date, endDate: Date): Promise<Killmail[]> {
+    const kills = await this.killRepository.getKillsForGroup(groupId, startDate, endDate);
+    return kills.map(kill => new Killmail(kill));
   }
 
   /**
    * Get map activity for a character group within a date range
    */
-  async getMapActivityForGroup(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<MapActivity[]> {
-    const activities = await this.mapActivityRepository.getActivityForGroup(
-      groupId,
-      startDate,
-      endDate
-    );
+  async getMapActivityForGroup(groupId: string, startDate: Date, endDate: Date): Promise<MapActivity[]> {
+    const activities = await this.mapActivityRepository.getActivityForGroup(groupId, startDate, endDate);
     return activities.map(
-      (activity) =>
+      activity =>
         new MapActivity({
           ...activity,
           characterId: BigInt(activity.characterId),
@@ -1585,11 +1326,7 @@ export class ChartService extends BaseRepository {
     totalSignatures: number;
     averageSignaturesPerSystem: number;
   }> {
-    return this.mapActivityRepository.getGroupActivityStats(
-      groupId,
-      startDate,
-      endDate
-    );
+    return this.mapActivityRepository.getGroupActivityStats(groupId, startDate, endDate);
   }
 
   /**
@@ -1605,19 +1342,15 @@ export class ChartService extends BaseRepository {
     averageValue: number;
     soloKills: number;
   }> {
-    const kills = await this.killRepository.getKillsForGroup(
-      groupId,
-      startDate,
-      endDate
-    );
-    
+    const kills = await this.killRepository.getKillsForGroup(groupId, startDate, endDate);
+
     const totalKills = kills.length;
-    const totalValue = kills.reduce((sum, kill) => sum + BigInt(kill.total_value || 0), BigInt(0));
+    const totalValue = kills.reduce((sum, kill) => sum + BigInt(kill.total_value ?? 0), BigInt(0));
     const averageValue = totalKills > 0 ? Number(totalValue) / totalKills : 0;
-    
+
     // Count solo kills (simplified - just check if solo flag is true)
     const soloKills = kills.filter(kill => kill.solo).length;
-    
+
     return {
       totalKills,
       totalValue,
@@ -1626,16 +1359,12 @@ export class ChartService extends BaseRepository {
     };
   }
 
-  async getActivityData(
-    characterIds: string[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<ActivityData[]> {
+  async getActivityData(characterIds: string[], startDate: Date, endDate: Date): Promise<ActivityData[]> {
     return this.executeQuery(async () => {
       const activity = await this.prisma.mapActivity.findMany({
         where: {
           characterId: {
-            in: characterIds.map((id) => BigInt(id)),
+            in: characterIds.map(id => BigInt(id)),
           },
           timestamp: {
             gte: startDate,
@@ -1648,16 +1377,12 @@ export class ChartService extends BaseRepository {
           characterId: true,
         },
         orderBy: {
-          timestamp: "asc",
+          timestamp: 'asc',
         },
       });
 
       return activity.map(
-        (item: {
-          timestamp: Date;
-          signatures: number;
-          characterId: bigint;
-        }): ActivityData => ({
+        (item: { timestamp: Date; signatures: number; characterId: bigint }): ActivityData => ({
           timestamp: item.timestamp,
           signatures: item.signatures,
           characterId: item.characterId,

@@ -1,4 +1,5 @@
-import { logger } from "../lib/logger";
+import { logger } from '../lib/logger';
+import { timerManager } from './timerManager';
 
 /**
  * Rate limiter utility for API clients
@@ -9,23 +10,29 @@ export class RateLimiter {
 
   constructor(
     private readonly minDelayMs: number,
-    private readonly serviceName: string = "API"
+    private readonly serviceName: string = 'API'
   ) {}
 
   /**
    * Wait if necessary to respect rate limits
+   * @param signal Optional AbortSignal for cancellation
    * @returns Promise that resolves when it's safe to make the next request
    */
-  async wait(): Promise<void> {
+  async wait(signal?: AbortSignal): Promise<void> {
     const now = Date.now();
     const elapsed = now - this.lastRequestTime;
 
     if (elapsed < this.minDelayMs) {
       const delay = this.minDelayMs - elapsed;
-      logger.debug(
-        `Rate limiting ${this.serviceName} - waiting ${delay}ms before next request`
-      );
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      logger.debug(`Rate limiting ${this.serviceName} - waiting ${delay}ms before next request`);
+
+      try {
+        await timerManager.delay(delay, signal);
+      } catch (error) {
+        throw new Error(
+          `Rate limiter for ${this.serviceName} aborted: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
     }
 
     this.lastRequestTime = Date.now();

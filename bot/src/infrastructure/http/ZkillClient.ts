@@ -1,7 +1,8 @@
-import { UnifiedESIClient } from "./UnifiedESIClient";
-import { logger } from "../../lib/logger";
-import { RateLimiter } from "../../utils/rateLimiter";
-import { RATE_LIMIT_MIN_DELAY } from "../../config";
+import { UnifiedESIClient } from './UnifiedESIClient';
+import { logger } from '../../lib/logger';
+import { RateLimiter } from '../../utils/rateLimiter';
+import { rateLimiterManager } from '../../utils/RateLimiterManager';
+import { RATE_LIMIT_MIN_DELAY } from '../../config';
 
 interface ZkillResponse {
   killID: number;
@@ -19,37 +20,35 @@ export class ZkillClient {
   private readonly client: UnifiedESIClient;
   private readonly rateLimiter: RateLimiter;
 
-  constructor(baseUrl: string = "https://zkillboard.com/api") {
+  constructor(baseUrl: string = 'https://zkillboard.com/api') {
     this.client = new UnifiedESIClient({
       baseUrl,
-      userAgent: "EVE-Chart-Bot/1.0",
+      userAgent: 'EVE-Chart-Bot/1.0',
       timeout: 15000,
     });
 
-    // Use shared rate limiter with 1 second delay for zKillboard
-    this.rateLimiter = new RateLimiter(RATE_LIMIT_MIN_DELAY, "zKillboard");
+    // Use shared rate limiter from singleton manager
+    // Override the default delay with config value if needed
+    this.rateLimiter = rateLimiterManager.getRateLimiter('zKillboard', {
+      minDelayMs: RATE_LIMIT_MIN_DELAY,
+    });
   }
 
   /**
    * Get a single killmail from zKillboard
    */
-  async getKillmail(killId: number): Promise<ZkillResponse | null> {
+  async getKillmail(killId: number, signal?: AbortSignal): Promise<ZkillResponse | null> {
     try {
-      await this.rateLimiter.wait();
+      await this.rateLimiter.wait(signal);
       logger.info(`Fetching killmail ${killId} from zKillboard`);
 
-      const response = await this.client.fetch<Record<string, any>>(
-        `/killID/${killId}/`
-      );
+      const response = await this.client.fetch<Record<string, any>>(`/killID/${killId}/`, { signal });
 
       // Log the raw response for debugging
-      logger.debug(
-        `Raw zKill response for killmail ${killId}:`,
-        JSON.stringify(response, null, 2)
-      );
+      logger.debug(`Raw zKill response for killmail ${killId}:`, JSON.stringify(response, null, 2));
 
       // Validate response structure
-      if (!response || typeof response !== "object") {
+      if (!response || typeof response !== 'object') {
         logger.warn(`Invalid response format for killmail ${killId}`);
         return null;
       }
@@ -57,7 +56,7 @@ export class ZkillClient {
       // The response might be wrapped in an object with the killID as the key
       const killData = response[killId.toString()] || response;
 
-      if (!killData || typeof killData !== "object") {
+      if (!killData || typeof killData !== 'object') {
         logger.warn(`Invalid kill data format for killmail ${killId}`);
         return null;
       }
@@ -72,7 +71,7 @@ export class ZkillClient {
       });
 
       // Ensure required fields exist
-      if (!killData.killmail_id || !killData.zkb || !killData.zkb.hash) {
+      if (!killData.killmail_id || !killData.zkb?.hash) {
         logger.warn(`Missing required fields for killmail ${killId}`, {
           killmail_id: killData.killmail_id,
           hasZkb: !!killData.zkb,
@@ -100,41 +99,26 @@ export class ZkillClient {
   /**
    * Get kills for a character from zKillboard
    */
-  async getCharacterKills(
-    characterId: number,
-    page: number = 1
-  ): Promise<ZkillResponse[]> {
+  async getCharacterKills(characterId: number, page: number = 1, signal?: AbortSignal): Promise<ZkillResponse[]> {
     try {
-      await this.rateLimiter.wait();
-      logger.info(
-        `Fetching kills for character ${characterId} from zKillboard (page ${page})`
-      );
+      await this.rateLimiter.wait(signal);
+      logger.info(`Fetching kills for character ${characterId} from zKillboard (page ${page})`);
 
-      const response = await this.client.fetch<Record<string, any>>(
-        `/characterID/${characterId}/page/${page}/`
-      );
+      const response = await this.client.fetch<Record<string, any>>(`/characterID/${characterId}/page/${page}/`, {
+        signal,
+      });
 
       // Log the raw response for debugging
-      logger.debug(
-        `Raw zKill response for character ${characterId} kills:`,
-        JSON.stringify(response, null, 2)
-      );
+      logger.debug(`Raw zKill response for character ${characterId} kills:`, JSON.stringify(response, null, 2));
 
-      if (!response || typeof response !== "object") {
-        logger.warn(
-          `Invalid response format for character ${characterId} kills`
-        );
+      if (!response || typeof response !== 'object') {
+        logger.warn(`Invalid response format for character ${characterId} kills`);
         return [];
       }
 
       // Convert object response to array
-      const kills = Object.values(response).filter((kill) => {
-        const isValid =
-          kill &&
-          typeof kill === "object" &&
-          kill.killmail_id &&
-          kill.zkb &&
-          kill.zkb.hash;
+      const kills = Object.values(response).filter(kill => {
+        const isValid = kill && typeof kill === 'object' && kill.killmail_id && kill.zkb?.hash;
 
         if (!isValid) {
           logger.debug(`Invalid kill entry:`, {
@@ -150,10 +134,7 @@ export class ZkillClient {
 
       return kills;
     } catch (error) {
-      logger.error(
-        `Error fetching kills for character ${characterId} from zKillboard:`,
-        error
-      );
+      logger.error(`Error fetching kills for character ${characterId} from zKillboard:`, error);
       throw error;
     }
   }
@@ -161,41 +142,27 @@ export class ZkillClient {
   /**
    * Get losses for a character from zKillboard
    */
-  async getCharacterLosses(
-    characterId: number,
-    page: number = 1
-  ): Promise<ZkillResponse[]> {
+  async getCharacterLosses(characterId: number, page: number = 1, signal?: AbortSignal): Promise<ZkillResponse[]> {
     try {
-      await this.rateLimiter.wait();
-      logger.info(
-        `Fetching losses for character ${characterId} from zKillboard (page ${page})`
-      );
+      await this.rateLimiter.wait(signal);
+      logger.info(`Fetching losses for character ${characterId} from zKillboard (page ${page})`);
 
       const response = await this.client.fetch<Record<string, any>>(
-        `/losses/characterID/${characterId}/page/${page}/`
+        `/losses/characterID/${characterId}/page/${page}/`,
+        { signal }
       );
 
       // Log the raw response for debugging
-      logger.debug(
-        `Raw zKill response for character ${characterId} losses:`,
-        JSON.stringify(response, null, 2)
-      );
+      logger.debug(`Raw zKill response for character ${characterId} losses:`, JSON.stringify(response, null, 2));
 
-      if (!response || typeof response !== "object") {
-        logger.warn(
-          `Invalid response format for character ${characterId} losses`
-        );
+      if (!response || typeof response !== 'object') {
+        logger.warn(`Invalid response format for character ${characterId} losses`);
         return [];
       }
 
       // Convert object response to array
-      const losses = Object.values(response).filter((kill) => {
-        const isValid =
-          kill &&
-          typeof kill === "object" &&
-          kill.killmail_id &&
-          kill.zkb &&
-          kill.zkb.hash;
+      const losses = Object.values(response).filter(kill => {
+        const isValid = kill && typeof kill === 'object' && kill.killmail_id && kill.zkb?.hash;
 
         if (!isValid) {
           logger.debug(`Invalid loss entry:`, {
@@ -211,11 +178,16 @@ export class ZkillClient {
 
       return losses;
     } catch (error) {
-      logger.error(
-        `Error fetching losses for character ${characterId} from zKillboard:`,
-        error
-      );
+      logger.error(`Error fetching losses for character ${characterId} from zKillboard:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Clean up resources
+   */
+  cleanup(): void {
+    // Rate limiter is now managed by the singleton, no need to reset here
+    // The manager will handle cleanup centrally
   }
 }

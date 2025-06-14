@@ -2,7 +2,7 @@
  * Feature flags configuration for toggling features
  */
 
-import { FEATURE_FLAGS } from "../config";
+import { FEATURE_FLAGS } from '../config';
 
 /**
  * Feature flags for the application

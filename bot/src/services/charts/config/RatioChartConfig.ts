@@ -2,10 +2,10 @@
  * Configuration for Kill-Death Ratio charts
  */
 export const RatioChartConfig = {
-  title: "Kill-Death Ratio by Character Group",
+  title: 'Kill-Death Ratio by Character Group',
   metrics: [
-    { name: "K/D Ratio", field: "ratio", color: "#3366CC" },
-    { name: "Efficiency %", field: "efficiency", color: "#109618" },
+    { name: 'K/D Ratio', field: 'ratio', color: '#3366CC' },
+    { name: 'Efficiency %', field: 'efficiency', color: '#109618' },
   ],
   chartOptions: {
     responsive: true,
@@ -13,17 +13,17 @@ export const RatioChartConfig = {
     plugins: {
       legend: {
         display: true,
-        position: "top",
+        position: 'top',
       },
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.dataset.label || "";
+            const label = context.dataset.label || '';
             const value = context.parsed.y;
 
-            if (label.includes("Ratio")) {
+            if (label.includes('Ratio')) {
               return `${label}: ${value.toFixed(2)}`;
-            } else if (label.includes("Efficiency")) {
+            } else if (label.includes('Efficiency')) {
               return `${label}: ${value.toFixed(1)}%`;
             }
             return `${label}: ${value}`;
@@ -35,14 +35,14 @@ export const RatioChartConfig = {
       x: {
         title: {
           display: true,
-          text: "Character Group",
+          text: 'Character Group',
         },
       },
       y: {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Ratio / Percentage",
+          text: 'Ratio / Percentage',
         },
       },
     },

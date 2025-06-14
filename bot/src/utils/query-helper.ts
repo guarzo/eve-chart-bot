@@ -10,28 +10,31 @@
  * @returns A where filter object for Prisma
  */
 export function buildWhereFilter(filters: Record<string, any>) {
-  return Object.entries(filters).reduce((acc, [key, value]) => {
-    if (value === undefined || value === null) {
-      return acc;
-    }
-
-    // Handle date fields
-    if (key.toLowerCase().includes("date") && value instanceof Date) {
-      acc[key] = { gte: value };
-    }
-    // Handle array values
-    else if (Array.isArray(value)) {
-      if (value.length > 0) {
-        acc[key] = { in: value };
+  return Object.entries(filters).reduce(
+    (acc, [key, value]) => {
+      if (value === undefined || value === null) {
+        return acc;
       }
-    }
-    // Handle simple values
-    else {
-      acc[key] = value;
-    }
 
-    return acc;
-  }, {} as Record<string, any>);
+      // Handle date fields
+      if (key.toLowerCase().includes('date') && value instanceof Date) {
+        acc[key] = { gte: value };
+      }
+      // Handle array values
+      else if (Array.isArray(value)) {
+        if (value.length > 0) {
+          acc[key] = { in: value };
+        }
+      }
+      // Handle simple values
+      else {
+        acc[key] = value;
+      }
+
+      return acc;
+    },
+    {} as Record<string, any>
+  );
 }
 
 /**
@@ -65,29 +68,18 @@ export function buildQueryString(
     sort?: boolean;
     encodeValues?: boolean;
     skipEmpty?: boolean;
-    arrayFormat?: "brackets" | "comma" | "repeat";
+    arrayFormat?: 'brackets' | 'comma' | 'repeat';
   } = {}
 ): string {
-  const {
-    sort = true,
-    encodeValues = true,
-    skipEmpty = true,
-    arrayFormat = "repeat",
-  } = options;
+  const { sort = true, encodeValues = true, skipEmpty = true, arrayFormat = 'repeat' } = options;
 
   // Filter out empty values if requested
   const filteredParams = skipEmpty
-    ? Object.entries(params).filter(
-        ([_, value]) => value !== null && value !== undefined && value !== ""
-      )
-    : Object.entries(params).filter(
-        ([_, value]) => value !== null && value !== undefined
-      );
+    ? Object.entries(params).filter(([, value]) => value !== null && value !== undefined && value !== '')
+    : Object.entries(params).filter(([, value]) => value !== null && value !== undefined);
 
   // Sort parameters if requested
-  const sortedParams = sort
-    ? filteredParams.sort(([a], [b]) => a.localeCompare(b))
-    : filteredParams;
+  const sortedParams = sort ? filteredParams.sort(([a], [b]) => a.localeCompare(b)) : filteredParams;
 
   // Build query string
   return sortedParams
@@ -95,46 +87,37 @@ export function buildQueryString(
       // Handle arrays
       if (Array.isArray(value)) {
         switch (arrayFormat) {
-          case "brackets":
+          case 'brackets':
             return value
-              .map((v) => {
-                const encodedKey = encodeValues
-                  ? encodeURIComponent(`${key}[]`)
-                  : `${key}[]`;
-                const encodedValue = encodeValues
-                  ? encodeURIComponent(String(v))
-                  : String(v);
+              .map(v => {
+                const encodedKey = encodeValues ? encodeURIComponent(`${key}[]`) : `${key}[]`;
+                const encodedValue = encodeValues ? encodeURIComponent(String(v)) : String(v);
                 return `${encodedKey}=${encodedValue}`;
               })
-              .join("&");
-          case "comma":
+              .join('&');
+          case 'comma': {
             const encodedKey = encodeValues ? encodeURIComponent(key) : key;
-            const encodedValue = encodeValues
-              ? encodeURIComponent(value.join(","))
-              : value.join(",");
+            const encodedValue = encodeValues ? encodeURIComponent(value.join(',')) : value.join(',');
             return `${encodedKey}=${encodedValue}`;
-          case "repeat":
+          }
+          case 'repeat':
           default:
             return value
-              .map((v) => {
+              .map(v => {
                 const encodedKey = encodeValues ? encodeURIComponent(key) : key;
-                const encodedValue = encodeValues
-                  ? encodeURIComponent(String(v))
-                  : String(v);
+                const encodedValue = encodeValues ? encodeURIComponent(String(v)) : String(v);
                 return `${encodedKey}=${encodedValue}`;
               })
-              .join("&");
+              .join('&');
         }
       }
 
       const stringValue = String(value);
-      const encodedValue = encodeValues
-        ? encodeURIComponent(stringValue)
-        : stringValue;
+      const encodedValue = encodeValues ? encodeURIComponent(stringValue) : stringValue;
       const encodedKey = encodeValues ? encodeURIComponent(key) : key;
       return `${encodedKey}=${encodedValue}`;
     })
-    .join("&");
+    .join('&');
 }
 
 /**
@@ -185,11 +168,7 @@ export function buildCacheKey(
  * @param params Query parameters
  * @returns Cache key string with hash
  */
-export function buildHashedCacheKey(
-  prefix: string,
-  endpoint: string,
-  params?: Record<string, any>
-): string {
+export function buildHashedCacheKey(prefix: string, endpoint: string, params?: Record<string, any>): string {
   if (!params || Object.keys(params).length === 0) {
     return `${prefix}:${endpoint}`;
   }
@@ -220,62 +199,45 @@ export function parseQueryString(
   queryString: string,
   options: {
     decodeValues?: boolean;
-    arrayFormat?: "brackets" | "comma" | "repeat";
+    arrayFormat?: 'brackets' | 'comma' | 'repeat';
     parseNumbers?: boolean;
     parseBooleans?: boolean;
   } = {}
 ): Record<string, string | string[] | number | boolean> {
-  const {
-    decodeValues = true,
-    arrayFormat = "repeat",
-    parseNumbers = false,
-    parseBooleans = false,
-  } = options;
+  const { decodeValues = true, arrayFormat = 'repeat', parseNumbers = false, parseBooleans = false } = options;
 
   const params: Record<string, any> = {};
 
   // Remove leading ? if present
-  const cleanQuery = queryString.startsWith("?")
-    ? queryString.slice(1)
-    : queryString;
+  const cleanQuery = queryString.startsWith('?') ? queryString.slice(1) : queryString;
 
   if (!cleanQuery) {
     return params;
   }
 
-  const pairs = cleanQuery.split("&");
+  const pairs = cleanQuery.split('&');
   for (const pair of pairs) {
-    const [key, value] = pair.split("=");
+    const [key, value] = pair.split('=');
     if (!key) continue;
 
     const decodedKey = decodeValues ? decodeURIComponent(key) : key;
-    const decodedValue = value
-      ? decodeValues
-        ? decodeURIComponent(value)
-        : value
-      : "";
+    const decodedValue = value ? (decodeValues ? decodeURIComponent(value) : value) : '';
 
     // Handle array formats
-    if (arrayFormat === "brackets" && decodedKey.endsWith("[]")) {
+    if (arrayFormat === 'brackets' && decodedKey.endsWith('[]')) {
       const arrayKey = decodedKey.slice(0, -2);
       if (!params[arrayKey]) {
         params[arrayKey] = [];
       }
-      params[arrayKey].push(
-        parseValue(decodedValue, { parseNumbers, parseBooleans })
-      );
-    } else if (arrayFormat === "comma" && decodedValue.includes(",")) {
-      params[decodedKey] = decodedValue
-        .split(",")
-        .map((v) => parseValue(v.trim(), { parseNumbers, parseBooleans }));
-    } else if (arrayFormat === "repeat" && params[decodedKey]) {
+      params[arrayKey].push(parseValue(decodedValue, { parseNumbers, parseBooleans }));
+    } else if (arrayFormat === 'comma' && decodedValue.includes(',')) {
+      params[decodedKey] = decodedValue.split(',').map(v => parseValue(v.trim(), { parseNumbers, parseBooleans }));
+    } else if (arrayFormat === 'repeat' && params[decodedKey]) {
       // Convert to array if we see the same key again
       if (!Array.isArray(params[decodedKey])) {
         params[decodedKey] = [params[decodedKey]];
       }
-      params[decodedKey].push(
-        parseValue(decodedValue, { parseNumbers, parseBooleans })
-      );
+      params[decodedKey].push(parseValue(decodedValue, { parseNumbers, parseBooleans }));
     } else {
       params[decodedKey] = parseValue(decodedValue, {
         parseNumbers,
@@ -297,11 +259,11 @@ function parseValue(
   const { parseNumbers = false, parseBooleans = false } = options;
 
   if (parseBooleans) {
-    if (value.toLowerCase() === "true") return true;
-    if (value.toLowerCase() === "false") return false;
+    if (value.toLowerCase() === 'true') return true;
+    if (value.toLowerCase() === 'false') return false;
   }
 
-  if (parseNumbers && !isNaN(Number(value)) && value !== "") {
+  if (parseNumbers && !isNaN(Number(value)) && value !== '') {
     return Number(value);
   }
 
@@ -313,9 +275,7 @@ function parseValue(
  * @param paramObjects Array of parameter objects to merge
  * @returns Merged parameter object
  */
-export function mergeParams(
-  ...paramObjects: Array<Record<string, any> | undefined>
-): Record<string, any> {
+export function mergeParams(...paramObjects: Array<Record<string, any> | undefined>): Record<string, any> {
   return paramObjects.reduce((merged: Record<string, any>, params) => {
     if (params) {
       return { ...merged, ...params };
@@ -329,15 +289,13 @@ export function mergeParams(
  * @param params Parameter object
  * @returns Parameter object with string values
  */
-export function stringifyParams(
-  params: Record<string, any>
-): Record<string, string> {
+export function stringifyParams(params: Record<string, any>): Record<string, string> {
   const stringified: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== undefined) {
       if (Array.isArray(value)) {
-        stringified[key] = value.join(",");
+        stringified[key] = value.join(',');
       } else {
         stringified[key] = String(value);
       }
@@ -364,7 +322,7 @@ export function buildUrl(
   }
 
   const queryString = buildQueryString(params, options);
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const separator = baseUrl.includes('?') ? '&' : '?';
 
   return `${baseUrl}${separator}${queryString}`;
 }
@@ -393,7 +351,7 @@ export function buildUrlWithPath(
   // Add query parameters
   if (queryParams && Object.keys(queryParams).length > 0) {
     const queryString = buildQueryString(queryParams, options);
-    const separator = url.includes("?") ? "&" : "?";
+    const separator = url.includes('?') ? '&' : '?';
     url += `${separator}${queryString}`;
   }
 
@@ -405,20 +363,16 @@ export function buildUrlWithPath(
  * @param params Raw parameter object
  * @returns Sanitized parameter object
  */
-export function sanitizeParams(
-  params: Record<string, any>
-): Record<string, string> {
+export function sanitizeParams(params: Record<string, any>): Record<string, string> {
   const sanitized: Record<string, string> = {};
 
   for (const [key, value] of Object.entries(params)) {
-    if (value !== null && value !== undefined && value !== "") {
+    if (value !== null && value !== undefined && value !== '') {
       // Convert BigInt to string
-      if (typeof value === "bigint") {
+      if (typeof value === 'bigint') {
         sanitized[key] = value.toString();
       } else if (Array.isArray(value)) {
-        sanitized[key] = value
-          .map((v) => (typeof v === "bigint" ? v.toString() : String(v)))
-          .join(",");
+        sanitized[key] = value.map(v => (typeof v === 'bigint' ? v.toString() : String(v))).join(',');
       } else {
         sanitized[key] = String(value);
       }
@@ -462,11 +416,7 @@ export function extractDomain(url: string): string | null {
  * @param totalItems Total number of items
  * @returns Pagination metadata object
  */
-export function buildPaginationMeta(
-  page: number,
-  pageSize: number,
-  totalItems: number
-) {
+export function buildPaginationMeta(page: number, pageSize: number, totalItems: number) {
   const totalPages = Math.ceil(totalItems / pageSize);
   const hasNext = page < totalPages;
   const hasPrev = page > 1;

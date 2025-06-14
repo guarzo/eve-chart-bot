@@ -1,10 +1,11 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
-import { TrendChartConfig } from "../config";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { format } from "date-fns";
-import { logger } from "../../../lib/logger";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+/* eslint-disable max-lines */
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData } from '../../../types/chart';
+import { TrendChartConfig } from '../config';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { format } from 'date-fns';
+import { logger } from '../../../lib/logger';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 
 /**
  * Generator for trend charts showing kills over time
@@ -24,7 +25,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
   /**
    * Generate a trend chart based on the provided options
    */
-  async generateChart(options: {
+  override async generateChart(options: {
     startDate: Date;
     endDate: Date;
     characterGroups: Array<{
@@ -36,24 +37,20 @@ export class TrendChartGenerator extends BaseChartGenerator {
   }): Promise<ChartData> {
     try {
       const { startDate, endDate, characterGroups, displayType } = options;
-      logger.info(
-        `Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`
-      );
-      logger.debug(
-        `Chart type: ${displayType}, Groups: ${characterGroups.length}`
-      );
+      logger.info(`Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      logger.debug(`Chart type: ${displayType}, Groups: ${characterGroups.length}`);
 
       // Select chart generation function based on display type
-      if (displayType === "area") {
+      if (displayType === 'area') {
         return this.generateAreaChart(characterGroups, startDate, endDate);
-      } else if (displayType === "dual") {
+      } else if (displayType === 'dual') {
         return this.generateDualAxisChart(characterGroups, startDate, endDate);
       } else {
         // Default to line chart (timeline)
         return this.generateTimelineChart(characterGroups, startDate, endDate);
       }
     } catch (error) {
-      logger.error("Error generating trend chart:", error);
+      logger.error('Error generating trend chart:', error);
       throw error;
     }
   }
@@ -74,37 +71,32 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const dateRange = endDate.getTime() - startDate.getTime();
     const days = dateRange / (1000 * 60 * 60 * 24);
 
-    let groupBy: "hour" | "day" | "week" = "day";
+    let groupBy: 'hour' | 'day' | 'week' = 'day';
     if (days <= 2) {
-      groupBy = "hour";
+      groupBy = 'hour';
     } else if (days > 30) {
-      groupBy = "week";
+      groupBy = 'week';
     }
 
     // Create a dataset for each character group
     const datasets = [];
     const timeLabels = new Set<string>();
     let overallTotalKills = 0;
-    let allDataPoints: number[] = []; // Used for trend calculation
+    const allDataPoints: number[] = []; // Used for trend calculation
 
     // Process each group
     for (let i = 0; i < characterGroups.length; i++) {
       const group = characterGroups[i];
 
       // Get all character IDs for this group
-      const characterIds = group.characters.map((char) => BigInt(char.eveId));
+      const characterIds = group.characters.map(char => BigInt(char.eveId));
 
       if (characterIds.length === 0) {
         continue;
       }
 
       // Get kill data grouped by time
-      const killData = await this.killRepository.getKillsGroupedByTime(
-        characterIds,
-        startDate,
-        endDate,
-        groupBy
-      );
+      const killData = await this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy);
 
       // Skip if no data
       if (killData.length === 0) {
@@ -116,11 +108,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
       // Try to find the main character or use the first character
       if (group.characters.length > 0) {
-        const mainCharacter = group.characters.find((char) =>
-          group.characters.some(
-            (c) =>
-              c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-          )
+        const mainCharacter = group.characters.find(char =>
+          group.characters.some(c => c.eveId !== char.eveId && c.name.includes(char.name.split(' ')[0]))
         );
 
         if (mainCharacter) {
@@ -137,10 +126,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
       let groupTotalKills = 0;
 
       for (const point of killData) {
-        const formattedTime = format(
-          point.timestamp,
-          this.getDateFormat(groupBy)
-        );
+        const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
         timePoints.push(formattedTime);
         timeLabels.add(formattedTime);
 
@@ -156,10 +142,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
       datasets.push({
         label: displayName,
         data: dataPoints,
-        backgroundColor:
-          TrendChartConfig.colors[i % TrendChartConfig.colors.length],
-        borderColor:
-          TrendChartConfig.colors[i % TrendChartConfig.colors.length],
+        backgroundColor: TrendChartConfig.colors[i % TrendChartConfig.colors.length],
+        borderColor: TrendChartConfig.colors[i % TrendChartConfig.colors.length],
         fill: false,
       });
     }
@@ -172,9 +156,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
     });
 
     // Calculate average kills per day
-    const dayCount = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     const averageKillsPerDay = overallTotalKills / dayCount;
 
     // Calculate the trend (increasing, stable, or decreasing)
@@ -184,17 +166,10 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const chartData: ChartData = {
       labels: sortedLabels,
       datasets,
-      displayType: "line",
-      title: `${TrendChartConfig.title} - ${format(
-        startDate,
-        "MMM d"
-      )} to ${format(endDate, "MMM d, yyyy")}`,
+      displayType: 'line',
+      title: `${TrendChartConfig.title} - ${format(startDate, 'MMM d')} to ${format(endDate, 'MMM d, yyyy')}`,
       options: TrendChartConfig.timelineOptions,
-      summary: TrendChartConfig.getDefaultSummary(
-        overallTotalKills,
-        averageKillsPerDay,
-        trend
-      ),
+      summary: TrendChartConfig.getDefaultSummary(overallTotalKills, averageKillsPerDay, trend),
     };
 
     return chartData;
@@ -216,37 +191,32 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const dateRange = endDate.getTime() - startDate.getTime();
     const days = dateRange / (1000 * 60 * 60 * 24);
 
-    let groupBy: "hour" | "day" | "week" = "day";
+    let groupBy: 'hour' | 'day' | 'week' = 'day';
     if (days <= 2) {
-      groupBy = "hour";
+      groupBy = 'hour';
     } else if (days > 30) {
-      groupBy = "week";
+      groupBy = 'week';
     }
 
     // Create a dataset for each character group
     const datasets = [];
     const timeLabels = new Set<string>();
     let overallTotalKills = 0;
-    let allDataPoints: number[] = []; // Used for trend calculation
+    const allDataPoints: number[] = []; // Used for trend calculation
 
     // Process each group
     for (let i = 0; i < characterGroups.length; i++) {
       const group = characterGroups[i];
 
       // Get all character IDs for this group
-      const characterIds = group.characters.map((char) => BigInt(char.eveId));
+      const characterIds = group.characters.map(char => BigInt(char.eveId));
 
       if (characterIds.length === 0) {
         continue;
       }
 
       // Get kill data grouped by time
-      const killData = await this.killRepository.getKillsGroupedByTime(
-        characterIds,
-        startDate,
-        endDate,
-        groupBy
-      );
+      const killData = await this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy);
 
       // Skip if no data
       if (killData.length === 0) {
@@ -258,11 +228,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
       // Try to find the main character or use the first character
       if (group.characters.length > 0) {
-        const mainCharacter = group.characters.find((char) =>
-          group.characters.some(
-            (c) =>
-              c.eveId !== char.eveId && c.name.includes(char.name.split(" ")[0])
-          )
+        const mainCharacter = group.characters.find(char =>
+          group.characters.some(c => c.eveId !== char.eveId && c.name.includes(char.name.split(' ')[0]))
         );
 
         if (mainCharacter) {
@@ -280,10 +247,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
       let groupTotalKills = 0;
 
       for (const point of killData) {
-        const formattedTime = format(
-          point.timestamp,
-          this.getDateFormat(groupBy)
-        );
+        const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
         timePoints.push(formattedTime);
         timeLabels.add(formattedTime);
 
@@ -300,12 +264,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
       datasets.push({
         label: displayName,
         data: dataPoints,
-        backgroundColor: this.adjustColorTransparency(
-          TrendChartConfig.colors[i % TrendChartConfig.colors.length],
-          0.6
-        ),
-        borderColor:
-          TrendChartConfig.colors[i % TrendChartConfig.colors.length],
+        backgroundColor: this.adjustColorTransparency(TrendChartConfig.colors[i % TrendChartConfig.colors.length], 0.6),
+        borderColor: TrendChartConfig.colors[i % TrendChartConfig.colors.length],
         fill: true,
       });
     }
@@ -318,9 +278,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
     });
 
     // Calculate average kills per day
-    const dayCount = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     const averageKillsPerDay = overallTotalKills / dayCount;
 
     // Calculate the trend (increasing, stable, or decreasing)
@@ -330,17 +288,13 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const chartData: ChartData = {
       labels: sortedLabels,
       datasets,
-      displayType: "line", // Still use line type but with fill
+      displayType: 'line', // Still use line type but with fill
       title: `Cumulative ${TrendChartConfig.title} - ${format(
         startDate,
-        "MMM d"
-      )} to ${format(endDate, "MMM d, yyyy")}`,
+        'MMM d'
+      )} to ${format(endDate, 'MMM d, yyyy')}`,
       options: TrendChartConfig.areaOptions,
-      summary: TrendChartConfig.getDefaultSummary(
-        overallTotalKills,
-        averageKillsPerDay,
-        trend
-      ),
+      summary: TrendChartConfig.getDefaultSummary(overallTotalKills, averageKillsPerDay, trend),
     };
 
     return chartData;
@@ -363,34 +317,29 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     // Extract all character IDs from all groups
     for (const group of characterGroups) {
-      allCharacterIds.push(...group.characters.map((char) => BigInt(char.eveId)));
+      allCharacterIds.push(...group.characters.map(char => BigInt(char.eveId)));
     }
 
     if (allCharacterIds.length === 0) {
-      throw new Error("No characters found in the provided groups");
+      throw new Error('No characters found in the provided groups');
     }
 
     // Determine appropriate time grouping
     const dateRange = endDate.getTime() - startDate.getTime();
     const days = dateRange / (1000 * 60 * 60 * 24);
 
-    let groupBy: "hour" | "day" | "week" = "day";
+    let groupBy: 'hour' | 'day' | 'week' = 'day';
     if (days <= 2) {
-      groupBy = "hour";
+      groupBy = 'hour';
     } else if (days > 30) {
-      groupBy = "week";
+      groupBy = 'week';
     }
 
     // Get kill data grouped by time
-    const killData = await this.killRepository.getKillsGroupedByTime(
-      allCharacterIds,
-      startDate,
-      endDate,
-      groupBy
-    );
+    const killData = await this.killRepository.getKillsGroupedByTime(allCharacterIds, startDate, endDate, groupBy);
 
     if (killData.length === 0) {
-      throw new Error("No kill data found for the specified time period");
+      throw new Error('No kill data found for the specified time period');
     }
 
     // Prepare data for the dual-axis chart
@@ -399,14 +348,11 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const timeLabels: string[] = [];
 
     let totalKills = 0;
-    let allKillsData: number[] = []; // For trend calculation
+    const allKillsData: number[] = []; // For trend calculation
 
     // Process the kill data
     for (const point of killData) {
-      const formattedTime = format(
-        point.timestamp,
-        this.getDateFormat(groupBy)
-      );
+      const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
       timeLabels.push(formattedTime);
 
       killsData.push(point.kills);
@@ -414,39 +360,34 @@ export class TrendChartGenerator extends BaseChartGenerator {
       totalKills += point.kills;
 
       // Convert bigint to number, handling potential overflow
-      const valueInISK =
-        Number(point.value) > Number.MAX_SAFE_INTEGER
-          ? Number.MAX_SAFE_INTEGER
-          : Number(point.value);
+      const valueInISK = Number(point.value) > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : Number(point.value);
       valueData.push(valueInISK);
     }
 
     // Create datasets for kills (line) and values (bar)
     const datasets = [
       {
-        label: "Kills",
+        label: 'Kills',
         data: killsData,
-        backgroundColor: this.adjustColorTransparency("#3366CC", 0.7),
-        borderColor: "#3366CC",
+        backgroundColor: this.adjustColorTransparency('#3366CC', 0.7),
+        borderColor: '#3366CC',
         fill: false,
-        type: "line" as "line",
-        yAxisID: "y",
+        type: 'line' as 'line',
+        yAxisID: 'y',
       },
       {
-        label: "Total Value (ISK)",
+        label: 'Total Value (ISK)',
         data: valueData,
-        backgroundColor: this.adjustColorTransparency("#DC3912", 0.7),
-        borderColor: "#DC3912",
+        backgroundColor: this.adjustColorTransparency('#DC3912', 0.7),
+        borderColor: '#DC3912',
         fill: false,
-        type: "bar" as "bar",
-        yAxisID: "y1",
+        type: 'bar' as 'bar',
+        yAxisID: 'y1',
       },
     ];
 
     // Calculate average kills per day
-    const dayCount = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
     const averageKillsPerDay = totalKills / dayCount;
 
     // Calculate the trend (increasing, stable, or decreasing)
@@ -456,18 +397,10 @@ export class TrendChartGenerator extends BaseChartGenerator {
     const chartData: ChartData = {
       labels: timeLabels,
       datasets,
-      displayType: "line", // Use line type for dual-axis chart
-      title: `Kills vs. Value Over Time - ${format(
-        startDate,
-        "MMM d"
-      )} to ${format(endDate, "MMM d, yyyy")}`,
+      displayType: 'line', // Use line type for dual-axis chart
+      title: `Kills vs. Value Over Time - ${format(startDate, 'MMM d')} to ${format(endDate, 'MMM d, yyyy')}`,
       options: TrendChartConfig.dualAxisOptions,
-      summary:
-        TrendChartConfig.getDefaultSummary(
-          totalKills,
-          averageKillsPerDay,
-          trend
-        ) + " with value metrics",
+      summary: `${TrendChartConfig.getDefaultSummary(totalKills, averageKillsPerDay, trend)} with value metrics`,
     };
 
     return chartData;
@@ -476,11 +409,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
   /**
    * Calculate trend direction from a series of data points
    */
-  private calculateTrend(
-    dataPoints: number[]
-  ): "increasing" | "stable" | "decreasing" {
+  private calculateTrend(dataPoints: number[]): 'increasing' | 'stable' | 'decreasing' {
     if (dataPoints.length < 3) {
-      return "stable"; // Not enough data to determine trend
+      return 'stable'; // Not enough data to determine trend
     }
 
     // Simple linear regression to determine trend
@@ -504,27 +435,27 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     // Determine trend direction
     if (slope > 0.05) {
-      return "increasing";
+      return 'increasing';
     } else if (slope < -0.05) {
-      return "decreasing";
+      return 'decreasing';
     } else {
-      return "stable";
+      return 'stable';
     }
   }
 
   /**
    * Get a date format string based on the grouping level
    */
-  protected getDateFormat(groupBy: "hour" | "day" | "week"): string {
+  protected override getDateFormat(groupBy: 'hour' | 'day' | 'week'): string {
     switch (groupBy) {
-      case "hour":
-        return "MMM d, HH:mm";
-      case "day":
-        return "MMM d";
-      case "week":
+      case 'hour':
+        return 'MMM d, HH:mm';
+      case 'day':
+        return 'MMM d';
+      case 'week':
         return "'Week' W, MMM yyyy";
       default:
-        return "MMM d";
+        return 'MMM d';
     }
   }
 
@@ -532,16 +463,16 @@ export class TrendChartGenerator extends BaseChartGenerator {
    * Adjust color transparency (for area charts)
    */
   private adjustColorTransparency(color: string, alpha: number): string {
-    if (color.startsWith("#")) {
+    if (color.startsWith('#')) {
       // Convert hex to rgb
       const r = parseInt(color.substring(1, 3), 16);
       const g = parseInt(color.substring(3, 5), 16);
       const b = parseInt(color.substring(5, 7), 16);
       return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    } else if (color.startsWith("rgb(")) {
+    } else if (color.startsWith('rgb(')) {
       // Convert rgb to rgba
-      return color.replace("rgb(", "rgba(").replace(")", `, ${alpha})`);
-    } else if (color.startsWith("rgba(")) {
+      return color.replace('rgb(', 'rgba(').replace(')', `, ${alpha})`);
+    } else if (color.startsWith('rgba(')) {
       // Replace existing alpha
       return color.replace(/,\s*[\d.]+\)$/, `, ${alpha})`);
     }

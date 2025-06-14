@@ -1,9 +1,9 @@
-import { Character } from "../domain/character/Character";
-import { CharacterGroup } from "../domain/character/CharacterGroup";
-import { CharacterRepository } from "../infrastructure/repositories/CharacterRepository";
-import { logger } from "../lib/logger";
-import { ESIService } from "./ESIService";
-import { PrismaClient } from "@prisma/client";
+import { Character } from '../domain/character/Character';
+import { CharacterGroup } from '../domain/character/CharacterGroup';
+import { CharacterRepository } from '../infrastructure/repositories/CharacterRepository';
+import { logger } from '../lib/logger';
+import { ESIService } from './ESIService';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Service for handling character-related business logic
@@ -88,24 +88,30 @@ export class CharacterService {
   /**
    * Delete a character group
    */
-  async deleteCharacterGroup(_groupId: string): Promise<void> {
+  async deleteCharacterGroup(groupId: string): Promise<void> {
     // This method needs to be implemented in CharacterRepository
+    // TODO: Implement using groupId parameter
+    void groupId; // Suppress unused variable warning
     throw new Error('deleteCharacterGroup not implemented');
   }
 
   /**
    * Set a character as the main character in a group
    */
-  async setMainCharacter(_characterId: string): Promise<CharacterGroup> {
+  async setMainCharacter(characterId: string): Promise<CharacterGroup> {
     // This method needs to be implemented in CharacterRepository
+    // TODO: Implement using characterId parameter
+    void characterId; // Suppress unused variable warning
     throw new Error('setMainCharacter not implemented');
   }
 
   /**
    * Remove a character from a group
    */
-  async removeFromGroup(_characterId: string): Promise<Character> {
+  async removeFromGroup(characterId: string): Promise<Character> {
     // This method needs to be implemented in CharacterRepository
+    // TODO: Implement using characterId parameter
+    void characterId; // Suppress unused variable warning
     throw new Error('removeFromGroup not implemented');
   }
 
@@ -127,7 +133,7 @@ export class CharacterService {
       const character = new Character({
         eveId: characterId,
         name: characterId, // We don't need the name since it can't change
-        allianceTicker: mapData.allianceTicker || undefined,
+        allianceTicker: mapData.allianceTicker ?? undefined,
         corporationTicker: mapData.corporationTicker,
         corporationId: mapData.corporationId,
       });
@@ -138,8 +144,7 @@ export class CharacterService {
       logger.info(`Successfully synced character ${characterId}`);
       return saved;
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 
       logger.error(
@@ -165,9 +170,7 @@ export class CharacterService {
     for (const characterId of characterIds) {
       try {
         // Get character data from ESI
-        const esiData = await this.esiService.getCharacter(
-          parseInt(characterId, 10)
-        );
+        const esiData = await this.esiService.getCharacter(parseInt(characterId, 10));
         if (!esiData) {
           throw new Error(`No ESI data found for character ${characterId}`);
         }
@@ -185,9 +188,7 @@ export class CharacterService {
     }
 
     if (errors.length > 0) {
-      logger.warn(
-        `Completed character sync with ${errors.length} errors out of ${characterIds.length} characters`
-      );
+      logger.warn(`Completed character sync with ${errors.length} errors out of ${characterIds.length} characters`);
     } else {
       logger.info(`Successfully synced all ${characterIds.length} characters`);
     }

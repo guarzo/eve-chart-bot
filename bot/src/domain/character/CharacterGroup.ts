@@ -1,5 +1,5 @@
-import { Exclude, Expose, Transform } from "class-transformer";
-import { Character } from "./Character";
+import { Exclude, Expose, Transform } from 'class-transformer';
+import { Character } from './Character';
 
 /**
  * CharacterGroup domain entity
@@ -54,7 +54,7 @@ export class CharacterGroup {
       name: this.name,
       map_name: this.map_name,
       mainCharacterId: this.mainCharacterId,
-      characters: this.characters.map((char) => char.toJSON()),
+      characters: this.characters.map(char => char.toJSON()),
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -64,16 +64,14 @@ export class CharacterGroup {
    * Gets the main character of the group
    */
   getMainCharacter(): Character | undefined {
-    return this.characters?.find((c) => c.eveId === this.mainCharacterId);
+    return this.characters?.find(c => c.eveId === this.mainCharacterId);
   }
 
   /**
    * Gets all alt characters in the group
    */
   getAltCharacters(): Character[] {
-    return (
-      this.characters?.filter((c) => c.eveId !== this.mainCharacterId) || []
-    );
+    return this.characters?.filter(c => c.eveId !== this.mainCharacterId) || [];
   }
 
   /**
@@ -87,10 +85,6 @@ export class CharacterGroup {
    * Checks if a character is an alt in the group
    */
   isAltCharacter(characterId: string): boolean {
-    return (
-      (this.mainCharacterId !== characterId &&
-        this.characters?.some((c) => c.eveId === characterId)) ||
-      false
-    );
+    return (this.mainCharacterId !== characterId && this.characters?.some(c => c.eveId === characterId)) || false;
   }
 }

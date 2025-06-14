@@ -1,9 +1,11 @@
-import axios, { AxiosInstance, AxiosRequestConfig } from "axios";
-import { logger } from "../../lib/logger";
-import { CacheAdapter } from "../../cache/CacheAdapter";
-import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
-import { ESIClientConfig, IESIClient } from "./ESIClient";
-import { retryOperation } from "../../utils/retry";
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { logger } from '../../lib/logger';
+import { CacheAdapter } from '../../cache/CacheAdapter';
+import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';
+import { ESIClientConfig, IESIClient } from './ESIClient';
+import { retryOperation } from '../../utils/retry';
+import { RateLimiter } from '../../utils/rateLimiter';
+import { rateLimiterManager } from '../../utils/RateLimiterManager';
 import {
   REDIS_URL,
   ESI_BASE_URL,
@@ -11,7 +13,7 @@ import {
   HTTP_TIMEOUT,
   HTTP_MAX_RETRIES,
   HTTP_INITIAL_RETRY_DELAY,
-} from "../../config";
+} from '../../config';
 
 /**
  * Unified client for interacting with EVE Online's ESI API
@@ -21,6 +23,7 @@ export class UnifiedESIClient implements IESIClient {
   private readonly client: AxiosInstance;
   private readonly config: Required<ESIClientConfig>;
   private readonly cache: CacheAdapter;
+  private readonly rateLimiter: RateLimiter | null = null;
 
   /**
    * Create a new unified ESI client
@@ -29,25 +32,29 @@ export class UnifiedESIClient implements IESIClient {
    */
   constructor(config: ESIClientConfig = {}, cache?: CacheAdapter) {
     this.config = {
-      baseUrl: config.baseUrl || ESI_BASE_URL,
-      timeout: config.timeout || HTTP_TIMEOUT,
-      userAgent: config.userAgent || "EVE-Chart-Bot/1.0",
-      cacheTtl: config.cacheTtl || CACHE_TTL,
-      maxRetries: config.maxRetries || HTTP_MAX_RETRIES,
-      initialRetryDelay: config.initialRetryDelay || HTTP_INITIAL_RETRY_DELAY,
+      baseUrl: config.baseUrl ?? ESI_BASE_URL,
+      timeout: config.timeout ?? HTTP_TIMEOUT,
+      userAgent: config.userAgent ?? 'EVE-Chart-Bot/1.0',
+      cacheTtl: config.cacheTtl ?? CACHE_TTL,
+      maxRetries: config.maxRetries ?? HTTP_MAX_RETRIES,
+      initialRetryDelay: config.initialRetryDelay ?? HTTP_INITIAL_RETRY_DELAY,
     };
 
     this.client = axios.create({
       baseURL: this.config.baseUrl,
       timeout: this.config.timeout,
       headers: {
-        "User-Agent": this.config.userAgent,
-        Accept: "application/json",
+        'User-Agent': this.config.userAgent,
+        Accept: 'application/json',
       },
     });
 
-    this.cache =
-      cache || new CacheRedisAdapter(REDIS_URL, this.config.cacheTtl);
+    this.cache = cache ?? new CacheRedisAdapter(REDIS_URL, this.config.cacheTtl);
+
+    // Only use rate limiter if this is an ESI client (not used for other APIs)
+    if (this.config.baseUrl.includes('esi')) {
+      this.rateLimiter = rateLimiterManager.getRateLimiter('ESI');
+    }
   }
 
   /**
@@ -55,12 +62,9 @@ export class UnifiedESIClient implements IESIClient {
    * @param endpoint API endpoint to fetch
    * @param options Additional request options
    */
-  async fetch<T>(
-    endpoint: string,
-    options: AxiosRequestConfig = {}
-  ): Promise<T> {
-    const url = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    const cacheKey = this.buildCacheKey(url, options.params || {});
+  async fetch<T>(endpoint: string, options: AxiosRequestConfig = {}): Promise<T> {
+    const url = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    const cacheKey = this.buildCacheKey(url, options.params ?? {});
 
     try {
       // Try to get from cache first
@@ -72,9 +76,17 @@ export class UnifiedESIClient implements IESIClient {
 
       // Not in cache, fetch from API with retry logic
       logger.debug(`ESI cache miss for ${url}, fetching from API`);
+
+      // Apply rate limiting if configured
+      if (this.rateLimiter && options.signal) {
+        // Cast to AbortSignal if it's compatible
+        await this.rateLimiter.wait(options.signal as AbortSignal);
+      } else if (this.rateLimiter) {
+        await this.rateLimiter.wait();
+      }
+
       const data = await retryOperation(
-        () =>
-          this.client.get<T>(url, options).then((response) => response.data),
+        () => this.client.get<T>(url, options).then(response => response.data),
         `ESI request to ${url}`,
         {
           maxRetries: this.config.maxRetries,
@@ -84,9 +96,7 @@ export class UnifiedESIClient implements IESIClient {
       );
 
       if (!data) {
-        throw new Error(
-          `Failed to fetch data from ESI after ${this.config.maxRetries} retries`
-        );
+        throw new Error(`Failed to fetch data from ESI after ${this.config.maxRetries} retries`);
       }
 
       // Cache the response
@@ -108,10 +118,10 @@ export class UnifiedESIClient implements IESIClient {
         ? Object.entries(params)
             .sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
             .map(([key, value]) => `${key}=${value}`)
-            .join("&")
-        : "";
+            .join('&')
+        : '';
 
-    return `esi:${endpoint}${paramString ? `?${paramString}` : ""}`;
+    return `esi:${endpoint}${paramString ? `?${paramString}` : ''}`;
   }
 
   /**
@@ -161,9 +171,7 @@ export class UnifiedESIClient implements IESIClient {
    */
   async clearCache(endpoint?: string): Promise<void> {
     if (endpoint) {
-      const normalizedEndpoint = endpoint.startsWith("/")
-        ? endpoint
-        : `/${endpoint}`;
+      const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
       await this.cache.delete(`esi:${normalizedEndpoint}`);
     } else {
       // Clear all ESI cache

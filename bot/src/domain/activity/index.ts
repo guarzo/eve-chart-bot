@@ -1,1 +1,1 @@
-export * from "./MapActivity";
+export * from './MapActivity';

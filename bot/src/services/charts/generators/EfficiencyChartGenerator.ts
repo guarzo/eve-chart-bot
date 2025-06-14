@@ -1,9 +1,9 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
-import { logger } from "../../../lib/logger";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
+import { logger } from '../../../lib/logger';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 
 /**
  * Generator for efficiency charts
@@ -34,17 +34,15 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
     displayType: string;
   }): Promise<ChartData> {
     const { startDate, endDate, characterGroups } = options;
-    logger.info("Generating efficiency chart");
+    logger.info('Generating efficiency chart');
 
     // Get all character IDs from all groups
-    const characterIds = characterGroups.flatMap((group) =>
-      group.characters.map((c) => BigInt(c.eveId))
-    );
+    const characterIds = characterGroups.flatMap(group => group.characters.map(c => BigInt(c.eveId)));
 
     // Get kills and losses for all characters
     const [kills, losses] = await Promise.all([
       this.killRepository.getKillsForCharacters(
-        characterIds.map((id) => BigInt(id)),
+        characterIds.map(id => BigInt(id)),
         startDate,
         endDate
       ),
@@ -52,21 +50,14 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
     ]);
 
     // Group data by character group
-    const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
-      const groupKills = kills.filter((kill) =>
-        groupCharacterIds.includes(BigInt(kill.character_id))
-      );
-      const groupLosses = losses.filter((loss) =>
-        groupCharacterIds.includes(BigInt(loss.characterId))
-      );
+    const groupData = characterGroups.map(group => {
+      const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
+      const groupKills = kills.filter(kill => groupCharacterIds.includes(BigInt(kill.character_id)));
+      const groupLosses = losses.filter(loss => groupCharacterIds.includes(BigInt(loss.characterId)));
 
       const totalKills = groupKills.length;
       const totalLosses = groupLosses.length;
-      const efficiency =
-        totalKills + totalLosses > 0
-          ? (totalKills / (totalKills + totalLosses)) * 100
-          : 0;
+      const efficiency = totalKills + totalLosses > 0 ? (totalKills / (totalKills + totalLosses)) * 100 : 0;
 
       return {
         group,
@@ -83,25 +74,25 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
 
     // Create chart data
     return {
-      labels: groupData.map((data) => this.getGroupDisplayName(data.group)),
+      labels: groupData.map(data => this.getGroupDisplayName(data.group)),
       datasets: [
         {
-          label: "Efficiency (%)",
-          data: groupData.map((data) => data.efficiency),
-          backgroundColor: this.getDatasetColors("kills").primary,
+          label: 'Efficiency (%)',
+          data: groupData.map(data => data.efficiency),
+          backgroundColor: this.getDatasetColors('kills').primary,
         },
         {
-          label: "Total Kills",
-          data: groupData.map((data) => data.totalKills),
-          backgroundColor: this.getDatasetColors("kills").secondary,
+          label: 'Total Kills',
+          data: groupData.map(data => data.totalKills),
+          backgroundColor: this.getDatasetColors('kills').secondary,
         },
         {
-          label: "Total Losses",
-          data: groupData.map((data) => data.totalLosses),
-          backgroundColor: this.getDatasetColors("loss").primary,
+          label: 'Total Losses',
+          data: groupData.map(data => data.totalLosses),
+          backgroundColor: this.getDatasetColors('loss').primary,
         },
       ],
-      displayType: "horizontalBar" as ChartDisplayType,
+      displayType: 'horizontalBar' as ChartDisplayType,
     };
   }
 }

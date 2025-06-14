@@ -1,11 +1,11 @@
-import { MapClient } from "../../infrastructure/http/MapClient";
-import { CacheRedisAdapter } from "../../cache/CacheRedisAdapter";
-import { retryOperation } from "../../utils/retry";
-import { logger } from "../../lib/logger";
-import { MapActivityResponseSchema } from "../../types/ingestion";
-import { MapActivityRepository } from "../../infrastructure/repositories/MapActivityRepository";
-import { MapActivity } from "../../domain/activity/MapActivity";
-import { Configuration } from "../../config";
+import { MapClient } from '../../infrastructure/http/MapClient';
+import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';
+import { retryOperation } from '../../utils/retry';
+import { logger } from '../../lib/logger';
+import { MapActivityResponseSchema } from '../../types/ingestion';
+import { MapActivityRepository } from '../../infrastructure/repositories/MapActivityRepository';
+import { MapActivity } from '../../domain/activity/MapActivity';
+import { Configuration } from '../../config';
 
 export class MapActivityService {
   private readonly map: MapClient;
@@ -17,7 +17,7 @@ export class MapActivityService {
   constructor(
     mapApiUrl: string,
     mapApiKey: string,
-    redisUrl: string = "redis://localhost:6379",
+    redisUrl: string = 'redis://localhost:6379',
     cacheTtl: number = 300,
     maxRetries: number = 3,
     retryDelay: number = 5000
@@ -33,21 +33,19 @@ export class MapActivityService {
    * Start the map activity service
    */
   public async start(): Promise<void> {
-    logger.info("Starting map activity service...");
+    logger.info('Starting map activity service...');
 
     // Get map name from centralized configuration
     const mapName = Configuration.apis.map.name;
     if (!mapName) {
-      logger.warn(
-        "MAP_NAME environment variable not set, skipping map activity ingestion"
-      );
+      logger.warn('MAP_NAME environment variable not set, skipping map activity ingestion');
       return;
     }
 
     try {
       // Fetch map activity data for the entire map (not per character)
       await this.ingestMapActivity(mapName, 7); // Last 7 days
-      logger.info("Map activity service started successfully");
+      logger.info('Map activity service started successfully');
     } catch (error) {
       logger.error(`Error ingesting map activity for map ${mapName}:`, error);
     }
@@ -60,7 +58,7 @@ export class MapActivityService {
         async () => {
           const result = await this.map.getCharacterActivity(slug, days);
           if (!result) {
-            throw new Error("No data returned from Map API");
+            throw new Error('No data returned from Map API');
           }
           return result;
         },
@@ -72,7 +70,7 @@ export class MapActivityService {
         }
       );
 
-      if (!mapData || !mapData.data || !Array.isArray(mapData.data)) {
+      if (!mapData?.data || !Array.isArray(mapData.data)) {
         logger.warn(`No valid map data available for ${slug}`);
         return;
       }
@@ -83,9 +81,7 @@ export class MapActivityService {
       // Process and store the data
       await this.processMapData(mapData);
     } catch (error: any) {
-      logger.error(
-        `Error ingesting map activity for ${slug}: ${error.message}`
-      );
+      logger.error(`Error ingesting map activity for ${slug}: ${error.message}`);
       throw error;
     }
   }
@@ -100,9 +96,7 @@ export class MapActivityService {
 
       await this.processMapData(cachedData);
     } catch (error: any) {
-      logger.error(
-        `Error syncing recent map activity for ${slug}: ${error.message}`
-      );
+      logger.error(`Error syncing recent map activity for ${slug}: ${error.message}`);
       throw error;
     }
   }
@@ -110,14 +104,12 @@ export class MapActivityService {
   public async refreshMapActivityData(slug: string, days = 7): Promise<void> {
     try {
       // Clear cache
-      await this.cache.del(`map:${slug}`);
+      await this.cache.delete(`map:${slug}`);
 
       // Re-ingest data
       await this.ingestMapActivity(slug, days);
     } catch (error: any) {
-      logger.error(
-        `Error refreshing map activity data for ${slug}: ${error.message}`
-      );
+      logger.error(`Error refreshing map activity data for ${slug}: ${error.message}`);
       throw error;
     }
   }
@@ -128,7 +120,7 @@ export class MapActivityService {
       const validatedData = MapActivityResponseSchema.parse(mapData);
 
       if (!validatedData.data || !Array.isArray(validatedData.data)) {
-        logger.warn("Invalid map data format");
+        logger.warn('Invalid map data format');
         return;
       }
 
@@ -155,9 +147,7 @@ export class MapActivityService {
         );
       }
 
-      logger.info(
-        `Processed ${validatedData.data.length} map activity records`
-      );
+      logger.info(`Processed ${validatedData.data.length} map activity records`);
     } catch (error: any) {
       logger.error(`Error processing map data: ${error.message}`);
       throw error;

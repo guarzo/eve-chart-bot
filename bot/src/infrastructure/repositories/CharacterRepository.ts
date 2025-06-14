@@ -1,8 +1,8 @@
-import { PrismaClient } from "@prisma/client";
-import { logger } from "../../lib/logger";
-import { Character } from "../../domain/character/Character";
-import { CharacterGroup } from "../../domain/character/CharacterGroup";
-import { PrismaMapper } from "../mapper/PrismaMapper";
+import { PrismaClient } from '@prisma/client';
+import { logger } from '../../lib/logger';
+import { Character } from '../../domain/character/Character';
+import { CharacterGroup } from '../../domain/character/CharacterGroup';
+import { PrismaMapper } from '../mapper/PrismaMapper';
 
 /**
  * Simplified Character Repository for WebSocket-based system
@@ -17,11 +17,11 @@ export class CharacterRepository {
   async getAllCharacters(): Promise<Character[]> {
     try {
       const characters = await this.prisma.character.findMany({
-        orderBy: { name: "asc" },
+        orderBy: { name: 'asc' },
       });
       return PrismaMapper.mapArray(characters, Character);
     } catch (error) {
-      logger.error("Failed to get all characters", error);
+      logger.error('Failed to get all characters', error);
       throw error;
     }
   }
@@ -48,7 +48,7 @@ export class CharacterRepository {
     try {
       const characters = await this.prisma.character.findMany({
         where: { characterGroupId: groupId },
-        orderBy: { name: "asc" },
+        orderBy: { name: 'asc' },
       });
       return PrismaMapper.mapArray(characters, Character);
     } catch (error) {
@@ -114,11 +114,11 @@ export class CharacterRepository {
           characters: true,
           mainCharacter: true,
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: { createdAt: 'asc' },
       });
       return PrismaMapper.mapArray(groups, CharacterGroup);
     } catch (error) {
-      logger.error("Failed to get character groups", error);
+      logger.error('Failed to get character groups', error);
       throw error;
     }
   }
@@ -145,10 +145,7 @@ export class CharacterRepository {
   /**
    * Create a character group
    */
-  async createCharacterGroup(data: {
-    map_name: string;
-    mainCharacterId?: bigint | null;
-  }): Promise<CharacterGroup> {
+  async createCharacterGroup(data: { map_name: string; mainCharacterId?: bigint | null }): Promise<CharacterGroup> {
     try {
       const group = await this.prisma.characterGroup.create({
         data,
@@ -159,7 +156,7 @@ export class CharacterRepository {
       });
       return PrismaMapper.map(group, CharacterGroup);
     } catch (error) {
-      logger.error("Failed to create character group", error);
+      logger.error('Failed to create character group', error);
       throw error;
     }
   }
@@ -167,12 +164,9 @@ export class CharacterRepository {
   /**
    * Update characters in a group (for WebSocket subscription updates)
    */
-  async updateCharacterGroup(
-    groupId: string,
-    characterIds: bigint[]
-  ): Promise<void> {
+  async updateCharacterGroup(groupId: string, characterIds: bigint[]): Promise<void> {
     try {
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async tx => {
         // Remove all characters from this group
         await tx.character.updateMany({
           where: { characterGroupId: groupId },
@@ -203,9 +197,9 @@ export class CharacterRepository {
       const characters = await this.prisma.character.findMany({
         select: { eveId: true },
       });
-      return characters.map((c) => c.eveId);
+      return characters.map(c => c.eveId);
     } catch (error) {
-      logger.error("Failed to get tracked character IDs", error);
+      logger.error('Failed to get tracked character IDs', error);
       throw error;
     }
   }

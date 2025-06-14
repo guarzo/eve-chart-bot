@@ -1,9 +1,9 @@
-import { PrismaClient } from "@prisma/client";
-import { ClassConstructor } from "class-transformer";
-import { logger } from "../../lib/logger";
-import prisma from "../persistence/client";
-import { PrismaMapper } from "../mapper/PrismaMapper";
-import { ensureBigInt } from "../../utils/conversion";
+import { PrismaClient } from '@prisma/client';
+import { ClassConstructor } from 'class-transformer';
+import { logger } from '../../lib/logger';
+import prisma from '../persistence/client';
+import { PrismaMapper } from '../mapper/PrismaMapper';
+import { ensureBigInt } from '../../utils/conversion';
 
 /**
  * Base repository class that all specific repositories will extend.
@@ -48,17 +48,14 @@ export abstract class BaseRepository {
   ): Promise<T | null> {
     return this.executeQuery(async () => {
       // Convert string/number IDs to BigInt if needed
-      const normalizedId =
-        typeof id === "string" || typeof id === "number"
-          ? ensureBigInt(id)
-          : id;
+      const normalizedId = typeof id === 'string' || typeof id === 'number' ? ensureBigInt(id) : id;
 
       const record = await (this.prisma as any)[model].findUnique({
         where: {
           id: normalizedId,
           // Also try common ID field patterns
-          ...(model === "character" && { eveId: normalizedId }),
-          ...(model === "killFact" && { killmailId: normalizedId }),
+          ...(model === 'character' && { eveId: normalizedId }),
+          ...(model === 'killFact' && { killmailId: normalizedId }),
         },
         ...options,
       });
@@ -74,11 +71,7 @@ export abstract class BaseRepository {
    * @param options Query options (where, include, orderBy, etc.)
    * @returns Array of domain entity instances
    */
-  protected async findMany<T>(
-    model: string,
-    EntityClass: ClassConstructor<T>,
-    options: any = {}
-  ): Promise<T[]> {
+  protected async findMany<T>(model: string, EntityClass: ClassConstructor<T>, options: any = {}): Promise<T[]> {
     return this.executeQuery(async () => {
       const records = await (this.prisma as any)[model].findMany(options);
       return PrismaMapper.mapArray(records, EntityClass);
@@ -92,11 +85,7 @@ export abstract class BaseRepository {
    * @param EntityClass The domain entity class constructor
    * @returns Created domain entity instance
    */
-  protected async create<T>(
-    model: string,
-    data: any,
-    EntityClass: ClassConstructor<T>
-  ): Promise<T> {
+  protected async create<T>(model: string, data: any, EntityClass: ClassConstructor<T>): Promise<T> {
     return this.executeQuery(async () => {
       const record = await (this.prisma as any)[model].create({ data });
       return PrismaMapper.map(record, EntityClass);

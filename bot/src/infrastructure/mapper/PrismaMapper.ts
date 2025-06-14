@@ -1,4 +1,4 @@
-import { ClassConstructor, plainToInstance } from "class-transformer";
+import { ClassConstructor, plainToInstance } from 'class-transformer';
 
 /**
  * Generic mapper for converting between Prisma models and domain entities
@@ -20,10 +20,10 @@ export class PrismaMapper {
     }
 
     if (Array.isArray(obj)) {
-      return obj.map((item) => this.convertKeysToCamelCase(item));
+      return obj.map(item => this.convertKeysToCamelCase(item));
     }
 
-    if (typeof obj === "object" && obj.constructor === Object) {
+    if (typeof obj === 'object' && obj.constructor === Object) {
       const converted: any = {};
       for (const [key, value] of Object.entries(obj)) {
         const camelKey = this.toCamelCase(key);
@@ -58,7 +58,7 @@ export class PrismaMapper {
    * @returns Array of domain entity instances
    */
   static mapArray<T>(models: any[], EntityClass: ClassConstructor<T>): T[] {
-    return models.map((model) => this.map(model, EntityClass));
+    return models.map(model => this.map(model, EntityClass));
   }
 
   /**
@@ -70,7 +70,7 @@ export class PrismaMapper {
     const result: Record<string, any> = {};
 
     // Skip Prisma-specific fields
-    const skipFields = ["$type", "$parent", "$path", "$args"];
+    const skipFields = ['$type', '$parent', '$path', '$args'];
 
     for (const [key, value] of Object.entries(model)) {
       if (!skipFields.includes(key)) {

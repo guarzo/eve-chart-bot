@@ -1,10 +1,10 @@
-import { CommandInteraction } from "discord.js";
-import { ChartFactory } from "../../../../services/charts";
-import { CharacterRepository } from "../../../../infrastructure/repositories/CharacterRepository";
-import { logger } from "../../../logger";
-import { RepositoryManager } from "../../../../infrastructure/repositories/RepositoryManager";
-import { CharacterGroup } from "../../../../domain/character/CharacterGroup";
-import { MessageFlags } from "discord.js";
+import { CommandInteraction } from 'discord.js';
+import { ChartFactory } from '../../../../services/charts';
+import { CharacterRepository } from '../../../../infrastructure/repositories/CharacterRepository';
+import { logger } from '../../../logger';
+import { RepositoryManager } from '../../../../infrastructure/repositories/RepositoryManager';
+import { CharacterGroup } from '../../../../domain/character/CharacterGroup';
+import { MessageFlags } from 'discord.js';
 
 /**
  * Base class for all chart command handlers
@@ -29,7 +29,7 @@ export abstract class BaseChartHandler {
   /**
    * Convert a time period string to date range
    */
-  protected getTimeRange(timePeriod: string = "7"): {
+  protected getTimeRange(timePeriod: string = '7'): {
     startDate: Date;
     endDate: Date;
   } {
@@ -57,13 +57,9 @@ export abstract class BaseChartHandler {
     }>
   > {
     try {
-      logger.info(
-        "BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()"
-      );
+      logger.info('BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()');
       const groups = await this.characterRepository.getAllCharacterGroups();
-      logger.info(
-        `BaseChartHandler.getCharacterGroups() - got ${groups.length} raw groups from repository`
-      );
+      logger.info(`BaseChartHandler.getCharacterGroups() - got ${groups.length} raw groups from repository`);
 
       // Filter out groups with no characters and transform to expected format
       const result = groups
@@ -71,19 +67,17 @@ export abstract class BaseChartHandler {
         .map((group: CharacterGroup) => ({
           groupId: group.id,
           name: group.name,
-          characters: group.characters.map((char) => ({
+          characters: group.characters.map(char => ({
             eveId: char.eveId,
             name: char.name,
           })),
           mainCharacterId: group.mainCharacterId,
         }));
 
-      logger.info(
-        `BaseChartHandler.getCharacterGroups() - returning ${result.length} filtered groups`
-      );
+      logger.info(`BaseChartHandler.getCharacterGroups() - returning ${result.length} filtered groups`);
       return result;
     } catch (error) {
-      logger.error("Error fetching character groups:", {
+      logger.error('Error fetching character groups:', {
         error:
           error instanceof Error
             ? {
@@ -102,10 +96,7 @@ export abstract class BaseChartHandler {
   /**
    * Handle any errors that occur during command execution
    */
-  protected async handleError(
-    interaction: CommandInteraction,
-    error: any
-  ): Promise<void> {
+  protected async handleError(interaction: CommandInteraction, error: any): Promise<void> {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logger.error(`Error handling chart command: ${errorMessage}`, {
       error:
@@ -118,9 +109,7 @@ export abstract class BaseChartHandler {
           : error,
       interactionId: interaction.id,
       commandName: interaction.commandName,
-      subcommand: interaction.isChatInputCommand()
-        ? interaction.options.getSubcommand(false)
-        : "unknown",
+      subcommand: interaction.isChatInputCommand() ? interaction.options.getSubcommand(false) : 'unknown',
       replied: interaction.replied,
       deferred: interaction.deferred,
     });
@@ -143,7 +132,7 @@ export abstract class BaseChartHandler {
         });
       }
     } catch (replyError) {
-      logger.error("Error sending error response:", replyError);
+      logger.error('Error sending error response:', replyError);
     }
   }
 }

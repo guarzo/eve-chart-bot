@@ -1,9 +1,9 @@
-import { CommandInteraction } from "discord.js";
-import { PrismaClient } from "@prisma/client";
-import { logger } from "../logger";
-import { ChartService } from "../../services/ChartService";
-import { ChartRenderer } from "../../services/ChartRenderer";
-import { ChartOptions } from "../../types/chart";
+import { CommandInteraction } from 'discord.js';
+import { PrismaClient } from '@prisma/client';
+import { logger } from '../logger';
+import { ChartService } from '../../services/ChartService';
+import { ChartRenderer } from '../../services/ChartRenderer';
+import { ChartOptions } from '../../types/chart';
 
 const prisma = new PrismaClient();
 const chartService = new ChartService();
@@ -11,20 +11,19 @@ const chartRenderer = new ChartRenderer();
 
 export async function handleKillsCommand(interaction: CommandInteraction) {
   try {
-    logger.info("Handling kills command with default values");
+    logger.info('Handling kills command with default values');
 
     // Get chart type option if provided
-    const chartType =
-      (interaction.options.get("type")?.value as string) || "line";
+    const chartType = (interaction.options.get('type')?.value as string) ?? 'line';
     logger.info(`Using chart type: ${chartType}`);
 
     // Defer reply since chart generation might take a while
-    logger.info("Deferring kill command reply");
+    logger.info('Deferring kill command reply');
     await interaction.deferReply();
-    logger.info("Successfully deferred reply");
+    logger.info('Successfully deferred reply');
 
     // Get all tracked characters
-    logger.info("Fetching all tracked characters");
+    logger.info('Fetching all tracked characters');
     const groups = await prisma.characterGroup.findMany({
       where: {
         mainCharacterId: { not: null },
@@ -36,18 +35,17 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
 
     // Extract main characters from groups
     const characters = groups
-      .map((group) => group.mainCharacter)
+      .map(group => group.mainCharacter)
       .filter((char): char is NonNullable<typeof char> => char !== null);
 
-    logger.info("Found tracked characters:", {
+    logger.info('Found tracked characters:', {
       characterCount: characters.length,
-      characters: characters.map((c) => ({ id: c.eveId, name: c.name })),
+      characters: characters.map(c => ({ id: c.eveId, name: c.name })),
     });
 
     if (characters.length === 0) {
       await interaction.editReply({
-        content:
-          "No characters found to generate chart for. Please add some characters first.",
+        content: 'No characters found to generate chart for. Please add some characters first.',
       });
       return;
     }
@@ -57,18 +55,18 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
     const startTime = new Date(now);
     startTime.setDate(now.getDate() - 7);
 
-    logger.info("Calculated time range:", {
+    logger.info('Calculated time range:', {
       startTime,
       endTime: now,
     });
 
     // Generate chart data
     const chartData = await chartService.generateChart({
-      type: "kills",
-      characterIds: characters.map((c) => BigInt(c.eveId)),
-      period: "7d",
-      groupBy: "day",
-      displayType: chartType as "line" | "bar",
+      type: 'kills',
+      characterIds: characters.map(c => BigInt(c.eveId)),
+      period: '7d',
+      groupBy: 'day',
+      displayType: chartType as 'line' | 'bar',
     });
 
     // Create chart options
@@ -78,11 +76,11 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
       plugins: {
         title: {
           display: true,
-          text: chartData.title || "Kills - Last 7 Days",
+          text: chartData.title ?? 'Kills - Last 7 Days',
         },
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
       },
     };
@@ -95,13 +93,13 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
       files: [
         {
           attachment: buffer,
-          name: "kills-chart.png",
+          name: 'kills-chart.png',
         },
       ],
     });
-    logger.info("Successfully sent kill chart");
+    logger.info('Successfully sent kill chart');
   } catch (error) {
-    logger.error("Error handling kills command:", {
+    logger.error('Error handling kills command:', {
       error:
         error instanceof Error
           ? {
@@ -119,12 +117,12 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
     // Don't throw the error, handle it gracefully
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: "An error occurred while processing your command.",
+        content: 'An error occurred while processing your command.',
         ephemeral: true,
       });
     } else {
       await interaction.editReply({
-        content: "An error occurred while processing your command.",
+        content: 'An error occurred while processing your command.',
       });
     }
   }
@@ -132,20 +130,19 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
 
 export async function handleMapCommand(interaction: CommandInteraction) {
   try {
-    logger.info("Handling map command with default values");
+    logger.info('Handling map command with default values');
 
     // Get chart type option if provided
-    const chartType =
-      (interaction.options.get("type")?.value as string) || "line";
+    const chartType = (interaction.options.get('type')?.value as string) ?? 'line';
     logger.info(`Using chart type: ${chartType}`);
 
     // Defer reply since chart generation might take a while
-    logger.info("Deferring map command reply");
+    logger.info('Deferring map command reply');
     await interaction.deferReply();
-    logger.info("Successfully deferred reply");
+    logger.info('Successfully deferred reply');
 
     // Get all tracked characters
-    logger.info("Fetching all tracked characters");
+    logger.info('Fetching all tracked characters');
     const groups = await prisma.characterGroup.findMany({
       where: {
         mainCharacterId: { not: null },
@@ -157,18 +154,17 @@ export async function handleMapCommand(interaction: CommandInteraction) {
 
     // Extract main characters from groups
     const characters = groups
-      .map((group) => group.mainCharacter)
+      .map(group => group.mainCharacter)
       .filter((char): char is NonNullable<typeof char> => char !== null);
 
-    logger.info("Found tracked characters:", {
+    logger.info('Found tracked characters:', {
       characterCount: characters.length,
-      characters: characters.map((c) => ({ id: c.eveId, name: c.name })),
+      characters: characters.map(c => ({ id: c.eveId, name: c.name })),
     });
 
     if (characters.length === 0) {
       await interaction.editReply({
-        content:
-          "No characters found to generate chart for. Please add some characters first.",
+        content: 'No characters found to generate chart for. Please add some characters first.',
       });
       return;
     }
@@ -178,18 +174,18 @@ export async function handleMapCommand(interaction: CommandInteraction) {
     const startTime = new Date(now);
     startTime.setHours(now.getHours() - 24);
 
-    logger.info("Calculated time range:", {
+    logger.info('Calculated time range:', {
       startTime,
       endTime: now,
     });
 
     // Generate chart data
     const chartData = await chartService.generateChart({
-      type: "map_activity",
-      characterIds: characters.map((c) => BigInt(c.eveId)),
-      period: "24h",
-      groupBy: "hour",
-      displayType: chartType as "line" | "bar",
+      type: 'map_activity',
+      characterIds: characters.map(c => BigInt(c.eveId)),
+      period: '24h',
+      groupBy: 'hour',
+      displayType: chartType as 'line' | 'bar',
     });
 
     // Create chart options
@@ -199,11 +195,11 @@ export async function handleMapCommand(interaction: CommandInteraction) {
       plugins: {
         title: {
           display: true,
-          text: chartData.title || "Map Activity - Last 24 Hours",
+          text: chartData.title ?? 'Map Activity - Last 24 Hours',
         },
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
       },
     };
@@ -216,13 +212,13 @@ export async function handleMapCommand(interaction: CommandInteraction) {
       files: [
         {
           attachment: buffer,
-          name: "map-activity-chart.png",
+          name: 'map-activity-chart.png',
         },
       ],
     });
-    logger.info("Successfully sent map activity chart");
+    logger.info('Successfully sent map activity chart');
   } catch (error) {
-    logger.error("Error handling map command:", {
+    logger.error('Error handling map command:', {
       error:
         error instanceof Error
           ? {
@@ -240,12 +236,12 @@ export async function handleMapCommand(interaction: CommandInteraction) {
     // Don't throw the error, handle it gracefully
     if (!interaction.replied && !interaction.deferred) {
       await interaction.reply({
-        content: "An error occurred while processing your command.",
+        content: 'An error occurred while processing your command.',
         ephemeral: true,
       });
     } else {
       await interaction.editReply({
-        content: "An error occurred while processing your command.",
+        content: 'An error occurred while processing your command.',
       });
     }
   }

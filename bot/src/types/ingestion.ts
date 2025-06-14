@@ -1,4 +1,4 @@
-import { z } from "zod";
+import { z } from 'zod';
 
 // API Response Types
 export const ZkillResponseSchema = z.object({

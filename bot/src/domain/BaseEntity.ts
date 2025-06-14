@@ -47,11 +47,11 @@ export abstract class BaseEntity {
 
     // Get all enumerable properties
     for (const key in this) {
-      if (this.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(this, key)) {
         const value = this[key];
 
         // Handle BigInt conversion to string
-        if (typeof value === "bigint") {
+        if (typeof value === 'bigint') {
           result[key] = value.toString();
         }
         // Handle Date conversion to ISO string
@@ -60,18 +60,16 @@ export abstract class BaseEntity {
         }
         // Handle arrays and nested objects
         else if (Array.isArray(value)) {
-          result[key] = value.map((item) =>
-            typeof item === "object" && item !== null && "toJSON" in item
-              ? item.toJSON()
-              : item
+          result[key] = value.map(item =>
+            typeof item === 'object' && item !== null && 'toJSON' in item ? item.toJSON() : item
           );
         }
         // Handle nested objects with toJSON method
         else if (
-          typeof value === "object" &&
+          typeof value === 'object' &&
           value !== null &&
-          "toJSON" in value &&
-          typeof value.toJSON === "function"
+          'toJSON' in value &&
+          typeof value.toJSON === 'function'
         ) {
           result[key] = value.toJSON();
         }

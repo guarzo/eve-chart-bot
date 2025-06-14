@@ -1,6 +1,6 @@
-import { Redis } from "ioredis";
-import { REDIS_URL } from "../../config";
-import { logger } from "../../lib/logger";
+import { Redis } from 'ioredis';
+import { REDIS_URL } from '../../config';
+import { logger } from '../../lib/logger';
 
 const redisUrl = REDIS_URL;
 
@@ -8,10 +8,10 @@ const redisUrl = REDIS_URL;
 export const redis = new Redis(redisUrl);
 
 // Log connection state
-redis.on("connect", () => {
+redis.on('connect', () => {
   logger.info(`Redis client connected to ${redisUrl}`);
 });
 
-redis.on("error", (err) => {
+redis.on('error', err => {
   logger.error(`Redis client error: ${err.message}`);
 });

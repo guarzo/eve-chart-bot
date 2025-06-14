@@ -1,12 +1,11 @@
-import { ChartOptions } from "../../../types/chart";
+import { ChartOptions } from '../../../types/chart';
 
 /**
  * Configuration for Distribution charts
  */
 export const DistributionChartConfig = {
-  title: "Kill Group Distribution",
-  description:
-    "Shows distribution of solo vs. small-group vs. large-group kills",
+  title: 'Kill Group Distribution',
+  description: 'Shows distribution of solo vs. small-group vs. large-group kills',
 
   // Define group sizes for categorization
   groupSizes: {
@@ -19,20 +18,20 @@ export const DistributionChartConfig = {
 
   // Display labels for each group size
   groupLabels: {
-    solo: "Solo",
-    smallGroup: "Small Group (2-5)",
-    mediumGroup: "Medium Group (6-15)",
-    largeGroup: "Large Group (16-50)",
-    blob: "Blob (51+)",
+    solo: 'Solo',
+    smallGroup: 'Small Group (2-5)',
+    mediumGroup: 'Medium Group (6-15)',
+    largeGroup: 'Large Group (16-50)',
+    blob: 'Blob (51+)',
   },
 
   // Color scheme for each group size
   groupColors: {
-    solo: "#DC3912", // red
-    smallGroup: "#3366CC", // blue
-    mediumGroup: "#FF9900", // orange
-    largeGroup: "#109618", // green
-    blob: "#990099", // purple
+    solo: '#DC3912', // red
+    smallGroup: '#3366CC', // blue
+    mediumGroup: '#FF9900', // orange
+    largeGroup: '#109618', // green
+    blob: '#990099', // purple
   },
 
   // Default chart options for pie chart
@@ -42,15 +41,15 @@ export const DistributionChartConfig = {
     plugins: {
       title: {
         display: true,
-        text: "Kill Group Size Distribution",
+        text: 'Kill Group Size Distribution',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: true,
-        position: "right",
+        position: 'right',
         labels: {
           font: {
             size: 16,
@@ -60,12 +59,10 @@ export const DistributionChartConfig = {
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.label || "";
+            const label = context.label || '';
             const value = context.raw;
             const percentage = context.parsed;
-            return `${label}: ${value} kills (${(percentage * 100).toFixed(
-              1
-            )}%)`;
+            return `${label}: ${value} kills (${(percentage * 100).toFixed(1)}%)`;
           },
         },
       },
@@ -76,19 +73,19 @@ export const DistributionChartConfig = {
   doughnutOptions: {
     responsive: true,
     maintainAspectRatio: false,
-    cutout: "30%",
+    cutout: '30%',
     plugins: {
       title: {
         display: true,
-        text: "Kill Group Size Distribution",
+        text: 'Kill Group Size Distribution',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
         display: true,
-        position: "right",
+        position: 'right',
         labels: {
           font: {
             size: 16,
@@ -98,12 +95,10 @@ export const DistributionChartConfig = {
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.label || "";
+            const label = context.label || '';
             const value = context.raw;
             const percentage = context.parsed;
-            return `${label}: ${value} kills (${(percentage * 100).toFixed(
-              1
-            )}%)`;
+            return `${label}: ${value} kills (${(percentage * 100).toFixed(1)}%)`;
           },
         },
       },
@@ -114,14 +109,14 @@ export const DistributionChartConfig = {
   barOptions: {
     responsive: true,
     maintainAspectRatio: false,
-    indexAxis: "y",
+    indexAxis: 'y',
     plugins: {
       title: {
         display: true,
-        text: "Kill Group Size Distribution",
+        text: 'Kill Group Size Distribution',
         font: {
           size: 40,
-          weight: "bold",
+          weight: 'bold',
         },
       },
       legend: {
@@ -130,7 +125,7 @@ export const DistributionChartConfig = {
       tooltip: {
         callbacks: {
           label: function (context: any) {
-            const label = context.dataset.label || "";
+            const label = context.dataset.label || '';
             const value = context.parsed.x;
             return `${label}: ${value} kills`;
           },
@@ -142,15 +137,15 @@ export const DistributionChartConfig = {
         beginAtZero: true,
         title: {
           display: true,
-          text: "Number of Kills",
+          text: 'Number of Kills',
           font: {
             size: 16,
           },
         },
         ticks: {
           callback: function (value: any) {
-            if (value >= 1000000) return (value / 1000000).toFixed(1) + "M";
-            if (value >= 1000) return (value / 1000).toFixed(1) + "K";
+            if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+            if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
             return value.toString();
           },
         },
@@ -158,7 +153,7 @@ export const DistributionChartConfig = {
       y: {
         title: {
           display: true,
-          text: "Group Size",
+          text: 'Group Size',
           font: {
             size: 16,
           },
@@ -172,14 +167,11 @@ export const DistributionChartConfig = {
     totalKills: number,
     soloKills: number,
     smallGroupKills: number,
-    mediumGroupKills: number,
+    mediumGroupKills: number
   ): string => {
-    const soloPercent =
-      totalKills > 0 ? ((soloKills / totalKills) * 100).toFixed(1) : "0";
-    const smallPercent =
-      totalKills > 0 ? ((smallGroupKills / totalKills) * 100).toFixed(1) : "0";
-    const mediumPercent =
-      totalKills > 0 ? ((mediumGroupKills / totalKills) * 100).toFixed(1) : "0";
+    const soloPercent = totalKills > 0 ? ((soloKills / totalKills) * 100).toFixed(1) : '0';
+    const smallPercent = totalKills > 0 ? ((smallGroupKills / totalKills) * 100).toFixed(1) : '0';
+    const mediumPercent = totalKills > 0 ? ((mediumGroupKills / totalKills) * 100).toFixed(1) : '0';
 
     return `${totalKills.toLocaleString()} total kills: ${soloPercent}% solo, ${smallPercent}% small group, ${mediumPercent}% medium group`;
   },

@@ -1,25 +1,27 @@
-import "reflect-metadata";
-import express, { RequestHandler } from "express";
-import { logger } from "./lib/logger";
-import { WebSocketIngestionService } from "./services/ingestion/WebSocketIngestionService";
-import { config as dotenvConfig } from "dotenv";
-import cors from "cors";
-import bodyParser from "body-parser";
-import rateLimit from "express-rate-limit";
-import { DiscordClient } from "./lib/discord/client";
-import { commands } from "./lib/discord/commands";
-import { ChartService } from "./services/ChartService";
-import { ChartRenderer } from "./services/ChartRenderer";
-import { ChartConfigInput } from "./types/chart";
-import { z } from "zod";
-import { initSentry } from "./lib/sentry";
-import { MapActivityService } from "./services/ingestion/MapActivityService";
-import { CharacterSyncService } from "./services/ingestion/CharacterSyncService";
-import { CharacterRepository } from "./infrastructure/repositories/CharacterRepository";
-import { exec } from "child_process";
-import { promisify } from "util";
-import { Configuration } from "./config";
-import { PrismaClient } from "@prisma/client";
+import 'reflect-metadata';
+import express, { RequestHandler } from 'express';
+import { logger } from './lib/logger';
+import { WebSocketIngestionService } from './services/ingestion/WebSocketIngestionService';
+import { config as dotenvConfig } from 'dotenv';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import rateLimit from 'express-rate-limit';
+import { DiscordClient } from './lib/discord/client';
+import { commands } from './lib/discord/commands';
+import { ChartService } from './services/ChartService';
+import { ChartRenderer } from './services/ChartRenderer';
+import { ChartConfigInput } from './types/chart';
+import { z } from 'zod';
+import { initSentry } from './lib/sentry';
+import { MapActivityService } from './services/ingestion/MapActivityService';
+import { CharacterSyncService } from './services/ingestion/CharacterSyncService';
+import { CharacterRepository } from './infrastructure/repositories/CharacterRepository';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { Configuration } from './config';
+import { PrismaClient } from '@prisma/client';
+import { timerManager } from './utils/timerManager';
+import { rateLimiterManager } from './utils/RateLimiterManager';
 
 const execAsync = promisify(exec);
 
@@ -35,7 +37,7 @@ const prisma = new PrismaClient();
 // Constants
 const appStartTime = Date.now();
 const port =
-  Configuration.server.nodeEnv === "test"
+  Configuration.server.nodeEnv === 'test'
     ? 0 // Use random port for tests
     : Configuration.server.port;
 
@@ -64,7 +66,6 @@ const websocketService = new WebSocketIngestionService(
   prisma
 );
 
-
 const mapService = new MapActivityService(
   Configuration.apis.map.url,
   Configuration.apis.map.key,
@@ -92,25 +93,25 @@ const discordClient = new DiscordClient();
 
 // Validation schemas
 const chartConfigSchema = z.object({
-  type: z.enum(["kills", "map_activity"]),
+  type: z.enum(['kills', 'map_activity']),
   characterIds: z.array(z.bigint()),
-  period: z.enum(["24h", "7d", "30d", "90d"]),
-  groupBy: z.enum(["hour", "day", "week"]).optional(),
+  period: z.enum(['24h', '7d', '30d', '90d']),
+  groupBy: z.enum(['hour', 'day', 'week']).optional(),
 });
 
 // Health check endpoint
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok" });
+app.get('/health', (_req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // WebSocket service status endpoint
-app.get("/api/websocket/status", (_req, res) => {
+app.get('/api/websocket/status', (_req, res) => {
   const status = websocketService.getStatus();
   res.json(status);
 });
 
 // Character management endpoints
-app.post("/api/characters/:characterId", async (req, res) => {
+app.post('/api/characters/:characterId', async (req, res) => {
   try {
     const characterId = BigInt(req.params.characterId);
     const character = await characterRepository.upsertCharacter({
@@ -127,53 +128,50 @@ app.post("/api/characters/:characterId", async (req, res) => {
 
     res.json({ success: true, character });
   } catch (error) {
-    logger.error("Failed to add character", error);
-    res.status(500).json({ error: "Failed to add character" });
+    logger.error('Failed to add character', error);
+    res.status(500).json({ error: 'Failed to add character' });
   }
 });
 
-app.delete("/api/characters/:characterId", async (req, res) => {
+app.delete('/api/characters/:characterId', async (req, res) => {
   try {
     const characterId = BigInt(req.params.characterId);
     await characterRepository.deleteCharacter(characterId);
 
     // Update WebSocket subscriptions
-    await websocketService.updateCharacterSubscriptions(
-      undefined,
-      [Number(characterId)]
-    );
+    await websocketService.updateCharacterSubscriptions(undefined, [Number(characterId)]);
 
     res.json({ success: true });
   } catch (error) {
-    logger.error("Failed to remove character", error);
-    res.status(500).json({ error: "Failed to remove character" });
+    logger.error('Failed to remove character', error);
+    res.status(500).json({ error: 'Failed to remove character' });
   }
 });
 
 // Get available chart types
-app.get("/v1/charts/types", (_req, res) => {
+app.get('/v1/charts/types', (_req, res) => {
   res.json({
     types: [
       {
-        id: "kills",
-        name: "Kill Chart",
-        description: "Generate a chart showing kill activity",
-        periods: ["24h", "7d", "30d", "90d"],
-        groupBy: ["hour", "day", "week"],
+        id: 'kills',
+        name: 'Kill Chart',
+        description: 'Generate a chart showing kill activity',
+        periods: ['24h', '7d', '30d', '90d'],
+        groupBy: ['hour', 'day', 'week'],
       },
       {
-        id: "map_activity",
-        name: "Map Activity Chart",
-        description: "Generate a chart showing map activity",
-        periods: ["24h", "7d", "30d"],
-        groupBy: ["hour", "day"],
+        id: 'map_activity',
+        name: 'Map Activity Chart',
+        description: 'Generate a chart showing map activity',
+        periods: ['24h', '7d', '30d'],
+        groupBy: ['hour', 'day'],
       },
     ],
   });
 });
 
 // Generate chart endpoint
-app.post("/v1/charts/generate", (async (req, res) => {
+app.post('/v1/charts/generate', (async (req, res) => {
   try {
     // Validate request
     const config = chartConfigSchema.parse(req.body);
@@ -193,20 +191,20 @@ app.post("/v1/charts/generate", (async (req, res) => {
     const buffer = await chartRenderer.renderToBuffer(chartData);
 
     // Send image
-    res.contentType("image/png");
+    res.contentType('image/png');
     res.send(buffer);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      res.status(400).json({ error: "Invalid request", details: error.errors });
+      res.status(400).json({ error: 'Invalid request', details: error.errors });
     } else {
-      logger.error("Error generating chart:", error);
-      res.status(500).json({ error: "Failed to generate chart" });
+      logger.error('Error generating chart:', error);
+      res.status(500).json({ error: 'Failed to generate chart' });
     }
   }
 }) as RequestHandler);
 
 // Status endpoint
-app.get("/status", (_req, res) => {
+app.get('/status', (_req, res) => {
   const uptime = Math.floor((Date.now() - appStartTime) / 1000);
   const status = {
     uptime,
@@ -217,18 +215,18 @@ app.get("/status", (_req, res) => {
         guilds: discordClient.getGuildsCount(),
       },
     },
-    version: process.env.npm_package_version || "unknown",
+    version: process.env.npm_package_version ?? 'unknown',
   };
   res.json(status);
 });
 
 // Diagnostics endpoints
-app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
+app.get('/api/diagnostics/tracked-characters', async (_req, res) => {
   try {
     const characters = await characterRepository.getAllCharacters();
     res.json({
       count: characters.length,
-      characters: characters.map((char) => ({
+      characters: characters.map(char => ({
         id: char.eveId.toString(),
         name: char.name,
         corporationId: char.corporationId,
@@ -236,45 +234,45 @@ app.get("/api/diagnostics/tracked-characters", async (_req, res) => {
       })),
     });
   } catch (error) {
-    logger.error("Failed to get tracked characters", error);
-    res.status(500).json({ error: "Failed to get tracked characters" });
+    logger.error('Failed to get tracked characters', error);
+    res.status(500).json({ error: 'Failed to get tracked characters' });
   }
 });
 
-app.get("/api/diagnostics/character-groups", async (_req, res) => {
+app.get('/api/diagnostics/character-groups', async (_req, res) => {
   try {
     const groups = await characterRepository.getAllCharacterGroups();
     res.json({
       count: groups.length,
-      groups: groups.map((group) => ({
+      groups: groups.map(group => ({
         id: group.id,
         mainCharacterId: group.mainCharacterId?.toString(),
         characterCount: group.characters.length,
-        characters: group.characters.map((char) => ({
+        characters: group.characters.map(char => ({
           id: char.eveId.toString(),
           name: char.name,
         })),
       })),
     });
   } catch (error) {
-    logger.error("Failed to get character groups", error);
-    res.status(500).json({ error: "Failed to get character groups" });
+    logger.error('Failed to get character groups', error);
+    res.status(500).json({ error: 'Failed to get character groups' });
   }
 });
 
 // Start the server
 async function startServer() {
-  logger.info("Starting EVE Chart Bot server...");
+  logger.info('Starting EVE Chart Bot server...');
 
   // Run database migrations
-  logger.info("Running database migrations...");
+  logger.info('Running database migrations...');
   try {
-    const { stderr } = await execAsync("npx prisma migrate deploy");
+    const { stderr } = await execAsync('npx prisma migrate deploy');
     if (stderr) {
-      logger.warn("Migration warnings:", stderr);
+      logger.warn('Migration warnings:', stderr);
     }
   } catch (error) {
-    logger.error("Error running migrations:", error);
+    logger.error('Error running migrations:', error);
     throw error;
   }
 
@@ -290,47 +288,40 @@ async function startServer() {
   if (discordToken) {
     try {
       const discordStartTime = Date.now();
-      logger.info(
-        `Discord initialization starting... (${
-          (discordStartTime - appStartTime) / 1000
-        }s after app start)`
-      );
+      logger.info(`Discord initialization starting... (${(discordStartTime - appStartTime) / 1000}s after app start)`);
 
-      logger.debug(
-        "Found Discord token:",
-        discordToken.substring(0, 10) + "..."
-      );
+      logger.debug('Found Discord token:', `${discordToken.substring(0, 10)}...`);
 
       // Login to Discord
-      logger.info("Logging in to Discord...");
+      logger.info('Logging in to Discord...');
       await discordClient.login(discordToken);
       await discordClient.registerCommands(commands);
       const loginTime = Date.now();
       logger.info(
         `Discord login successful - Client ready state: ${
-          discordClient.isReady() ? "Ready" : "Not Ready"
+          discordClient.isReady() ? 'Ready' : 'Not Ready'
         } (${(loginTime - discordStartTime) / 1000}s)`
       );
 
       // Add specific Discord readiness log
-      setTimeout(() => {
+      timerManager.setTimeout(() => {
         const readyCheckTime = Date.now();
         logger.info(
           `Discord client status check after 5 seconds: (Total time since app start: ${
             (readyCheckTime - appStartTime) / 1000
           }s)`,
           {
-            ready: discordClient.isReady() ? "Yes" : "No",
+            ready: discordClient.isReady() ? 'Yes' : 'No',
             guilds: discordClient.getGuildsCount(),
           }
         );
       }, 5000);
     } catch (error) {
-      logger.error("Failed to initialize Discord:", error);
+      logger.error('Failed to initialize Discord:', error);
       // Don't throw - allow server to continue without Discord
     }
   } else {
-    logger.warn("Discord token not found, Discord integration will be disabled");
+    logger.warn('Discord token not found, Discord integration will be disabled');
   }
 
   // Start Express server
@@ -343,9 +334,13 @@ async function startServer() {
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down gracefully...`);
 
+    // Get timer stats before shutdown
+    const timerStats = timerManager.getStats();
+    logger.info('Timer statistics before shutdown:', timerStats);
+
     // Stop accepting new connections
     server.close(() => {
-      logger.info("HTTP server closed");
+      logger.info('HTTP server closed');
     });
 
     // Stop services
@@ -356,18 +351,31 @@ async function startServer() {
     // Disconnect Discord
     if (discordClient.isReady()) {
       // Discord.js Client doesn't have destroy, just disconnect
-      discordClient.client.destroy();
+      await discordClient.client.destroy();
     }
+
+    // Clean up rate limiters
+    rateLimiterManager.cleanup();
 
     // Close database connection
     await prisma.$disconnect();
 
-    logger.info("Shutdown complete");
-    process.exit(0);
+    logger.info('Shutdown complete');
+    // Note: In production, process.exit should be called by process manager
+    if (Configuration.server.nodeEnv !== 'production') {
+      // Use a more graceful shutdown approach
+      server.close(() => {
+        // Exit gracefully after server is closed
+        setTimeout(() => {
+          // Throw error to allow process manager to handle exit
+          throw new Error('Server shutdown complete');
+        }, 100);
+      });
+    }
   };
 
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 
   return server;
 }
@@ -376,13 +384,13 @@ async function startServer() {
 export { app, startServer };
 
 // Start server if not in test mode
-if (Configuration.server.nodeEnv !== "test") {
-  startServer().catch((error) => {
-    logger.error("Failed to start server:", {
+if (Configuration.server.nodeEnv !== 'test') {
+  startServer().catch(error => {
+    logger.error('Failed to start server:', {
       error,
       message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined
+      stack: error instanceof Error ? error.stack : undefined,
     });
-    process.exit(1);
+    throw error;
   });
 }

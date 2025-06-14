@@ -2,7 +2,8 @@
  * Common validation utilities for domain entities
  */
 
-import { z } from "zod";
+import { z } from 'zod';
+import { Configuration } from '../config';
 
 /**
  * Manual validation functions (legacy)
@@ -11,7 +12,7 @@ import { z } from "zod";
 /**
  * Validates that a value is not null or undefined
  */
-export function validateRequired(name: string, value: any): void {
+export function validateRequired(name: string, value: unknown): void {
   if (value === null || value === undefined) {
     throw new Error(`${name} is required`);
   }
@@ -42,7 +43,7 @@ export function validatePositiveBigInt(fieldName: string, value: bigint): void {
   if (!value) {
     throw new Error(`${fieldName} is required`);
   }
-  if (value <= 0n) {
+  if (value <= Configuration.bigIntConstants.zero) {
     throw new Error(`${fieldName} must be positive`);
   }
 }
@@ -59,25 +60,25 @@ export function validateDate(fieldName: string, value: Date): void {
   }
 }
 
-export function validateString(name: string, value: any): void {
-  if (typeof value !== "string") {
+export function validateString(name: string, value: unknown): void {
+  if (typeof value !== 'string') {
     throw new Error(`${name} must be a string, got ${typeof value}`);
   }
 }
 
-export function validateNumber(name: string, value: any): void {
-  if (typeof value !== "number" || isNaN(value)) {
+export function validateNumber(name: string, value: unknown): void {
+  if (typeof value !== 'number' || isNaN(value)) {
     throw new Error(`${name} must be a valid number, got ${value}`);
   }
 }
 
-export function validateBigInt(name: string, value: any): void {
-  if (typeof value !== "bigint") {
+export function validateBigInt(name: string, value: unknown): void {
+  if (typeof value !== 'bigint') {
     throw new Error(`${name} must be a BigInt, got ${typeof value}`);
   }
 }
 
-export function validateArray(name: string, value: any): void {
+export function validateArray(name: string, value: unknown): void {
   if (!Array.isArray(value)) {
     throw new Error(`${name} must be an array, got ${typeof value}`);
   }
@@ -92,14 +93,14 @@ export const PositiveNumberSchema = z.number().positive();
 export const NonNegativeNumberSchema = z.number().min(0);
 export const BigIntSchema = z.union([
   z.bigint(),
-  z.string().transform((val) => {
+  z.string().transform(val => {
     try {
       return BigInt(val);
     } catch {
       throw new Error(`Invalid BigInt value: ${val}`);
     }
   }),
-  z.number().transform((val) => BigInt(Math.floor(val))),
+  z.number().transform(val => BigInt(Math.floor(val))),
 ]);
 
 export const EVEIdSchema = z.union([
@@ -107,11 +108,11 @@ export const EVEIdSchema = z.union([
   z
     .string()
     .min(1)
-    .transform((val) => {
+    .transform(val => {
       try {
         const bigIntVal = BigInt(val);
-        if (bigIntVal <= 0n) {
-          throw new Error("Must be positive");
+        if (bigIntVal <= Configuration.bigIntConstants.zero) {
+          throw new Error('Must be positive');
         }
         return bigIntVal;
       } catch {
@@ -122,7 +123,7 @@ export const EVEIdSchema = z.union([
     .number()
     .positive()
     .int()
-    .transform((val) => BigInt(val)),
+    .transform(val => BigInt(val)),
 ]);
 
 export const LabelsSchema = z.array(z.string()).default([]);
@@ -238,8 +239,8 @@ export const ChartDataSchema = z.object({
 });
 
 export const ChartOptionsSchema = z.object({
-  width: PositiveNumberSchema.default(800),
-  height: PositiveNumberSchema.default(600),
+  width: PositiveNumberSchema.default(Configuration.charts.defaultWidth),
+  height: PositiveNumberSchema.default(Configuration.charts.defaultHeight),
   title: z.string().optional(),
   showLegend: z.boolean().default(true),
   showLabels: z.boolean().default(true),
@@ -251,14 +252,14 @@ export const ChartOptionsSchema = z.object({
 // API Response schemas
 export const ApiResponseSchema = z.object({
   success: z.boolean(),
-  data: z.any().optional(),
+  data: z.unknown().optional(),
   error: z.string().optional(),
   message: z.string().optional(),
 });
 
 export const PaginationSchema = z.object({
   page: PositiveNumberSchema.default(1),
-  pageSize: PositiveNumberSchema.default(10),
+  pageSize: PositiveNumberSchema.default(Configuration.charts.defaultTopLimit),
   total: NonNegativeNumberSchema.optional(),
 });
 
@@ -268,8 +269,8 @@ export const DateRangeSchema = z
     startDate: z.date(),
     endDate: z.date(),
   })
-  .refine((data) => data.startDate <= data.endDate, {
-    message: "Start date must be before or equal to end date",
+  .refine(data => data.startDate <= data.endDate, {
+    message: 'Start date must be before or equal to end date',
   });
 
 export const FilterSchema = z.object({
@@ -284,21 +285,13 @@ export const FilterSchema = z.object({
  * Validation helper functions using Zod
  */
 
-export function validateWithSchema<T>(
-  schema: z.ZodSchema<T>,
-  data: unknown,
-  entityName?: string
-): T {
+export function validateWithSchema<T>(schema: z.ZodSchema<T>, data: unknown, entityName?: string): T {
   try {
     return schema.parse(data);
   } catch (error) {
     if (error instanceof z.ZodError) {
-      const errorMessages = error.errors
-        .map((err) => `${err.path.join(".")}: ${err.message}`)
-        .join(", ");
-      throw new Error(
-        `${entityName || "Data"} validation failed: ${errorMessages}`
-      );
+      const errorMessages = error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
+      throw new Error(`${entityName ?? 'Data'} validation failed: ${errorMessages}`);
     }
     throw error;
   }
@@ -314,47 +307,31 @@ export function safeParseWithSchema<T>(
 /**
  * Validate and transform EVE ID from various input types
  */
-export function validateEVEId(
-  value: unknown,
-  fieldName: string = "EVE ID"
-): bigint {
+export function validateEVEId(value: unknown, fieldName: string = 'EVE ID'): bigint {
   try {
     return EVEIdSchema.parse(value);
   } catch (error) {
-    throw new Error(
-      `Invalid ${fieldName}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    throw new Error(`Invalid ${fieldName}: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
 /**
  * Validate array of EVE IDs
  */
-export function validateEVEIds(
-  values: unknown[],
-  fieldName: string = "EVE IDs"
-): bigint[] {
-  return values.map((value, index) =>
-    validateEVEId(value, `${fieldName}[${index}]`)
-  );
+export function validateEVEIds(values: unknown[], fieldName: string = 'EVE IDs'): bigint[] {
+  return values.map((value, index) => validateEVEId(value, `${fieldName}[${index}]`));
 }
 
 /**
  * Validate date range
  */
-export function validateDateRange(
-  startDate: unknown,
-  endDate: unknown
-): { startDate: Date; endDate: Date } {
+export function validateDateRange(startDate: unknown, endDate: unknown): { startDate: Date; endDate: Date } {
   const dateRange = {
-    startDate:
-      startDate instanceof Date ? startDate : new Date(String(startDate)),
+    startDate: startDate instanceof Date ? startDate : new Date(String(startDate)),
     endDate: endDate instanceof Date ? endDate : new Date(String(endDate)),
   };
 
-  return validateWithSchema(DateRangeSchema, dateRange, "Date range");
+  return validateWithSchema(DateRangeSchema, dateRange, 'Date range');
 }
 
 /**

@@ -1,15 +1,14 @@
-import { BaseChartHandler } from "./BaseChartHandler";
-import { CommandInteraction } from "discord.js";
-import { ChartData, ChartOptions } from "../../../../types/chart";
-import { ChartRenderer } from "../../../../services/ChartRenderer";
-import { logger } from "../../../logger";
-import { ChartFactory } from "../../../../services/charts";
+import { BaseChartHandler } from './BaseChartHandler';
+import { CommandInteraction } from 'discord.js';
+import { ChartData, ChartOptions } from '../../../../types/chart';
+import { ChartRenderer } from '../../../../services/ChartRenderer';
+import { logger } from '../../../logger';
+import { ChartFactory } from '../../../../services/charts';
 
 /**
  * Handler for the /charts corps command
  */
 export class CorpsHandler extends BaseChartHandler {
-
   constructor() {
     super();
   }
@@ -24,7 +23,7 @@ export class CorpsHandler extends BaseChartHandler {
       await interaction.deferReply();
 
       // Get time period from command options
-      const time = interaction.options.getString("time") ?? "7";
+      const time = interaction.options.getString('time') ?? '7';
       const { startDate, endDate } = this.getTimeRange(time);
 
       logger.info(`Generating enemy corporations chart for ${time} days`);
@@ -34,18 +33,16 @@ export class CorpsHandler extends BaseChartHandler {
 
       if (groups.length === 0) {
         await interaction.editReply({
-          content:
-            "No character groups found. Please add characters to groups first.",
+          content: 'No character groups found. Please add characters to groups first.',
         });
         return;
       }
 
       // Get the chart generator from the factory
-      const corpsGenerator = ChartFactory.createGenerator("corps");
+      const corpsGenerator = ChartFactory.createGenerator('corps');
 
       // Check if view option is specified (horizontalBar, verticalBar, or pie)
-      const displayType =
-        interaction.options.getString("view") ?? "horizontalBar";
+      const displayType = interaction.options.getString('view') ?? 'horizontalBar';
 
       // Generate chart data
       const chartData = await corpsGenerator.generateChart({
@@ -56,18 +53,16 @@ export class CorpsHandler extends BaseChartHandler {
       });
 
       // Render chart to buffer
-      logger.info(
-        `Rendering enemy corporations chart with ${displayType} view`
-      );
+      logger.info(`Rendering enemy corporations chart with ${displayType} view`);
       const buffer = await this.renderChart(chartData);
 
       // Send the chart with summary
       await interaction.editReply({
-        content: chartData.summary || "Enemy Corporations Chart",
-        files: [{ attachment: buffer, name: "corps-chart.png" }],
+        content: chartData.summary ?? 'Enemy Corporations Chart',
+        files: [{ attachment: buffer, name: 'corps-chart.png' }],
       });
 
-      logger.info("Successfully sent enemy corporations chart");
+      logger.info('Successfully sent enemy corporations chart');
     } catch (error) {
       await this.handleError(interaction, error);
     }
@@ -78,15 +73,15 @@ export class CorpsHandler extends BaseChartHandler {
    */
   private async renderChart(chartData: ChartData): Promise<Buffer> {
     // Create options object based on chartData.options or use defaults
-    const options: ChartOptions = chartData.options || {
+    const options: ChartOptions = chartData.options ?? {
       responsive: true,
       maintainAspectRatio: false,
     };
 
     // Use different canvas sizes based on chart type
-    if (chartData.displayType === "pie") {
+    if (chartData.displayType === 'pie') {
       return new ChartRenderer(2400, 2400).renderToBuffer(chartData, options);
-    } else if (chartData.displayType === "bar") {
+    } else if (chartData.displayType === 'bar') {
       // Vertical bar chart
       return new ChartRenderer(3000, 1800).renderToBuffer(chartData, options);
     } else {

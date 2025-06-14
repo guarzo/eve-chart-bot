@@ -1,9 +1,9 @@
-import { ChartData, ChartOptions } from "./ChartService";
-import { logger } from "../../lib/logger";
-import { flags } from "../../utils/feature-flags";
-import { IChartRenderStrategy } from "./strategies/IChartRenderStrategy";
-import { BasicChartRenderStrategy } from "./strategies/BasicChartRenderStrategy";
-import { AdvancedChartRenderStrategy } from "./strategies/AdvancedChartRenderStrategy";
+import { ChartData, ChartOptions } from './ChartService';
+import { logger } from '../../lib/logger';
+import { flags } from '../../utils/feature-flags';
+import { IChartRenderStrategy } from './strategies/IChartRenderStrategy';
+import { BasicChartRenderStrategy } from './strategies/BasicChartRenderStrategy';
+import { AdvancedChartRenderStrategy } from './strategies/AdvancedChartRenderStrategy';
 
 /**
  * Handles the rendering of charts to various formats using strategy pattern
@@ -17,10 +17,10 @@ export class ChartRenderer {
   private static getStrategy(): IChartRenderStrategy {
     if (!this.strategy) {
       if (flags.newChartRendering) {
-        logger.info("Using advanced chart rendering strategy");
+        logger.info('Using advanced chart rendering strategy');
         this.strategy = new AdvancedChartRenderStrategy();
       } else {
-        logger.info("Using basic chart rendering strategy");
+        logger.info('Using basic chart rendering strategy');
         this.strategy = new BasicChartRenderStrategy();
       }
     }
@@ -40,10 +40,7 @@ export class ChartRenderer {
    * @param options Rendering options
    * @returns Buffer containing the PNG image
    */
-  static async renderPNG(
-    chartData: ChartData,
-    options?: Partial<ChartOptions>
-  ): Promise<Buffer | null> {
+  static async renderPNG(chartData: ChartData, options?: Partial<ChartOptions>): Promise<Buffer | null> {
     try {
       const strategy = this.getStrategy();
       return await strategy.renderPNG(chartData, options);
@@ -53,7 +50,7 @@ export class ChartRenderer {
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         },
-        "Failed to render chart as PNG"
+        'Failed to render chart as PNG'
       );
       return null;
     }
@@ -65,20 +62,17 @@ export class ChartRenderer {
    * @param options Rendering options
    * @returns HTML string
    */
-  static renderHTML(
-    chartData: ChartData,
-    options: Partial<ChartOptions> = {}
-  ): string {
+  static async renderHTML(chartData: ChartData, options: Partial<ChartOptions> = {}): Promise<string> {
     try {
       const strategy = this.getStrategy();
-      return strategy.renderHTML(chartData, options);
+      return await strategy.renderHTML(chartData, options);
     } catch (error) {
       logger.error(
         {
           error: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
         },
-        "Failed to render chart as HTML"
+        'Failed to render chart as HTML'
       );
       return `<html><body><h1>Error rendering chart</h1><p>${error}</p></body></html>`;
     }
