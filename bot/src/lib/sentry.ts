@@ -1,13 +1,14 @@
 import * as Sentry from '@sentry/node';
 import { httpIntegration } from '@sentry/node';
 import { logger } from './logger';
+import { ValidatedConfiguration } from '../config/validated';
 
 /**
  * Initialize Sentry error monitoring
  */
 export function initSentry() {
-  const dsn = process.env.SENTRY_DSN;
-  const environment = process.env.NODE_ENV ?? 'development';
+  const dsn = ValidatedConfiguration.sentry.dsn;
+  const environment = ValidatedConfiguration.server.nodeEnv;
 
   if (!dsn) {
     logger.debug('SENTRY_DSN not set, error monitoring disabled');

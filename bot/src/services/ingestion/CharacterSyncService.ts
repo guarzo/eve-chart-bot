@@ -1,13 +1,13 @@
 import { ESIService } from '../ESIService';
-import { retryOperation } from '../../utils/retry';
+import { retryOperation } from '../../shared/performance/retry';
 import { logger } from '../../lib/logger';
 import { Character } from '../../domain/character/Character';
 import { CharacterRepository } from '../../infrastructure/repositories/CharacterRepository';
 import { MapClient } from '../../infrastructure/http/MapClient';
 import { PrismaClient } from '@prisma/client';
 import prisma from '../../infrastructure/persistence/client';
-import { Configuration } from '../../config';
-import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../lib/errors';
+import { ValidatedConfiguration as Configuration } from '../../config/validated';
+import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../shared/errors';
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;

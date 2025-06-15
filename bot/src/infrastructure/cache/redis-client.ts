@@ -1,8 +1,8 @@
 import { Redis } from 'ioredis';
-import { REDIS_URL } from '../../config';
+import { ValidatedConfiguration } from '../../config/validated';
 import { logger } from '../../lib/logger';
 
-const redisUrl = REDIS_URL;
+const redisUrl = ValidatedConfiguration.redis.url;
 
 // Create a Redis client singleton
 const redisClient = new Redis(redisUrl);

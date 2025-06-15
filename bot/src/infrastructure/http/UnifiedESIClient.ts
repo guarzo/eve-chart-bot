@@ -3,18 +3,10 @@ import { logger } from '../../lib/logger';
 import { CacheAdapter } from '../../cache/CacheAdapter';
 import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';
 import { ESIClientConfig, IESIClient } from './ESIClient';
-import { retryOperation } from '../../shared/performance/retry';
 import { RateLimiter } from '../../shared/performance/rateLimiter';
 import { rateLimiterManager } from '../../shared/performance/RateLimiterManager';
 import { errorHandler, ExternalServiceError } from '../../shared/errors';
-import {
-  REDIS_URL,
-  ESI_BASE_URL,
-  CACHE_TTL,
-  HTTP_TIMEOUT,
-  HTTP_MAX_RETRIES,
-  HTTP_INITIAL_RETRY_DELAY,
-} from '../../config';
+import { ValidatedConfiguration } from '../../config/validated';
 
 /**
  * Unified client for interacting with EVE Online's ESI API
@@ -33,12 +25,12 @@ export class UnifiedESIClient implements IESIClient {
    */
   constructor(config: ESIClientConfig = {}, cache?: CacheAdapter) {
     this.config = {
-      baseUrl: config.baseUrl ?? ESI_BASE_URL,
-      timeout: config.timeout ?? HTTP_TIMEOUT,
+      baseUrl: config.baseUrl ?? ValidatedConfiguration.apis.esi.baseUrl,
+      timeout: config.timeout ?? ValidatedConfiguration.http.timeout,
       userAgent: config.userAgent ?? 'EVE-Chart-Bot/1.0',
-      cacheTtl: config.cacheTtl ?? CACHE_TTL,
-      maxRetries: config.maxRetries ?? HTTP_MAX_RETRIES,
-      initialRetryDelay: config.initialRetryDelay ?? HTTP_INITIAL_RETRY_DELAY,
+      cacheTtl: config.cacheTtl ?? ValidatedConfiguration.redis.cacheTtl,
+      maxRetries: config.maxRetries ?? ValidatedConfiguration.http.maxRetries,
+      initialRetryDelay: config.initialRetryDelay ?? ValidatedConfiguration.http.initialRetryDelay,
     };
 
     this.client = axios.create({
@@ -50,7 +42,7 @@ export class UnifiedESIClient implements IESIClient {
       },
     });
 
-    this.cache = cache ?? new CacheRedisAdapter(REDIS_URL, this.config.cacheTtl);
+    this.cache = cache ?? new CacheRedisAdapter(ValidatedConfiguration.redis.url, this.config.cacheTtl);
 
     // Only use rate limiter if this is an ESI client (not used for other APIs)
     if (this.config.baseUrl.includes('esi')) {

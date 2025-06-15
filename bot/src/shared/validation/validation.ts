@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod';
-import { Configuration } from '../../config';
+import { ValidatedConfiguration as Configuration } from '../../config/validated';
 import { ValidationError } from '../errors';
 
 /**

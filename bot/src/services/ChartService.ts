@@ -12,7 +12,7 @@ import { ChartConfigInput, ChartData, ChartDisplayType, ChartMetric } from '../t
 import { format } from 'date-fns';
 import { BaseRepository } from '../infrastructure/repositories/BaseRepository';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ValidationError, DatabaseError, ChartError } from '../lib/errors';
+import { errorHandler, ValidationError, DatabaseError, ChartError } from '../shared/errors';
 
 interface KillData {
   killTime: Date;
@@ -301,7 +301,7 @@ export class ChartService extends BaseRepository {
           labels,
           datasets: emptyDatasets,
           title: '',
-          displayType: 'line' as ChartDisplayType,
+          displayType: 'line',
         };
       }
 
@@ -390,7 +390,7 @@ export class ChartService extends BaseRepository {
           labels: [],
           datasets: [],
           title: '',
-          displayType: 'line' as ChartDisplayType,
+          displayType: 'line',
         };
       }
 
@@ -475,7 +475,7 @@ export class ChartService extends BaseRepository {
         labels: groupedData.map(d => format(d.timestamp, this.getDateFormat(groupBy))),
         datasets,
         title: '',
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     } catch (error) {
       logger.error('Error generating kills chart:', error);
@@ -484,7 +484,7 @@ export class ChartService extends BaseRepository {
         labels: [],
         datasets: [],
         title: '',
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     }
   }
@@ -633,7 +633,7 @@ export class ChartService extends BaseRepository {
         labels: groupedData.map(d => format(d.timestamp, this.getDateFormat(groupBy))),
         datasets,
         title: '',
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     } catch (error) {
       logger.error('Error generating map activity chart:', error);
@@ -642,7 +642,7 @@ export class ChartService extends BaseRepository {
         labels: [],
         datasets: [],
         title: '',
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     }
   }
@@ -863,7 +863,7 @@ export class ChartService extends BaseRepository {
         return {
           labels: [],
           datasets: [],
-          displayType: 'horizontalBar' as ChartDisplayType,
+          displayType: 'horizontalBar',
           summary: 'No kills found in the specified time period',
         };
       }
@@ -901,7 +901,7 @@ export class ChartService extends BaseRepository {
             backgroundColor: '#DC3912',
           },
         ],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
         summary: `Total kills: ${overallTotalKills.toLocaleString()}\nSolo kills: ${overallSoloKills.toLocaleString()} (${
           overallTotalKills > 0 ? Math.round((overallSoloKills / overallTotalKills) * 100) : 0
         }%)`,
@@ -956,7 +956,7 @@ export class ChartService extends BaseRepository {
                 backgroundColor: '#FF9900',
               },
             ],
-            displayType: 'horizontalBar' as ChartDisplayType,
+            displayType: 'horizontalBar',
           };
         }
 
@@ -1116,7 +1116,7 @@ export class ChartService extends BaseRepository {
               backgroundColor: '#FF9900',
             },
           ],
-          displayType: 'horizontalBar' as ChartDisplayType,
+          displayType: 'horizontalBar',
         };
       }
 
@@ -1149,7 +1149,7 @@ export class ChartService extends BaseRepository {
             backgroundColor: '#FF9900',
           },
         ],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
       };
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);

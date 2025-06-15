@@ -30,7 +30,7 @@
 
 import axios, { AxiosInstance } from 'axios';
 import { logger } from '../../lib/logger';
-import { timerManager } from '../../utils/timerManager';
+import { timerManager } from '../../shared/performance/timerManager';
 
 // Rate limiting configuration
 const RATE_LIMIT = {

@@ -1,38 +1,30 @@
-import { UnifiedESIClient } from './UnifiedESIClient';
+import { TypeSafeHttpClient } from '../../shared/http/TypeSafeHttpClient';
+import { ZkillResponseSchema, ZkillResponse } from '../../shared/schemas/api-responses';
 import { logger } from '../../lib/logger';
 import { RateLimiter } from '../../shared/performance/rateLimiter';
 import { rateLimiterManager } from '../../shared/performance/RateLimiterManager';
-import { RATE_LIMIT_MIN_DELAY } from '../../config';
+import { ValidatedConfiguration } from '../../config/validated';
 import { ExternalServiceError, ValidationError } from '../../shared/errors';
 import * as crypto from 'crypto';
 
-interface ZkillResponse {
-  killID: number;
-  killmail_id: number;
-  zkb: {
-    hash: string;
-    totalValue: number;
-    points: number;
-    labels?: string[];
-  };
-  [key: string]: any; // Allow additional fields
-}
-
 export class ZkillClient {
-  private readonly client: UnifiedESIClient;
+  private readonly client: TypeSafeHttpClient;
   private readonly rateLimiter: RateLimiter;
 
   constructor(baseUrl: string = 'https://zkillboard.com/api') {
-    this.client = new UnifiedESIClient({
-      baseUrl,
-      userAgent: 'EVE-Chart-Bot/1.0',
+    this.client = new TypeSafeHttpClient({
+      baseURL: baseUrl,
       timeout: 15000,
+      retries: 3,
+      headers: {
+        'User-Agent': 'EVE-Chart-Bot/1.0',
+      },
     });
 
     // Use shared rate limiter from singleton manager
     // Override the default delay with config value if needed
     this.rateLimiter = rateLimiterManager.getRateLimiter('zKillboard', {
-      minDelayMs: RATE_LIMIT_MIN_DELAY,
+      minDelayMs: ValidatedConfiguration.rateLimit.minDelay,
     });
   }
 
@@ -64,7 +56,8 @@ export class ZkillClient {
       // Apply rate limiting with retry
       await this.rateLimiter.wait(signal);
 
-      const response = await this.client.fetch<Record<string, any>>(`/killID/${killId}/`, { signal });
+      // The zKillboard API returns either an array or an object with killID as key
+      const response = await this.client.getRaw(`/killID/${killId}/`, { signal });
 
       logger.debug('Raw zKill response received', {
         correlationId,
@@ -73,8 +66,16 @@ export class ZkillClient {
         hasData: !!response,
       });
 
-      // Validate response structure
-      if (!response || typeof response !== 'object') {
+      // Handle different response formats from zKillboard
+      let killData: unknown;
+      
+      if (Array.isArray(response)) {
+        killData = response[0]; // First element in array
+      } else if (response && typeof response === 'object') {
+        // Response might be wrapped in an object with killID as key
+        const responseObj = response as Record<string, unknown>;
+        killData = responseObj[killId.toString()] || response;
+      } else {
         logger.warn('Invalid response format from zKillboard', {
           correlationId,
           killId,
@@ -83,55 +84,35 @@ export class ZkillClient {
         return null;
       }
 
-      // The response might be wrapped in an object with the killID as the key
-      const killData = response[killId.toString()] || response;
-
-      if (!killData || typeof killData !== 'object') {
-        logger.warn('Invalid kill data format from zKillboard', {
+      if (!killData) {
+        logger.warn('No kill data found in response', {
           correlationId,
           killId,
-          killDataType: typeof killData,
         });
         return null;
       }
 
-      logger.debug('Kill data structure validation', {
+      // Validate the kill data with Zod schema
+      const validatedKill = ZkillResponseSchema.parse(killData);
+
+      logger.debug('Kill data validated successfully', {
         correlationId,
         killId,
-        hasKillmailId: !!killData.killmail_id,
-        hasZkb: !!killData.zkb,
-        hasHash: !!killData.zkb?.hash,
-        keys: Object.keys(killData),
-        zkbKeys: killData.zkb ? Object.keys(killData.zkb) : [],
+        killmailId: validatedKill.killmail_id,
+        hasZkb: !!validatedKill.zkb,
+        totalValue: validatedKill.zkb.totalValue,
       });
 
-      // Ensure required fields exist
-      if (!killData.killmail_id || !killData.zkb?.hash) {
-        throw ValidationError.fieldRequired(
-          'killmail_id or zkb.hash',
-          {
-            correlationId,
-            operation: 'zkill.validate.killmail',
-            metadata: {
-              killId,
-              hasKillmailId: !!killData.killmail_id,
-              hasZkb: !!killData.zkb,
-              hasHash: !!killData.zkb?.hash,
-            },
-          }
-        );
-      }
-
-      // Ensure the killID matches
-      if (killData.killID !== killId) {
+      // Ensure the killID matches (if present)
+      if (validatedKill.killID && validatedKill.killID !== killId) {
         throw ValidationError.invalidFormat(
           'killID',
           killId.toString(),
-          killData.killID?.toString(),
+          validatedKill.killID.toString(),
           {
             correlationId,
             operation: 'zkill.validate.killIdMatch',
-            metadata: { expectedKillId: killId, actualKillId: killData.killID },
+            metadata: { expectedKillId: killId, actualKillId: validatedKill.killID },
           }
         );
       }
@@ -139,11 +120,11 @@ export class ZkillClient {
       logger.debug('Successfully validated killmail data', {
         correlationId,
         killId,
-        killmailId: killData.killmail_id,
-        hash: killData.zkb.hash,
+        killmailId: validatedKill.killmail_id,
+        hash: validatedKill.zkb.hash,
       });
 
-      return killData as ZkillResponse;
+      return validatedKill;
     } catch (error) {
       throw ExternalServiceError.zkillError(
         error instanceof Error ? error.message : 'Failed to get killmail',

@@ -1,7 +1,7 @@
 import { ChartData, ChartOptions } from './ChartService';
 import { ChartPipeline, ChartGenerationConfig } from './pipeline/ChartPipeline';
 import { ChartPipelineFactory, ChartPipelineConfig } from './factories/ChartPipelineFactory';
-import { Configuration } from '../../config';
+import { ValidatedConfiguration as Configuration } from '../../config/validated';
 import { logger } from '../../lib/logger';
 
 /**

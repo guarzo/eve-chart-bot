@@ -1,6 +1,6 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
 import { ChartData } from '../../../types/chart';
-import { HeatmapChartConfig } from '../config';
+import { HeatmapChartConfig } from '../config/HeatmapChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';

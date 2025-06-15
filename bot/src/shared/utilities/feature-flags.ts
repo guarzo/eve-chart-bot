@@ -2,12 +2,12 @@
  * Feature flags configuration for toggling features
  */
 
-import { FEATURE_FLAGS } from '../config';
+import { ValidatedConfiguration } from '../../config/validated';
 
 /**
  * Feature flags for the application
  */
-export const flags = FEATURE_FLAGS;
+export const flags = ValidatedConfiguration.features;
 
 /**
  * Check if a feature flag is enabled

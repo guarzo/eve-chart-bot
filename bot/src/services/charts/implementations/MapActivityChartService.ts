@@ -70,7 +70,7 @@ export class MapActivityChartService extends BaseChartService implements IMapAct
         labels,
         datasets,
         title: this.generateChartTitle('map_activity', displayMetric, this.periodFromDates(startDate)),
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     } catch (error) {
       logger.error('Error generating map activity chart:', error);
@@ -187,7 +187,7 @@ export class MapActivityChartService extends BaseChartService implements IMapAct
       labels,
       datasets: emptyDatasets,
       title: '',
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
     };
   }
 

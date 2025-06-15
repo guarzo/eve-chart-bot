@@ -4,7 +4,7 @@ import { CharacterRepository } from '../infrastructure/repositories/CharacterRep
 import { logger } from '../lib/logger';
 import { ESIService } from './ESIService';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../lib/errors';
+import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../shared/errors';
 
 /**
  * Service for handling character-related business logic

@@ -4,6 +4,7 @@ import { logger } from '../logger';
 import { ChartService } from '../../services/ChartService';
 import { ChartRenderer } from '../../services/ChartRenderer';
 import { ChartOptions } from '../../types/chart';
+import { ChartPeriodEnum, ChartSourceTypeEnum, ChartGroupByEnum } from '../../shared/enums';
 
 const prisma = new PrismaClient();
 const chartService = new ChartService();
@@ -62,10 +63,10 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
 
     // Generate chart data
     const chartData = await chartService.generateChart({
-      type: 'kills',
+      type: ChartSourceTypeEnum.KILLS,
       characterIds: characters.map(c => BigInt(c.eveId)),
-      period: '7d',
-      groupBy: 'day',
+      period: ChartPeriodEnum.SEVEN_DAYS,
+      groupBy: ChartGroupByEnum.DAY,
       displayType: chartType as 'line' | 'bar',
     });
 
@@ -181,10 +182,10 @@ export async function handleMapCommand(interaction: CommandInteraction) {
 
     // Generate chart data
     const chartData = await chartService.generateChart({
-      type: 'map_activity',
+      type: ChartSourceTypeEnum.MAP_ACTIVITY,
       characterIds: characters.map(c => BigInt(c.eveId)),
-      period: '24h',
-      groupBy: 'hour',
+      period: ChartPeriodEnum.TWENTY_FOUR_HOURS,
+      groupBy: ChartGroupByEnum.HOUR,
       displayType: chartType as 'line' | 'bar',
     });
 

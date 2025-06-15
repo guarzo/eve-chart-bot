@@ -1,8 +1,8 @@
 import { UnifiedESIClient } from '../infrastructure/http/UnifiedESIClient';
 import { CacheRedisAdapter } from '../cache/CacheRedisAdapter';
 import { logger } from '../lib/logger';
-import { Configuration } from '../config';
-import { errorHandler, ExternalServiceError, ValidationError } from '../lib/errors';
+import { ValidatedConfiguration as Configuration } from '../config/validated';
+import { errorHandler, ExternalServiceError, ValidationError } from '../shared/errors';
 
 /**
  * Service for interacting with EVE Online's ESI API

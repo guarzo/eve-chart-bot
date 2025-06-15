@@ -1,24 +1,12 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
-import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { ChartData, ChartDisplayType, ChartDisplayTypeEnum } from '../../../types/chart';
 import { logger } from '../../../lib/logger';
-import { KillsChartConfig } from '../config';
+import { KillsChartConfig } from '../config/KillsChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
-import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
-import { BigIntTransformer } from '../../../utils/BigIntTransformer';
-
-interface Kill {
-  killmailId: bigint;
-  killTime: Date;
-  victim?: { characterId?: bigint };
-  attackers?: Array<{ characterId?: bigint }>;
-  solo: boolean;
-  [key: string]: any; // For other properties
-}
-
-interface Attacker {
-  characterId?: bigint;
-}
+import { errorHandler, ChartError, ValidationError } from '../../../shared/errors';
+import { BigIntTransformer } from '../../../shared/utilities/BigIntTransformer';
+import { KillChartData, AttackerData } from '../../../shared/types';
 
 /**
  * Generator for kill-related charts
@@ -290,7 +278,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
         return {
           labels: [],
           datasets: [],
-          displayType: 'horizontalBar' as ChartDisplayType,
+          displayType: ChartDisplayTypeEnum.HORIZONTAL_BAR,
           summary: 'No kills found in the specified time period',
         };
       }
@@ -321,7 +309,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
             backgroundColor: this.getDatasetColors('kills').secondary,
           },
         ],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
         options: {
           indexAxis: 'y',
           scales: {

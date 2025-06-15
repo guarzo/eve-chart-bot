@@ -5,6 +5,10 @@
 
 // Common types
 export * from './types/common';
+export * from './types';
+
+// Enums
+export * from './enums';
 
 // DTOs
 export * from './dto/external-api.dto';
@@ -27,6 +31,30 @@ export * from './utilities';
 
 // Cache utilities
 export * from './cache';
+
+// HTTP utilities
+export * from './http';
+
+// API response schemas
+export {
+  ZkillResponseSchema,
+  ESICharacterSchema,
+  ESICorporationSchema,
+  ESIAllianceSchema,
+  MapActivityDataSchema,
+  UserCharacterGroupSchema,
+  HttpResponseSchema,
+  PaginationMetaSchema,
+  WebSocketMessageSchema,
+  WebSocketKillmailMessageSchema,
+  // Export specific types to avoid conflicts
+  type ZkillResponse,
+  type ESICharacter,
+  type ESICorporation,
+  type ESIAlliance,
+  type HttpResponse,
+  type WebSocketMessage as WSMessage,
+} from './schemas/api-responses';
 
 // Shared interfaces
 export * from './interfaces/repository';

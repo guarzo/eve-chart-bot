@@ -3,7 +3,7 @@ import { flags } from '../../shared/utilities/feature-flags';
 import { RepositoryManager } from '../../infrastructure/repositories/RepositoryManager';
 import { CacheAdapter } from '../../cache/CacheAdapter';
 import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';
-import { Configuration } from '../../config';
+import { ValidatedConfiguration as Configuration } from '../../config/validated';
 
 /**
  * Chart rendering options

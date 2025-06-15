@@ -134,7 +134,7 @@ export class OptimizedChartService extends BaseChartService {
       labels,
       datasets,
       title: this.generateChartTitle('kills', displayMetric, this.periodFromDates(startDate)),
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
     };
   }
 
@@ -382,7 +382,7 @@ export class OptimizedChartService extends BaseChartService {
       labels,
       datasets: emptyDatasets,
       title: '',
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
     };
   }
 

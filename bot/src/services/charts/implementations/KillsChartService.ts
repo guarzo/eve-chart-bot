@@ -105,7 +105,7 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
         labels,
         datasets,
         title: this.generateChartTitle('kills', displayMetric, this.periodFromDates(startDate)),
-        displayType: 'line' as ChartDisplayType,
+        displayType: 'line',
       };
     } catch (error) {
       logger.error('Error generating kills chart', { 
@@ -241,7 +241,7 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
       labels,
       datasets: emptyDatasets,
       title: '',
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
     };
   }
 

@@ -18,10 +18,11 @@ import { CharacterSyncService } from './services/ingestion/CharacterSyncService'
 import { CharacterRepository } from './infrastructure/repositories/CharacterRepository';
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { Configuration } from './config';
+import { ValidatedConfiguration as Configuration } from './config/validated';
 import { PrismaClient } from '@prisma/client';
-import { timerManager } from './utils/timerManager';
-import { rateLimiterManager } from './utils/RateLimiterManager';
+import { timerManager } from './shared/performance/timerManager';
+import { rateLimiterManager } from './shared/performance/RateLimiterManager';
+import { ChartPeriodEnum, ChartSourceTypeEnum, ChartGroupByEnum } from './shared/enums';
 
 const execAsync = promisify(exec);
 
@@ -93,10 +94,10 @@ const discordClient = new DiscordClient();
 
 // Validation schemas
 const chartConfigSchema = z.object({
-  type: z.enum(['kills', 'map_activity']),
+  type: z.nativeEnum(ChartSourceTypeEnum),
   characterIds: z.array(z.bigint()),
-  period: z.enum(['24h', '7d', '30d', '90d']),
-  groupBy: z.enum(['hour', 'day', 'week']).optional(),
+  period: z.nativeEnum(ChartPeriodEnum),
+  groupBy: z.nativeEnum(ChartGroupByEnum).optional(),
 });
 
 // Health check endpoint
@@ -153,18 +154,18 @@ app.get('/v1/charts/types', (_req, res) => {
   res.json({
     types: [
       {
-        id: 'kills',
+        id: ChartSourceTypeEnum.KILLS,
         name: 'Kill Chart',
         description: 'Generate a chart showing kill activity',
-        periods: ['24h', '7d', '30d', '90d'],
-        groupBy: ['hour', 'day', 'week'],
+        periods: [ChartPeriodEnum.TWENTY_FOUR_HOURS, ChartPeriodEnum.SEVEN_DAYS, ChartPeriodEnum.THIRTY_DAYS, ChartPeriodEnum.NINETY_DAYS],
+        groupBy: [ChartGroupByEnum.HOUR, ChartGroupByEnum.DAY, ChartGroupByEnum.WEEK],
       },
       {
-        id: 'map_activity',
+        id: ChartSourceTypeEnum.MAP_ACTIVITY,
         name: 'Map Activity Chart',
         description: 'Generate a chart showing map activity',
-        periods: ['24h', '7d', '30d'],
-        groupBy: ['hour', 'day'],
+        periods: [ChartPeriodEnum.TWENTY_FOUR_HOURS, ChartPeriodEnum.SEVEN_DAYS, ChartPeriodEnum.THIRTY_DAYS],
+        groupBy: [ChartGroupByEnum.HOUR, ChartGroupByEnum.DAY],
       },
     ],
   });

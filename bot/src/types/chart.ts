@@ -1,28 +1,36 @@
 import { ChartType, ChartOptions as ChartJSOptions, ScriptableContext, Tick, Scale, TooltipItem } from 'chart.js';
+import { 
+  ChartPeriod as ChartPeriodEnum, 
+  ChartSourceType as ChartSourceTypeEnum, 
+  ChartDisplayType as ChartDisplayTypeEnum, 
+  ChartMetric as ChartMetricEnum,
+  ChartGroupBy as ChartGroupByEnum,
+  LegendPosition as LegendPositionEnum
+} from '../shared/enums';
 
-export type ChartPeriod = '24h' | '7d' | '30d' | '90d';
-export type ChartSourceType = 'kills' | 'map_activity';
-export type ChartDisplayType =
-  | 'bar'
-  | 'line'
-  | 'pie'
-  | 'boxplot'
-  | 'violin'
-  | 'heatmap'
-  | 'calendar'
-  | 'doughnut'
-  | 'radar'
-  | 'polarArea'
-  | 'bubble'
-  | 'scatter'
-  | 'gauge';
-export type ChartMetric = 'value' | 'kills' | 'points' | 'attackers';
+// Export the enum values as types for backward compatibility
+export type ChartPeriod = `${ChartPeriodEnum}`;
+export type ChartSourceType = `${ChartSourceTypeEnum}`;
+export type ChartDisplayType = `${ChartDisplayTypeEnum}`;
+export type ChartMetric = `${ChartMetricEnum}`;
+export type ChartGroupBy = `${ChartGroupByEnum}`;
+export type LegendPosition = `${LegendPositionEnum}`;
+
+// Re-export enums for direct usage
+export { 
+  ChartPeriodEnum, 
+  ChartSourceTypeEnum, 
+  ChartDisplayTypeEnum, 
+  ChartMetricEnum,
+  ChartGroupByEnum,
+  LegendPositionEnum
+};
 
 export interface ChartConfig {
   type: ChartSourceType;
   characterIds: bigint[];
   period: ChartPeriod;
-  groupBy?: 'hour' | 'day' | 'week';
+  groupBy?: ChartGroupBy;
   displayType?: ChartDisplayType;
   displayMetric?: ChartMetric;
   limit?: number;
@@ -127,7 +135,7 @@ export interface ChartOptions {
   plugins?: {
     legend?: {
       display?: boolean;
-      position?: 'top' | 'bottom' | 'left' | 'right';
+      position?: LegendPosition;
       labels?: {
         color?: string;
         font?: {

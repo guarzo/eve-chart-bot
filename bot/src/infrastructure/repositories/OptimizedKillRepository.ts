@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../../lib/logger';
-import { errorHandler, DatabaseError } from '../../lib/errors';
+import { errorHandler, DatabaseError } from '../../shared/errors';
 
 /**
  * Optimized Kill Repository with efficient database operations

@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client';
 /* eslint-disable max-lines */
 import { logger } from '../../lib/logger';
 import { errorHandler, DatabaseError } from '../../shared/errors';
+import { KillFactData, VictimData, AttackerData, InvolvedCharacterData } from '../../shared/types/database';
 
 /**
  * Simplified Kill Repository for WebSocket-based ingestion
@@ -15,39 +16,10 @@ export class KillRepository {
    * Ingest a complete killmail from WebSocket data
    */
   async ingestKillmail(
-    killFact: {
-      killmailId: bigint;
-      killTime: Date;
-      npc: boolean;
-      solo: boolean;
-      awox: boolean;
-      shipTypeId: number;
-      systemId: number;
-      labels: string[];
-      totalValue: bigint;
-      points: number;
-    },
-    victim: {
-      characterId?: bigint;
-      corporationId?: bigint;
-      allianceId?: bigint;
-      shipTypeId: number;
-      damageTaken: number;
-    },
-    attackers: Array<{
-      characterId?: bigint;
-      corporationId?: bigint;
-      allianceId?: bigint;
-      damageDone: number;
-      finalBlow: boolean;
-      securityStatus?: number;
-      shipTypeId?: number;
-      weaponTypeId?: number;
-    }>,
-    involvedCharacters: Array<{
-      characterId: bigint;
-      role: 'attacker' | 'victim';
-    }>
+    killFact: KillFactData,
+    victim: VictimData,
+    attackers: AttackerData[],
+    involvedCharacters: InvolvedCharacterData[]
   ): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
     const startTime = Date.now();
@@ -99,18 +71,7 @@ export class KillRepository {
    */
   private async upsertKillFacts(
     tx: any,
-    killFact: {
-      killmailId: bigint;
-      killTime: Date;
-      npc: boolean;
-      solo: boolean;
-      awox: boolean;
-      shipTypeId: number;
-      systemId: number;
-      labels: string[];
-      totalValue: bigint;
-      points: number;
-    },
+    killFact: KillFactData,
     correlationId: string
   ): Promise<void> {
     await tx.killFact.upsert({
@@ -141,13 +102,7 @@ export class KillRepository {
   private async processVictimData(
     tx: any,
     killmailId: bigint,
-    victim: {
-      characterId?: bigint;
-      corporationId?: bigint;
-      allianceId?: bigint;
-      shipTypeId: number;
-      damageTaken: number;
-    },
+    victim: VictimData,
     correlationId: string
   ): Promise<void> {
     // Delete existing victims for this killmail (should be only one)
@@ -180,16 +135,7 @@ export class KillRepository {
   private async processAttackerData(
     tx: any,
     killmailId: bigint,
-    attackers: Array<{
-      characterId?: bigint;
-      corporationId?: bigint;
-      allianceId?: bigint;
-      damageDone: number;
-      finalBlow: boolean;
-      securityStatus?: number;
-      shipTypeId?: number;
-      weaponTypeId?: number;
-    }>,
+    attackers: AttackerData[],
     correlationId: string
   ): Promise<void> {
     // Delete existing attackers
@@ -229,10 +175,7 @@ export class KillRepository {
   private async manageCharacterRelationships(
     tx: any,
     killmailId: bigint,
-    involvedCharacters: Array<{
-      characterId: bigint;
-      role: 'attacker' | 'victim';
-    }>,
+    involvedCharacters: InvolvedCharacterData[],
     correlationId: string
   ): Promise<void> {
     // Delete existing relationships

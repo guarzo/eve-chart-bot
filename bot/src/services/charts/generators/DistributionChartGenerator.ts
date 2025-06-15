@@ -82,7 +82,7 @@ export class DistributionChartGenerator extends BaseChartGenerator {
           backgroundColor: this.getDatasetColors('distribution').secondary,
         },
       ],
-      displayType: 'horizontalBar' as ChartDisplayType,
+      displayType: 'horizontalBar',
     };
   }
 }

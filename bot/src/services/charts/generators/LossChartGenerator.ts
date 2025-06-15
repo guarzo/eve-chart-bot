@@ -1,6 +1,6 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
 import { ChartData, ChartDisplayType } from '../../../types/chart';
-import { LossChartConfig } from '../config';
+import { LossChartConfig } from '../config/LossChartConfig';
 import { logger } from '../../../lib/logger';
 import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
@@ -102,7 +102,7 @@ export class LossChartGenerator extends BaseChartGenerator {
       return {
         labels: [],
         datasets: [],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
         summary: 'No losses found in the specified time period',
       };
     }
@@ -149,7 +149,7 @@ export class LossChartGenerator extends BaseChartGenerator {
           type: 'line',
         },
       ],
-      displayType: 'horizontalBar' as ChartDisplayType,
+      displayType: 'horizontalBar',
       options: {
         indexAxis: 'y',
         scales: {
@@ -255,7 +255,7 @@ export class LossChartGenerator extends BaseChartGenerator {
           borderColor: 'rgb(54, 162, 235)',
         },
       ],
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
     };
   }
 
@@ -310,7 +310,7 @@ export class LossChartGenerator extends BaseChartGenerator {
           borderColor: 'rgb(54, 162, 235)',
         },
       ],
-      displayType: 'bar' as ChartDisplayType,
+      displayType: 'bar',
     };
   }
 }

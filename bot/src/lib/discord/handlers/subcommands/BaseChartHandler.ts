@@ -5,7 +5,7 @@ import { logger } from '../../../logger';
 import { RepositoryManager } from '../../../../infrastructure/repositories/RepositoryManager';
 import { CharacterGroup } from '../../../../domain/character/CharacterGroup';
 import { MessageFlags } from 'discord.js';
-import { errorHandler, createDiscordErrorResponse } from '../../../errors';
+import { errorHandler, createDiscordErrorResponse } from '../../../../shared/errors';
 
 /**
  * Base class for all chart command handlers

@@ -1,8 +1,5 @@
 const pino = require('pino');
-import { config } from 'dotenv';
-
-// Load environment variables
-config();
+import { ValidatedConfiguration } from '../config/validated';
 
 // Define log levels
 const LOG_LEVELS = {
@@ -13,8 +10,8 @@ const LOG_LEVELS = {
   trace: 10,
 } as const;
 
-// Get log level from environment or default to info
-const logLevel = (process.env.LOG_LEVEL ?? 'debug').toLowerCase();
+// Get log level from configuration
+const logLevel = ValidatedConfiguration.logging.level;
 
 // Validate log level
 if (!Object.keys(LOG_LEVELS).includes(logLevel)) {

@@ -6,7 +6,6 @@
 import { ChartData, ChartDataset, ChartMetadata } from '../../value-objects/ChartData';
 import { ChartConfiguration } from '../../value-objects/ChartConfiguration';
 import { ChartType } from '../../../../../shared/types/common';
-import { BigIntTransformer } from '../../../../../shared/utils/BigIntTransformer';
 
 export interface LossDataPoint {
   killTime: Date;

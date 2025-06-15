@@ -1,6 +1,6 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
 import { ChartData } from '../../../types/chart';
-import { ShipTypesChartConfig } from '../config';
+import { ShipTypesChartConfig } from '../config/ShipTypesChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';

@@ -1,12 +1,6 @@
 import { logger } from '../../lib/logger';
 import { timerManager } from './timerManager';
-import {
-  HTTP_MAX_RETRIES,
-  HTTP_INITIAL_RETRY_DELAY,
-  HTTP_MAX_RETRY_DELAY,
-  HTTP_TIMEOUT,
-  Configuration,
-} from '../config';
+import { ValidatedConfiguration } from '../../config/validated';
 
 /**
  * Configuration options for retry logic
@@ -52,12 +46,12 @@ export interface RetryOptions {
 export async function retry<T>(fn: () => Promise<T>, description?: string, options: RetryOptions = {}): Promise<T> {
   // Normalize options to handle legacy aliases
   const baseDelay =
-    options.baseDelayMs ?? options.initialDelayMs ?? options.initialRetryDelay ?? HTTP_INITIAL_RETRY_DELAY;
+    options.baseDelayMs ?? options.initialDelayMs ?? options.initialRetryDelay ?? ValidatedConfiguration.http.initialRetryDelay;
 
-  const maxDelay = options.maxDelayMs ?? options.maxRetryDelay ?? HTTP_MAX_RETRY_DELAY;
+  const maxDelay = options.maxDelayMs ?? options.maxRetryDelay ?? ValidatedConfiguration.http.maxRetryDelay;
 
   const {
-    maxRetries = HTTP_MAX_RETRIES,
+    maxRetries = ValidatedConfiguration.http.maxRetries,
     useExponentialBackoff = true,
     backoffFactor = 2,
     onError,
@@ -193,9 +187,9 @@ export const retryStrategies = {
     retry(fn, 'HTTP request', {
       maxRetries,
       baseDelayMs: HTTP_INITIAL_RETRY_DELAY,
-      maxDelayMs: HTTP_MAX_RETRY_DELAY,
+      maxDelayMs: ValidatedConfiguration.http.maxRetryDelay,
       useExponentialBackoff: true,
-      timeout: HTTP_TIMEOUT,
+      timeout: ValidatedConfiguration.http.timeout,
       shouldRetry: error => {
         // Retry on network errors or server errors (5xx)
         const isNetworkError =

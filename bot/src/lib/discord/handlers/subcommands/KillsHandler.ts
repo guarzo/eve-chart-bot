@@ -5,7 +5,7 @@ import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { ChartFactory } from '../../../../services/charts/ChartFactory';
 import { theme } from '../../../../services/charts/config/theme';
-import { errorHandler, ChartError, ValidationError } from '../../../errors';
+import { errorHandler, ChartError, ValidationError } from '../../../../shared/errors';
 
 /**
  * Handler for the /charts kills command

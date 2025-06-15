@@ -5,7 +5,7 @@ import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { TooltipItem, Scale } from 'chart.js';
 import { ChartFactory } from '../../../../services/charts';
-import { errorHandler, ChartError, ValidationError } from '../../../errors';
+import { errorHandler, ChartError, ValidationError } from '../../../../shared/errors';
 
 /**
  * Handler for the /charts loss command

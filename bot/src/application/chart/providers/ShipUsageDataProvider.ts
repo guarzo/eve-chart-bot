@@ -2,7 +2,7 @@ import { ChartData } from '../ChartService';
 import { IChartDataProvider, ChartGenerationConfig } from '../pipeline/ChartPipeline';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { CacheAdapter } from '../../../cache/CacheAdapter';
-import { Configuration } from '../../../config';
+import { ValidatedConfiguration as Configuration } from '../../../config/validated';
 import { logger } from '../../../lib/logger';
 
 /**

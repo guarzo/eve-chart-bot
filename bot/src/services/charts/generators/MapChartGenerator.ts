@@ -144,7 +144,7 @@ export class MapChartGenerator extends BaseChartGenerator {
             backgroundColor: this.getColorForIndex(2),
           },
         ],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
       };
     } catch (error) {
       logger.error('Error generating map activity chart', { 

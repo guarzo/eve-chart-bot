@@ -1,42 +1,7 @@
 import { WebSocketKillmail, WebSocketVictim, WebSocketAttacker } from '../../types/websocket';
 import { mapWebSocketKillmailToDomain } from '../../shared/mappers/dto.mapper';
 import { KillmailDto } from '../../shared/dto/domain.dto';
-
-interface MappedKillData {
-  killFact: {
-    killmailId: bigint;
-    killTime: Date;
-    npc: boolean;
-    solo: boolean;
-    awox: boolean;
-    shipTypeId: number;
-    systemId: number;
-    labels: string[];
-    totalValue: bigint;
-    points: number;
-  };
-  victim: {
-    characterId?: bigint;
-    corporationId?: bigint;
-    allianceId?: bigint;
-    shipTypeId: number;
-    damageTaken: number;
-  };
-  attackers: Array<{
-    characterId?: bigint;
-    corporationId?: bigint;
-    allianceId?: bigint;
-    damageDone: number;
-    finalBlow: boolean;
-    securityStatus?: number;
-    shipTypeId?: number;
-    weaponTypeId?: number;
-  }>;
-  involvedCharacters: Array<{
-    characterId: bigint;
-    role: 'attacker' | 'victim';
-  }>;
-}
+import { MappedKillData } from '../../shared/types/database';
 
 export class WebSocketDataMapper {
   /**

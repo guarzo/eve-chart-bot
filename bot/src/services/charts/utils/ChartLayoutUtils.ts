@@ -19,7 +19,7 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: 'horizontalBar' as ChartDisplayType,
+      displayType: 'horizontalBar',
       options: {
         indexAxis: 'y',
         scales: { x: { beginAtZero: true }, y: { stacked: true } },
@@ -46,7 +46,7 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: 'bar' as ChartDisplayType,
+      displayType: 'bar',
       options: {
         scales: { y: { beginAtZero: true } },
         plugins: {
@@ -77,7 +77,7 @@ export class ChartLayoutUtils {
     return {
       labels,
       datasets,
-      displayType: 'line' as ChartDisplayType,
+      displayType: 'line',
       options: {
         scales: { y: { beginAtZero: true } },
         plugins: {
@@ -106,7 +106,7 @@ export class ChartLayoutUtils {
           backgroundColor,
         },
       ],
-      displayType: 'pie' as ChartDisplayType,
+      displayType: 'pie',
       options: {
         plugins: {
           title: { display: true, text: title },

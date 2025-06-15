@@ -4,8 +4,8 @@ import { KillRepository } from '../../../infrastructure/repositories/KillReposit
 import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
 import { logger } from '../../../lib/logger';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
-import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
-import { BigIntTransformer } from '../../../utils/BigIntTransformer';
+import { errorHandler, ChartError, ValidationError } from '../../../shared/errors';
+import { BigIntTransformer } from '../../../shared/utilities/BigIntTransformer';
 
 /**
  * Generator for efficiency charts
@@ -131,7 +131,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
             backgroundColor: this.getDatasetColors('loss').primary,
           },
         ],
-        displayType: 'horizontalBar' as ChartDisplayType,
+        displayType: 'horizontalBar',
       };
     } catch (error) {
       logger.error('Error generating efficiency chart', { 

@@ -6,7 +6,7 @@ import { AdvancedChartRenderStrategy } from '../strategies/AdvancedChartRenderSt
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { CacheAdapter } from '../../../cache/CacheAdapter';
 import { CacheRedisAdapter } from '../../../cache/CacheRedisAdapter';
-import { Configuration } from '../../../config';
+import { ValidatedConfiguration as Configuration } from '../../../config/validated';
 import { logger } from '../../../lib/logger';
 
 /**

@@ -2,7 +2,7 @@ import { IChartRenderStrategy } from './IChartRenderStrategy';
 import { ChartData, ChartOptions } from '../ChartService';
 import { logger } from '../../../lib/logger';
 import { TemplateEngine } from '../../../shared/utilities/template';
-import { Configuration } from '../../../config';
+import { ValidatedConfiguration as Configuration } from '../../../config/validated';
 import { ChartHtmlBuilder, HtmlStyling, HtmlStylingPresets } from '../builders/ChartHtmlBuilder';
 
 /**

@@ -1,7 +1,7 @@
 /* eslint-disable max-lines */
 import { BaseChartGenerator } from '../BaseChartGenerator';
 import { ChartData } from '../../../types/chart';
-import { TrendChartConfig } from '../config';
+import { TrendChartConfig } from '../config/TrendChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';

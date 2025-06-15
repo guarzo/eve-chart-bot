@@ -1,6 +1,6 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
 import { ChartData } from '../../../types/chart';
-import { CorpsChartConfig } from '../config';
+import { CorpsChartConfig } from '../config/CorpsChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';

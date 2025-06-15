@@ -5,7 +5,7 @@ import { MapActivityRepository } from '../../infrastructure/repositories/MapActi
 import { Character } from '../../domain/character/Character';
 import { CharacterGroup } from '../../domain/character/CharacterGroup';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ChartError, ValidationError } from '../../lib/errors';
+import { errorHandler, ChartError, ValidationError } from '../../shared/errors';
 import { logger } from '../../lib/logger';
 
 export abstract class BaseChartService extends BaseRepository {

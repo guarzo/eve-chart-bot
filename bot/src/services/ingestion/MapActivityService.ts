@@ -1,12 +1,12 @@
 import { MapClient } from '../../infrastructure/http/MapClient';
 import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';
-import { retryOperation } from '../../utils/retry';
+import { retryOperation } from '../../shared/performance/retry';
 import { logger } from '../../lib/logger';
 import { MapActivityResponseSchema } from '../../types/ingestion';
 import { MapActivityRepository } from '../../infrastructure/repositories/MapActivityRepository';
 import { MapActivity } from '../../domain/activity/MapActivity';
-import { Configuration } from '../../config';
-import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../lib/errors';
+import { ValidatedConfiguration as Configuration } from '../../config/validated';
+import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../shared/errors';
 
 export class MapActivityService {
   private readonly map: MapClient;
