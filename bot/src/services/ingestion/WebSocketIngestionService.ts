@@ -31,7 +31,7 @@ import { KillRepository } from '../../infrastructure/repositories/KillRepository
 import { WebSocketKillmail, WebSocketKillmailUpdate } from '../../types/websocket';
 import { WebSocketDataMapper } from './WebSocketDataMapper';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ExternalServiceError, DatabaseError, ValidationError } from '../../shared/errors';
+import { errorHandler, ExternalServiceError, ValidationError } from '../../shared/errors';
 
 interface WebSocketPreloadConfig {
   enabled: boolean;
@@ -121,13 +121,8 @@ export class WebSocketIngestionService {
       this.isRunning = false;
       throw errorHandler.handleExternalServiceError(
         error,
-        'WebSocket',
-        'start',
-        {
-          correlationId,
-          operation: 'start',
-          metadata: { url: this.config.url },
-        }
+        'WEBSOCKET',
+        'start'
       );
     }
   }
@@ -188,8 +183,14 @@ export class WebSocketIngestionService {
     try {
       // Validate configuration
       if (!this.config.url) {
-        throw ValidationError.missingRequiredField(
-          'config.url',
+        throw new ValidationError(
+          'Missing required field: config.url',
+          [{
+            field: 'config.url',
+            value: undefined,
+            constraint: 'required',
+            message: 'config.url is required'
+          }],
           {
             correlationId,
             operation: 'websocket.connect',
@@ -236,13 +237,8 @@ export class WebSocketIngestionService {
     } catch (error) {
       throw errorHandler.handleExternalServiceError(
         error,
-        'WebSocket',
-        'connect',
-        {
-          correlationId,
-          operation: 'connect',
-          metadata: { url: this.config.url },
-        }
+        'WEBSOCKET',
+        'connect'
       );
     }
   }
@@ -323,12 +319,8 @@ export class WebSocketIngestionService {
     try {
       if (!this.socket) {
         throw new ExternalServiceError(
-          'WebSocket',
-          'Socket not initialized',
-          {
-            correlationId,
-            operation: 'subscribeToTrackedCharacters',
-          }
+          'WEBSOCKET',
+          'Socket not initialized'
         );
       }
 
@@ -398,12 +390,8 @@ export class WebSocketIngestionService {
     } catch (error) {
       throw errorHandler.handleExternalServiceError(
         error,
-        'WebSocket',
-        'subscribeToTrackedCharacters',
-        {
-          correlationId,
-          operation: 'subscribeToTrackedCharacters',
-        }
+        'WEBSOCKET',
+        'subscribeToTrackedCharacters'
       );
     }
   }

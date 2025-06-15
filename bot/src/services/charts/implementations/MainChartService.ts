@@ -6,7 +6,7 @@ import { OptimizedChartService } from '../OptimizedChartService';
 import { ChartConfigInput, ChartData, ChartOptions } from '../../../types/chart';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../../../lib/logger';
-import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
+import { errorHandler, ValidationError, ChartError } from '../../../shared/errors';
 
 export class MainChartService extends BaseChartService implements IChartService {
   private readonly killsChartService: KillsChartService;
@@ -75,8 +75,9 @@ export class MainChartService extends BaseChartService implements IChartService 
         );
 
       default:
-        throw ChartError.unsupportedChartType(
+        throw ChartError.configError(
           type,
+          `Unsupported chart type '${type}'. Supported types: kills, map_activity`,
           {
             correlationId,
             operation: 'generateChart',
@@ -87,12 +88,8 @@ export class MainChartService extends BaseChartService implements IChartService 
     } catch (error) {
       throw errorHandler.handleChartError(
         error,
-        'generateChart',
-        {
-          correlationId,
-          operation: 'generateChart',
-          metadata: { config },
-        }
+        config.type || 'unknown',
+        config.characterIds?.map(id => id.toString())
       );
     }
   }
@@ -134,8 +131,9 @@ export class MainChartService extends BaseChartService implements IChartService 
           );
 
         default:
-          throw ChartError.unsupportedChartType(
+          throw ChartError.configError(
             type,
+            `Unsupported chart type '${type}' for optimized charts. Supported types: kills`,
             {
               correlationId,
               operation: 'generateOptimizedChart',
@@ -146,12 +144,8 @@ export class MainChartService extends BaseChartService implements IChartService 
     } catch (error) {
       throw errorHandler.handleChartError(
         error,
-        'generateOptimizedChart',
-        {
-          correlationId,
-          operation: 'generateOptimizedChart',
-          metadata: { config },
-        }
+        config.type || 'unknown',
+        config.characterIds?.map(id => id.toString())
       );
     }
   }
@@ -161,7 +155,7 @@ export class MainChartService extends BaseChartService implements IChartService 
    */
   private validateChartConfig(config: ChartConfigInput, correlationId: string): void {
     if (!config.type) {
-      throw ValidationError.missingRequiredField(
+      throw ValidationError.fieldRequired(
         'type',
         {
           correlationId,
@@ -171,7 +165,7 @@ export class MainChartService extends BaseChartService implements IChartService 
     }
 
     if (!config.characterIds || config.characterIds.length === 0) {
-      throw ValidationError.missingRequiredField(
+      throw ValidationError.fieldRequired(
         'characterIds',
         {
           correlationId,
@@ -181,7 +175,7 @@ export class MainChartService extends BaseChartService implements IChartService 
     }
 
     if (!config.period) {
-      throw ValidationError.missingRequiredField(
+      throw ValidationError.fieldRequired(
         'period',
         {
           correlationId,

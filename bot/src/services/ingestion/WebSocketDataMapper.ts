@@ -1,6 +1,6 @@
 import { WebSocketKillmail, WebSocketVictim, WebSocketAttacker } from '../../types/websocket';
-import { mapWebSocketKillmailToDomain } from '../../shared/mappers/dto.mapper';
-import { KillmailDto } from '../../shared/dto/domain.dto';
+// import { mapWebSocketKillmailToDomain } from '../../shared/mappers/dto.mapper'; // Not currently used
+// import { KillmailDto } from '../../shared/dto/domain.dto'; // Not currently used
 import { MappedKillData } from '../../shared/types/database';
 
 export class WebSocketDataMapper {

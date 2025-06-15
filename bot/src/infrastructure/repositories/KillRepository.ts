@@ -59,10 +59,13 @@ export class KillRepository {
         correlationId
       });
       
-      throw new DatabaseError('KILL_INGESTION_FAILED', 'Failed to ingest killmail', {
-        cause: error,
-        context: { killmailId: killFact.killmailId?.toString(), correlationId }
-      });
+      throw new DatabaseError(
+        'Failed to ingest killmail',
+        'create',
+        'killFact',
+        { correlationId },
+        error as Error
+      );
     }
   }
 
@@ -428,10 +431,13 @@ export class KillRepository {
       }));
     } catch (error) {
       logger.error('Failed to get top ship types used', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get top ship types used', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit }
-      });
+      throw new DatabaseError(
+        'Failed to get top ship types used',
+        'query',
+        'killAttacker',
+        { metadata: { startDate, endDate, limit } },
+        error as Error
+      );
     }
   }
 
@@ -477,10 +483,13 @@ export class KillRepository {
       }));
     } catch (error) {
       logger.error('Failed to get top ship types destroyed', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get top ship types destroyed', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit }
-      });
+      throw new DatabaseError(
+        'Failed to get top ship types destroyed',
+        'query',
+        'killVictim',
+        { metadata: { startDate, endDate, limit } },
+        error as Error
+      );
     }
   }
 
@@ -495,7 +504,6 @@ export class KillRepository {
   ): Promise<Array<{ time: Date; count: number }>> {
     try {
       // For now, use raw SQL for time grouping as Prisma doesn't support it natively
-      const interval = groupBy === 'hour' ? '1 hour' : groupBy === 'day' ? '1 day' : '1 week';
       
       const result = await this.prisma.$queryRaw<Array<{ time: Date; count: bigint }>>`
         SELECT 
@@ -517,10 +525,13 @@ export class KillRepository {
       }));
     } catch (error) {
       logger.error('Failed to get kills grouped by time', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get kills grouped by time', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, groupBy }
-      });
+      throw new DatabaseError(
+        'Failed to get kills grouped by time',
+        'query',
+        'killFact',
+        { metadata: { startDate, endDate, groupBy } },
+        error as Error
+      );
     }
   }
 }

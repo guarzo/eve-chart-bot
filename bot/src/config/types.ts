@@ -249,9 +249,75 @@ export function isWithinConstraints(
 
 /**
  * Validate configuration at runtime
+ * Checks that the configuration object has the required structure and types
  */
 export function validateConfiguration(config: unknown): config is ApplicationConfig {
-  // This would contain runtime validation logic
-  // For compile-time validation, we rely on TypeScript's type system
-  return true; // Placeholder
+  if (!config || typeof config !== 'object') {
+    return false;
+  }
+
+  const cfg = config as Record<string, unknown>;
+
+  // Check required top-level properties
+  const requiredKeys = ['server', 'database', 'redis', 'apis', 'websocket', 'discord', 'logging', 'http'];
+  for (const key of requiredKeys) {
+    if (!cfg[key] || typeof cfg[key] !== 'object') {
+      return false;
+    }
+  }
+
+  // Validate server config
+  const server = cfg.server as Record<string, unknown>;
+  if (typeof server.port !== 'number' || typeof server.nodeEnv !== 'string') {
+    return false;
+  }
+
+  // Validate database config
+  const database = cfg.database as Record<string, unknown>;
+  if (database.url !== undefined && typeof database.url !== 'string') {
+    return false;
+  }
+
+  // Validate redis config
+  const redis = cfg.redis as Record<string, unknown>;
+  if (typeof redis.url !== 'string' || typeof redis.cacheTtl !== 'number') {
+    return false;
+  }
+
+  // Validate APIs config
+  const apis = cfg.apis as Record<string, unknown>;
+  if (!apis.map || typeof apis.map !== 'object') {
+    return false;
+  }
+  
+  const mapApi = apis.map as Record<string, unknown>;
+  if (typeof mapApi.url !== 'string') {
+    return false;
+  }
+
+  // Validate websocket config
+  const websocket = cfg.websocket as Record<string, unknown>;
+  if (typeof websocket.url !== 'string') {
+    return false;
+  }
+
+  // Validate discord config
+  const discord = cfg.discord as Record<string, unknown>;
+  if (discord.token !== undefined && typeof discord.token !== 'string') {
+    return false;
+  }
+
+  // Validate logging config
+  const logging = cfg.logging as Record<string, unknown>;
+  if (typeof logging.level !== 'string') {
+    return false;
+  }
+
+  // Validate HTTP config
+  const http = cfg.http as Record<string, unknown>;
+  if (typeof http.maxRetries !== 'number' || typeof http.initialRetryDelay !== 'number') {
+    return false;
+  }
+
+  return true;
 }

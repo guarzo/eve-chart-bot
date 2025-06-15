@@ -93,7 +93,6 @@ export class UnifiedESIClient implements IESIClient {
         this.config.maxRetries,
         this.config.initialRetryDelay,
         {
-          correlationId,
           operation: 'esi.fetch',
           metadata: { 
             endpoint: url, 
@@ -106,7 +105,6 @@ export class UnifiedESIClient implements IESIClient {
       if (!data) {
         throw ExternalServiceError.serviceUnavailable(
           'ESI',
-          `No data returned from ESI endpoint ${url}`,
           {
             correlationId,
             operation: 'esi.fetch',
@@ -133,16 +131,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        url,
-        {
-          correlationId,
-          operation: 'fetch',
-          metadata: { 
-            endpoint: url,
-            cacheKey,
-            configuredRetries: this.config.maxRetries,
-          },
-        }
+        url
       );
     }
   }
@@ -180,12 +169,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/killmails/${killmailId}/${hash}/`,
-        {
-          correlationId,
-          operation: 'fetchKillmail',
-          metadata: { killmailId, hash },
-        }
+        `/killmails/${killmailId}/${hash}/`
       );
     }
   }
@@ -207,12 +191,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/characters/${characterId}/`,
-        {
-          correlationId,
-          operation: 'fetchCharacter',
-          metadata: { characterId },
-        }
+        `/characters/${characterId}/`
       );
     }
   }
@@ -234,12 +213,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/corporations/${corporationId}/`,
-        {
-          correlationId,
-          operation: 'fetchCorporation',
-          metadata: { corporationId },
-        }
+        `/corporations/${corporationId}/`
       );
     }
   }
@@ -261,12 +235,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/alliances/${allianceId}/`,
-        {
-          correlationId,
-          operation: 'fetchAlliance',
-          metadata: { allianceId },
-        }
+        `/alliances/${allianceId}/`
       );
     }
   }
@@ -288,12 +257,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/universe/systems/${systemId}/`,
-        {
-          correlationId,
-          operation: 'fetchSolarSystem',
-          metadata: { systemId },
-        }
+        `/universe/systems/${systemId}/`
       );
     }
   }
@@ -315,12 +279,7 @@ export class UnifiedESIClient implements IESIClient {
       throw errorHandler.handleExternalServiceError(
         error,
         'ESI',
-        `/universe/types/${typeId}/`,
-        {
-          correlationId,
-          operation: 'fetchType',
-          metadata: { typeId },
-        }
+        `/universe/types/${typeId}/`
       );
     }
   }

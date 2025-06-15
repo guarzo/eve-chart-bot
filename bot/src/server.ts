@@ -8,9 +8,9 @@ import bodyParser from 'body-parser';
 import rateLimit from 'express-rate-limit';
 import { DiscordClient } from './lib/discord/client';
 import { commands } from './lib/discord/commands';
-import { ChartService } from './services/ChartService';
+import { ChartServiceFactory } from './services/charts';
 import { ChartRenderer } from './services/ChartRenderer';
-import { ChartConfigInput } from './types/chart';
+import { ChartConfigInput, ChartSourceType as ChartSourceTypeType, ChartPeriod as ChartPeriodType, ChartGroupBy as ChartGroupByType } from './types/chart';
 import { z } from 'zod';
 import { initSentry } from './lib/sentry';
 import { MapActivityService } from './services/ingestion/MapActivityService';
@@ -22,7 +22,7 @@ import { ValidatedConfiguration as Configuration } from './config/validated';
 import { PrismaClient } from '@prisma/client';
 import { timerManager } from './shared/performance/timerManager';
 import { rateLimiterManager } from './shared/performance/RateLimiterManager';
-import { ChartPeriodEnum, ChartSourceTypeEnum, ChartGroupByEnum } from './shared/enums';
+import { ChartPeriod, ChartSourceType, ChartGroupBy } from './shared/enums';
 
 const execAsync = promisify(exec);
 
@@ -83,7 +83,8 @@ const characterService = new CharacterSyncService(
   Configuration.http.initialRetryDelay
 );
 
-const chartService = new ChartService();
+const chartServiceFactory = ChartServiceFactory.getInstance(prisma);
+const chartService = chartServiceFactory.getMainChartService();
 const chartRenderer = new ChartRenderer();
 
 // Initialize repositories
@@ -94,10 +95,10 @@ const discordClient = new DiscordClient();
 
 // Validation schemas
 const chartConfigSchema = z.object({
-  type: z.nativeEnum(ChartSourceTypeEnum),
+  type: z.nativeEnum(ChartSourceType),
   characterIds: z.array(z.bigint()),
-  period: z.nativeEnum(ChartPeriodEnum),
-  groupBy: z.nativeEnum(ChartGroupByEnum).optional(),
+  period: z.nativeEnum(ChartPeriod),
+  groupBy: z.nativeEnum(ChartGroupBy).optional(),
 });
 
 // Health check endpoint
@@ -154,18 +155,18 @@ app.get('/v1/charts/types', (_req, res) => {
   res.json({
     types: [
       {
-        id: ChartSourceTypeEnum.KILLS,
+        id: ChartSourceType.KILLS,
         name: 'Kill Chart',
         description: 'Generate a chart showing kill activity',
-        periods: [ChartPeriodEnum.TWENTY_FOUR_HOURS, ChartPeriodEnum.SEVEN_DAYS, ChartPeriodEnum.THIRTY_DAYS, ChartPeriodEnum.NINETY_DAYS],
-        groupBy: [ChartGroupByEnum.HOUR, ChartGroupByEnum.DAY, ChartGroupByEnum.WEEK],
+        periods: [ChartPeriod.TWENTY_FOUR_HOURS, ChartPeriod.SEVEN_DAYS, ChartPeriod.THIRTY_DAYS, ChartPeriod.NINETY_DAYS],
+        groupBy: [ChartGroupBy.HOUR, ChartGroupBy.DAY, ChartGroupBy.WEEK],
       },
       {
-        id: ChartSourceTypeEnum.MAP_ACTIVITY,
+        id: ChartSourceType.MAP_ACTIVITY,
         name: 'Map Activity Chart',
         description: 'Generate a chart showing map activity',
-        periods: [ChartPeriodEnum.TWENTY_FOUR_HOURS, ChartPeriodEnum.SEVEN_DAYS, ChartPeriodEnum.THIRTY_DAYS],
-        groupBy: [ChartGroupByEnum.HOUR, ChartGroupByEnum.DAY],
+        periods: [ChartPeriod.TWENTY_FOUR_HOURS, ChartPeriod.SEVEN_DAYS, ChartPeriod.THIRTY_DAYS],
+        groupBy: [ChartGroupBy.HOUR, ChartGroupBy.DAY],
       },
     ],
   });
@@ -179,10 +180,10 @@ app.post('/v1/charts/generate', (async (req, res) => {
 
     // Convert config to ChartConfigInput
     const chartConfig: ChartConfigInput = {
-      type: config.type,
+      type: config.type as ChartSourceTypeType,
       characterIds: config.characterIds,
-      period: config.period,
-      groupBy: config.groupBy,
+      period: config.period as ChartPeriodType,
+      groupBy: config.groupBy as ChartGroupByType | undefined,
     };
 
     // Generate chart data

@@ -1,11 +1,11 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
-import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { ChartData } from '../../../types/chart';
 import { LossChartConfig } from '../config/LossChartConfig';
 import { logger } from '../../../lib/logger';
 import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { LossFact } from '../../../domain/killmail/LossFact';
-import { BigIntTransformer } from '../../../utils/BigIntTransformer';
+import { BigIntTransformer } from '../../../shared/utilities/BigIntTransformer';
 
 /**
  * Generator for loss charts

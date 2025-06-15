@@ -3,7 +3,7 @@ import { logger } from '../../lib/logger';
 import { Character } from '../../domain/character/Character';
 import { CharacterGroup } from '../../domain/character/CharacterGroup';
 import { PrismaMapper } from '../mapper/PrismaMapper';
-import { errorHandler, DatabaseError } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors';
 
 /**
  * Simplified Character Repository for WebSocket-based system
@@ -26,11 +26,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getAllCharacters',
-        }
+        1000
       );
       
       logger.debug('Successfully retrieved all characters', {
@@ -44,11 +40,7 @@ export class CharacterRepository {
         error,
         'read',
         'character',
-        undefined,
-        {
-          correlationId,
-          operation: 'getAllCharacters',
-        }
+        undefined
       );
     }
   }
@@ -67,12 +59,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getCharacter',
-          characterId: eveId.toString(),
-        }
+        1000
       );
       
       if (!character) {
@@ -95,12 +82,7 @@ export class CharacterRepository {
         error,
         'read',
         'character',
-        eveId.toString(),
-        {
-          correlationId,
-          operation: 'getCharacter',
-          metadata: { eveId: eveId.toString() },
-        }
+        eveId.toString()
       );
     }
   }
@@ -120,12 +102,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getCharactersByGroup',
-          metadata: { groupId },
-        }
+        1000
       );
       
       logger.debug('Successfully retrieved characters by group', {
@@ -140,12 +117,7 @@ export class CharacterRepository {
         error,
         'read',
         'character',
-        undefined,
-        {
-          correlationId,
-          operation: 'getCharactersByGroup',
-          metadata: { groupId },
-        }
+        undefined
       );
     }
   }
@@ -181,12 +153,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.upsertCharacter',
-          metadata: { eveId: character.eveId.toString(), name: character.name },
-        }
+        1000
       );
       
       logger.debug('Successfully upserted character', {
@@ -201,12 +168,7 @@ export class CharacterRepository {
         error,
         'upsert',
         'character',
-        character.eveId.toString(),
-        {
-          correlationId,
-          operation: 'upsertCharacter',
-          metadata: { eveId: character.eveId.toString(), name: character.name },
-        }
+        character.eveId.toString()
       );
     }
   }
@@ -225,12 +187,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.deleteCharacter',
-          metadata: { eveId: eveId.toString() },
-        }
+        1000
       );
       
       logger.info('Successfully deleted character', {
@@ -242,12 +199,7 @@ export class CharacterRepository {
         error,
         'delete',
         'character',
-        eveId.toString(),
-        {
-          correlationId,
-          operation: 'deleteCharacter',
-          metadata: { eveId: eveId.toString() },
-        }
+        eveId.toString()
       );
     }
   }
@@ -270,11 +222,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getAllCharacterGroups',
-        }
+        1000
       );
       
       logger.debug('Successfully retrieved all character groups', {
@@ -288,11 +236,7 @@ export class CharacterRepository {
         error,
         'read',
         'characterGroup',
-        undefined,
-        {
-          correlationId,
-          operation: 'getAllCharacterGroups',
-        }
+        undefined
       );
     }
   }
@@ -315,12 +259,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getCharacterGroup',
-          metadata: { groupId: id },
-        }
+        1000
       );
       
       if (!group) {
@@ -343,12 +282,7 @@ export class CharacterRepository {
         error,
         'read',
         'characterGroup',
-        id,
-        {
-          correlationId,
-          operation: 'getCharacterGroup',
-          metadata: { groupId: id },
-        }
+        id
       );
     }
   }
@@ -374,12 +308,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.createCharacterGroup',
-          metadata: { mapName: data.mapName, mainCharacterId: data.mainCharacterId?.toString() },
-        }
+        1000
       );
       
       logger.info('Successfully created character group', {
@@ -395,12 +324,7 @@ export class CharacterRepository {
         error,
         'create',
         'characterGroup',
-        undefined,
-        {
-          correlationId,
-          operation: 'createCharacterGroup',
-          metadata: { mapName: data.mapName, mainCharacterId: data.mainCharacterId?.toString() },
-        }
+        undefined
       );
     }
   }
@@ -431,12 +355,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.updateCharacterGroup',
-          metadata: { groupId, characterCount: characterIds.length },
-        }
+        1000
       );
 
       logger.info('Successfully updated character group', {
@@ -449,12 +368,7 @@ export class CharacterRepository {
         error,
         'update',
         'characterGroup',
-        groupId,
-        {
-          correlationId,
-          operation: 'updateCharacterGroup',
-          metadata: { groupId, characterCount: characterIds.length },
-        }
+        groupId
       );
     }
   }
@@ -473,11 +387,7 @@ export class CharacterRepository {
           });
         },
         3,
-        1000,
-        {
-          correlationId,
-          operation: 'db.getTrackedCharacterIds',
-        }
+        1000
       );
       
       logger.debug('Successfully retrieved tracked character IDs', {
@@ -491,11 +401,7 @@ export class CharacterRepository {
         error,
         'read',
         'character',
-        undefined,
-        {
-          correlationId,
-          operation: 'getTrackedCharacterIds',
-        }
+        undefined
       );
     }
   }

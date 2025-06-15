@@ -305,7 +305,7 @@ export class MetricsCollector extends EventEmitter {
     }
     
     // Histograms
-    for (const [key, values] of this.histograms) {
+    for (const [key] of this.histograms) {
       const { name, labels } = this.parseMetricKey(key);
       const stats = this.getHistogramStats(name, labels);
       if (stats) {

@@ -4,7 +4,7 @@ import { logger } from '../../lib/logger';
 import prisma from '../persistence/client';
 import { PrismaMapper } from '../mapper/PrismaMapper';
 import { ensureBigInt } from '../../shared/utilities/conversion';
-import { errorHandler, DatabaseError } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors';
 
 /**
  * Base repository class that all specific repositories will extend.
@@ -54,11 +54,7 @@ export abstract class BaseRepository {
         'query',
         this.modelName.toLowerCase(),
         undefined,
-        {
-          correlationId: actualCorrelationId,
-          operation: actualOperation,
-          metadata: { modelName: this.modelName },
-        }
+        undefined
       );
     }
   }

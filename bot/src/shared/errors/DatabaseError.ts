@@ -12,7 +12,8 @@ export class DatabaseError extends BaseError {
     operation?: DatabaseOperation,
     table?: string,
     context?: ErrorDetails['context'],
-    cause?: Error
+    cause?: Error,
+    query?: string
   ) {
     super({
       code: 'DATABASE_ERROR',
@@ -27,6 +28,7 @@ export class DatabaseError extends BaseError {
 
     this.operation = operation;
     this.table = table;
+    this.query = query;
   }
 
   static connectionFailed(context?: ErrorDetails['context'], cause?: Error): DatabaseError {
@@ -40,16 +42,14 @@ export class DatabaseError extends BaseError {
   }
 
   static queryFailed(query: string, table?: string, context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    const error = new DatabaseError(
+    return new DatabaseError(
       `Database query failed: ${query}`,
       'query',
       table,
       context,
-      cause
+      cause,
+      query
     ).withErrorCode('DATABASE_QUERY_FAILED');
-    
-    error.query = query;
-    return error;
   }
 
   static transactionFailed(context?: ErrorDetails['context'], cause?: Error): DatabaseError {

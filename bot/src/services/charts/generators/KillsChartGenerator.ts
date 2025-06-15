@@ -1,12 +1,13 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
-import { ChartData, ChartDisplayType, ChartDisplayTypeEnum } from '../../../types/chart';
+import { ChartData, ChartDisplayTypeEnum } from '../../../types/chart';
 import { logger } from '../../../lib/logger';
 import { KillsChartConfig } from '../config/KillsChartConfig';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { errorHandler, ChartError, ValidationError } from '../../../shared/errors';
 import { BigIntTransformer } from '../../../shared/utilities/BigIntTransformer';
-import { KillChartData, AttackerData } from '../../../shared/types';
+// import { KillChartData, AttackerData } from '../../../shared/types'; // Unused imports
+import { Killmail, KillmailAttacker } from '../../../domain/killmail/Killmail';
 
 /**
  * Generator for kill-related charts
@@ -58,10 +59,9 @@ export class KillsChartGenerator extends BaseChartGenerator {
       // Get kills for all characters with retry logic
       const kills = await errorHandler.withRetry(
         () => this.killRepository.getAllKillsForCharacters(characterIds, startDate, endDate),
-        {
-          retries: 3,
-          context: { operation: 'fetchKillsData', characterCount: characterIds.length, correlationId }
-        }
+        3,
+        1000,
+        { operation: 'fetchKillsData', correlationId, metadata: { characterCount: characterIds.length } }
       );
 
       logger.info(`Found ${kills.length} total kills across all characters (including as attackers)`, { correlationId });
@@ -69,8 +69,8 @@ export class KillsChartGenerator extends BaseChartGenerator {
       // Check if we have any data to work with
       if (kills.length === 0) {
         logger.warn('No kills found for the specified time period and characters', { correlationId });
-        throw new ChartError('NO_DATA_AVAILABLE', 'No kills found in the specified time period', {
-          context: { startDate, endDate, characterCount: characterIds.length, correlationId }
+        throw new ChartError('CHART_DATA_ERROR', 'No kills found in the specified time period', 'kills', {
+          correlationId, metadata: { startDate, endDate, characterCount: characterIds.length }
         });
       }
 
@@ -131,7 +131,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
       // A kill belongs to the group if:
       // 1. The main character on the kill is in the group, OR
       // 2. Any of the attackers are in the group
-      kills.forEach((kill: Kill) => {
+      kills.forEach((kill: Killmail) => {
         const killmailIdStr = BigIntTransformer.forLogging(kill.killmailId);
         if (!killmailIdStr) return;
 
@@ -178,7 +178,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
       });
 
       // Now get the actual kill objects for the unique IDs
-      const groupKills = kills.filter((kill: Kill) => {
+      const groupKills = kills.filter((kill: Killmail) => {
         const killmailIdStr = BigIntTransformer.forLogging(kill.killmailId);
         return killmailIdStr && uniqueGroupKillIds.has(killmailIdStr);
       });
@@ -214,16 +214,16 @@ export class KillsChartGenerator extends BaseChartGenerator {
         if (!kill.attackers || kill.attackers.length === 0) continue;
 
         // Get all player attackers (those with character IDs)
-        const playerAttackers = kill.attackers.filter(
-          (a: Attacker) => a.characterId !== null && a.characterId !== undefined
-        );
+        const playerAttackers = kill.attackers?.filter(
+          (a: KillmailAttacker) => a.characterId !== null && a.characterId !== undefined
+        ) || [];
         if (playerAttackers.length === 0) continue;
 
         // Count as solo if either:
         // 1. It's a true solo kill (only one player attacker)
         // 2. All player attackers are from this group
         const isTrueSolo = playerAttackers.length === 1;
-        const allFromGroup = playerAttackers.every((attacker: Attacker) => {
+        const allFromGroup = playerAttackers.every((attacker: KillmailAttacker) => {
           if (!attacker.characterId) return false;
           return groupCharacterIds.includes(BigInt(attacker.characterId));
         });
@@ -347,10 +347,9 @@ export class KillsChartGenerator extends BaseChartGenerator {
         throw error;
       }
 
-      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate kills chart', {
-        cause: error,
-        context: { correlationId, operation: 'generateKillsChart' }
-      });
+      throw new ChartError('CHART_GENERATION_ERROR', 'Failed to generate kills chart', 'kills', {
+        correlationId, operation: 'generateKillsChart'
+      }, error as Error);
     }
   }
 
@@ -368,51 +367,55 @@ export class KillsChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }, correlationId: string): void {
-    const issues: Array<{ field: string; message: string }> = [];
+    const issues: Array<{ field: string; value: any; constraint: string; message: string }> = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', message: 'Invalid start date' });
+      issues.push({ field: 'startDate', value: options.startDate, constraint: 'date', message: 'Invalid start date' });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
-      issues.push({ field: 'endDate', message: 'Invalid end date' });
+      issues.push({ field: 'endDate', value: options.endDate, constraint: 'date', message: 'Invalid end date' });
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'comparison', message: 'Start date must be before end date' });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'array', message: 'Character groups must be an array' });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'array', message: 'Characters must be an array' });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                value: char.eveId,
+                constraint: 'required',
                 message: 'Character eveId is required' 
               });
             }
             if (!char.name || typeof char.name !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                value: char.name,
+                constraint: 'required',
                 message: 'Character name is required' 
               });
             }
@@ -423,7 +426,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
 
     if (issues.length > 0) {
       throw new ValidationError('Invalid chart generation options', issues, { 
-        context: { correlationId, operation: 'validateKillsChartOptions' }
+        correlationId, operation: 'validateKillsChartOptions' 
       });
     }
   }

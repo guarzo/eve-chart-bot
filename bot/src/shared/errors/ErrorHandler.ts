@@ -3,9 +3,9 @@ import { BaseError, ErrorContext } from './BaseError';
 import { ValidationError } from './ValidationError';
 import { DatabaseError } from './DatabaseError';
 import { DiscordError } from './DiscordError';
-import { ChartError } from './ChartError';
+// import { ChartError } from './ChartError'; // Not currently used
 import { ExternalServiceError } from './ExternalServiceError';
-import { logger } from '../logger';
+import { logger } from '../../lib/logger';
 import { metricsCollector } from '../../infrastructure/monitoring/MetricsCollector';
 import { tracingService } from '../../infrastructure/monitoring/TracingService';
 

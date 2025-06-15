@@ -1,4 +1,4 @@
-import { Worker, isMainThread, parentPort, workerData } from 'worker_threads';
+import { Worker, isMainThread, parentPort } from 'worker_threads';
 import { createCanvas } from 'canvas';
 import { ChartData, ChartOptions } from '../../../types/chart';
 import { logger } from '../../../lib/logger';

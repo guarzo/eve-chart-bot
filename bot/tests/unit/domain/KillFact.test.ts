@@ -189,7 +189,7 @@ describe('KillFact', () => {
         points: 10,
       });
 
-      expect(() => killWithoutAttackers.attackers).toThrow('Attackers not loaded for this kill');
+      expect(() => killWithoutAttackers.getAttackersRequired()).toThrow('Attackers not loaded for this kill');
     });
 
     it('should set new attackers', () => {
@@ -225,7 +225,7 @@ describe('KillFact', () => {
         points: 10,
       });
 
-      expect(() => killWithoutVictim.victim).toThrow('Victim not loaded for this kill');
+      expect(() => killWithoutVictim.getVictimRequired()).toThrow('Victim not loaded for this kill');
     });
 
     it('should set new victim', () => {
@@ -647,15 +647,15 @@ describe('KillAttacker', () => {
     it('should create from database model', () => {
       const model = {
         id: 1,
-        killmail_id: 12345n,
-        character_id: 200n,
-        corporation_id: 3000n,
-        alliance_id: 4000n,
-        damage_done: 5000,
-        final_blow: true,
-        security_status: -5.0,
-        ship_type_id: 590,
-        weapon_type_id: 2203,
+        killmailId: 12345n,
+        characterId: 200n,
+        corporationId: 3000n,
+        allianceId: 4000n,
+        damageDone: 5000,
+        finalBlow: true,
+        securityStatus: -5.0,
+        shipTypeId: 590,
+        weaponTypeId: 2203,
       };
 
       const attacker = KillAttacker.fromModel(model);
@@ -762,12 +762,12 @@ describe('KillVictim', () => {
     it('should create from database model', () => {
       const model = {
         id: 1,
-        killmail_id: 12345n,
-        character_id: 100n,
-        corporation_id: 1000n,
-        alliance_id: 2000n,
-        ship_type_id: 587,
-        damage_taken: 5000,
+        killmailId: 12345n,
+        characterId: 100n,
+        corporationId: 1000n,
+        allianceId: 2000n,
+        shipTypeId: 587,
+        damageTaken: 5000,
       };
 
       const victim = KillVictim.fromModel(model);

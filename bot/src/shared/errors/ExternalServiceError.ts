@@ -1,6 +1,6 @@
 import { BaseError, ErrorDetails } from './BaseError';
 
-export type ExternalService = 'ESI' | 'ZKILL' | 'WANDERER' | 'MAP_API' | 'REDIS' | 'EXTERNAL_API';
+export type ExternalService = 'ESI' | 'ZKILL' | 'WANDERER' | 'MAP_API' | 'REDIS' | 'EXTERNAL_API' | 'WEBSOCKET';
 
 export class ExternalServiceError extends BaseError {
   public readonly service: ExternalService;
@@ -138,6 +138,8 @@ export class ExternalServiceError extends BaseError {
         return 'Caching service is experiencing issues. Performance may be degraded.';
       case 'EXTERNAL_API':
         return 'An external service is temporarily unavailable. Please try again later.';
+      case 'WEBSOCKET':
+        return 'WebSocket connection is experiencing issues. Trying to reconnect automatically.';
       default:
         return 'An external service is experiencing issues. Please try again later.';
     }

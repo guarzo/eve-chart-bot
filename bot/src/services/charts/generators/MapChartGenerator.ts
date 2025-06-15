@@ -1,9 +1,9 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
-import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { ChartData } from '../../../types/chart';
 import { MapActivityRepository } from '../../../infrastructure/repositories/MapActivityRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { logger } from '../../../lib/logger';
-import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
+import { errorHandler, ChartError, ValidationError } from '../../../shared/errors';
 
 /**
  * Generator for map activity charts
@@ -53,10 +53,9 @@ export class MapChartGenerator extends BaseChartGenerator {
       // Get map activity for all characters with retry logic
       const activities = await errorHandler.withRetry(
         () => this.mapActivityRepository.getActivityForCharacters(characterIds, startDate, endDate),
-        {
-          retries: 3,
-          context: { operation: 'fetchMapActivity', characterCount: characterIds.length, correlationId }
-        }
+        3,
+        1000,
+        { operation: 'fetchMapActivity', metadata: { characterCount: characterIds.length }, correlationId }
       );
 
       logger.info(`Found ${activities.length} activity records`, { correlationId });
@@ -64,9 +63,12 @@ export class MapChartGenerator extends BaseChartGenerator {
       // Check if we have any data to work with
       if (activities.length === 0) {
         logger.warn('No map activity found for the specified time period and characters', { correlationId });
-        throw new ChartError('NO_DATA_AVAILABLE', 'No map activity found in the specified time period', {
-          context: { startDate, endDate, characterCount: characterIds.length, correlationId }
-        });
+        throw new ChartError(
+          'CHART_DATA_ERROR',
+          'No map activity found in the specified time period',
+          'map',
+          { metadata: { startDate, endDate, characterCount: characterIds.length }, correlationId }
+        );
       }
 
       // Group activities by character group
@@ -94,7 +96,7 @@ export class MapChartGenerator extends BaseChartGenerator {
         })
         .filter((id): id is bigint => id !== null);
 
-      const groupActivities = activities.filter(activity => {
+      const groupActivities = activities.filter((activity: { characterId: bigint | null | undefined }) => {
         if (activity.characterId === null || activity.characterId === undefined) {
           return false;
         }
@@ -102,9 +104,9 @@ export class MapChartGenerator extends BaseChartGenerator {
       });
 
       // Calculate totals for each metric
-      const totalSignatures = groupActivities.reduce((sum, activity) => sum + activity.signatures, 0);
-      const totalConnections = groupActivities.reduce((sum, activity) => sum + activity.connections, 0);
-      const totalPassages = groupActivities.reduce((sum, activity) => sum + activity.passages, 0);
+      const totalSignatures = groupActivities.reduce((sum: number, activity: { signatures: number }) => sum + activity.signatures, 0);
+      const totalConnections = groupActivities.reduce((sum: number, activity: { connections: number }) => sum + activity.connections, 0);
+      const totalPassages = groupActivities.reduce((sum: number, activity: { passages: number }) => sum + activity.passages, 0);
 
       return {
         group,
@@ -161,10 +163,13 @@ export class MapChartGenerator extends BaseChartGenerator {
         throw error;
       }
 
-      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate map activity chart', {
-        cause: error,
-        context: { correlationId, operation: 'generateMapChart' }
-      });
+      throw new ChartError(
+        'CHART_GENERATION_ERROR',
+        'Failed to generate map activity chart',
+        'map',
+        { correlationId, operation: 'generateMapChart' },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
@@ -182,51 +187,55 @@ export class MapChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }, correlationId: string): void {
-    const issues: Array<{ field: string; message: string }> = [];
+    const issues: Array<{ field: string; value: any; constraint: string; message: string }> = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', message: 'Invalid start date' });
+      issues.push({ field: 'startDate', value: options.startDate, constraint: 'date', message: 'Invalid start date' });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
-      issues.push({ field: 'endDate', message: 'Invalid end date' });
+      issues.push({ field: 'endDate', value: options.endDate, constraint: 'date', message: 'Invalid end date' });
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'range', message: 'Start date must be before end date' });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'array', message: 'Character groups must be an array' });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'array', message: 'Characters must be an array' });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                value: char.eveId,
+                constraint: 'required',
                 message: 'Character eveId is required' 
               });
             }
             if (!char.name || typeof char.name !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                value: char.name,
+                constraint: 'required',
                 message: 'Character name is required' 
               });
             }
@@ -237,7 +246,7 @@ export class MapChartGenerator extends BaseChartGenerator {
 
     if (issues.length > 0) {
       throw new ValidationError('Invalid chart generation options', issues, { 
-        context: { correlationId, operation: 'validateMapChartOptions' }
+        correlationId, operation: 'validateMapChartOptions'
       });
     }
   }

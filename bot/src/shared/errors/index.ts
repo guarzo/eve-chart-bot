@@ -1,5 +1,6 @@
 // Base error types
-export { BaseError } from './BaseError';
+import { BaseError } from './BaseError';
+export { BaseError };
 export type { ErrorContext, ErrorDetails } from './BaseError';
 
 // Specific error classes
@@ -62,6 +63,10 @@ export class AppError extends BaseError {
       severity: 'medium',
       context: { metadata: details },
     });
+  }
+
+  protected getDefaultUserMessage(): string {
+    return 'An application error occurred. Please try again later.';
   }
 }
 

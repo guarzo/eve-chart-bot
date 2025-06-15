@@ -88,7 +88,7 @@ export class MapActivityService {
     try {
       // Validate input parameters
       if (!slug || typeof slug !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'slug',
           {
             correlationId,
@@ -122,8 +122,10 @@ export class MapActivityService {
           const result = await this.map.getCharacterActivity(slug, days);
           if (!result) {
             throw new ExternalServiceError(
-              'Map API',
+              'MAP_API',
               'No data returned from Map API',
+              undefined,
+              undefined,
               {
                 correlationId,
                 operation: 'getCharacterActivity',
@@ -172,13 +174,8 @@ export class MapActivityService {
     } catch (error) {
       throw errorHandler.handleExternalServiceError(
         error,
-        'Map API',
-        `ingestMapActivity/${slug}`,
-        {
-          correlationId,
-          operation: 'ingestMapActivity',
-          metadata: { slug, days },
-        }
+        'MAP_API',
+        `ingestMapActivity/${slug}`
       );
     }
   }

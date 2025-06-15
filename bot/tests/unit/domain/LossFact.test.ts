@@ -308,13 +308,13 @@ describe('LossFact', () => {
   describe('fromModel', () => {
     it('should create LossFact from database model', () => {
       const model = {
-        killmail_id: 67890n,
-        character_id: 200n,
-        kill_time: new Date('2023-06-15T18:30:00Z'),
-        ship_type_id: 590,
-        system_id: 30000143,
-        total_value: 25000000n,
-        attacker_count: 3,
+        killmailId: 67890n,
+        characterId: 200n,
+        killTime: new Date('2023-06-15T18:30:00Z'),
+        shipTypeId: 590,
+        systemId: 30000143,
+        totalValue: 25000000n,
+        attackerCount: 3,
         labels: ['pvp', 'lowsec'],
       };
 
@@ -333,13 +333,13 @@ describe('LossFact', () => {
 
     it('should handle missing labels', () => {
       const model = {
-        killmail_id: 12345n,
-        character_id: 100n,
-        kill_time: new Date(),
-        ship_type_id: 587,
-        system_id: 30000142,
-        total_value: 1000000n,
-        attacker_count: 1,
+        killmailId: 12345n,
+        characterId: 100n,
+        killTime: new Date(),
+        shipTypeId: 587,
+        systemId: 30000142,
+        totalValue: 1000000n,
+        attackerCount: 1,
       };
 
       const result = LossFact.fromModel(model);
@@ -348,13 +348,13 @@ describe('LossFact', () => {
 
     it('should handle string IDs in model', () => {
       const model = {
-        killmail_id: '12345',
-        character_id: '100',
-        kill_time: new Date(),
-        ship_type_id: 587,
-        system_id: 30000142,
-        total_value: '1000000',
-        attacker_count: 1,
+        killmailId: '12345',
+        characterId: '100',
+        killTime: new Date(),
+        shipTypeId: 587,
+        systemId: 30000142,
+        totalValue: '1000000',
+        attackerCount: 1,
       };
 
       const result = LossFact.fromModel(model);

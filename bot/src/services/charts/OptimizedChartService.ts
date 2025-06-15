@@ -1,7 +1,7 @@
 import { BaseChartService } from './BaseChartService';
 import { chartWorkerManager } from './workers/ChartWorker';
 import { chartCacheService } from './cache/ChartCacheService';
-import { ChartData, ChartOptions, ChartMetric, ChartDisplayType } from '../../types/chart';
+import { ChartData, ChartOptions, ChartMetric } from '../../types/chart';
 import { logger } from '../../lib/logger';
 import { Character } from '../../domain/character/Character';
 

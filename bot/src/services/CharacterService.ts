@@ -28,7 +28,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'characterId',
           {
             correlationId,
@@ -128,7 +128,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!groupId || typeof groupId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'groupId',
           {
             correlationId,
@@ -185,7 +185,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!groupId || typeof groupId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'groupId',
           {
             correlationId,
@@ -285,7 +285,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!character) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'character',
           {
             correlationId,
@@ -295,7 +295,7 @@ export class CharacterService {
       }
 
       if (!character.eveId) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'character.eveId',
           {
             correlationId,
@@ -361,7 +361,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!group) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'group',
           {
             correlationId,
@@ -371,7 +371,7 @@ export class CharacterService {
       }
 
       if (!group.map_name) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'group.map_name',
           {
             correlationId,
@@ -435,7 +435,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'characterId',
           {
             correlationId,
@@ -526,7 +526,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'characterId',
           {
             correlationId,
@@ -536,7 +536,7 @@ export class CharacterService {
       }
 
       if (!mapData) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'mapData',
           {
             correlationId,
@@ -547,7 +547,7 @@ export class CharacterService {
       }
 
       if (!mapData.corporationTicker) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'mapData.corporationTicker',
           {
             correlationId,
@@ -615,7 +615,7 @@ export class CharacterService {
     try {
       // Validate input parameters
       if (!characterIds || !Array.isArray(characterIds)) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'characterIds',
           {
             correlationId,

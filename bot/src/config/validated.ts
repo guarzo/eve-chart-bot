@@ -10,7 +10,6 @@ import type {
 } from './types';
 import { 
   ConfigurationConstraints,
-  isWithinConstraints 
 } from './types';
 
 /**
@@ -255,7 +254,7 @@ export const ValidatedConfiguration = {
     ),
   },
   bigIntConstants: {
-    zero: 0n,
+    zero: BigInt(0),
   },
   jitter: {
     maxMs: parseNumber(

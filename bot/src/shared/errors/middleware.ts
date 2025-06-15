@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { BaseError } from './BaseError';
+import { AppError } from './index';
 import { errorHandler } from './ErrorHandler';
 import { extractCorrelationId } from './utils';
 
@@ -96,7 +97,7 @@ export function createDiscordErrorResponse(error: BaseError): {
  * Validation middleware for request data
  */
 export function validateRequest(schema: any) {
-  return (req: Request, res: Response, next: NextFunction): void => {
+  return (req: Request, _res: Response, next: NextFunction): void => {
     try {
       // Validate request data using schema (Zod, Joi, etc.)
       const validated = schema.parse({
@@ -123,28 +124,23 @@ export function validateRequest(schema: any) {
 export function rateLimitErrorHandler(
   req: Request,
   res: Response,
-  next: NextFunction,
+  _next: NextFunction,
   options?: { windowMs?: number; maxRequests?: number }
 ): void {
   const correlationId = (req as any).correlationId || errorHandler.createCorrelationId();
   
-  const rateLimitError = new BaseError({
-    code: 'RATE_LIMIT_EXCEEDED',
-    message: 'Too many requests',
-    statusCode: 429,
-    userMessage: 'You are making requests too quickly. Please slow down and try again.',
-    context: {
+  const rateLimitError = new AppError(
+    'Too many requests',
+    429,
+    'RATE_LIMIT_EXCEEDED',
+    {
       correlationId,
       operation: `${req.method} ${req.path}`,
-      metadata: {
-        windowMs: options?.windowMs,
-        maxRequests: options?.maxRequests,
-        ip: req.ip,
-      },
-    },
-    isRetryable: true,
-    severity: 'medium',
-  });
+      windowMs: options?.windowMs,
+      maxRequests: options?.maxRequests,
+      ip: req.ip,
+    }
+  );
 
   const apiResponse = rateLimitError.toApiResponse();
   
@@ -165,18 +161,15 @@ export function rateLimitErrorHandler(
 export function notFoundHandler(req: Request, res: Response): void {
   const correlationId = (req as any).correlationId || errorHandler.createCorrelationId();
   
-  const notFoundError = new BaseError({
-    code: 'RESOURCE_NOT_FOUND',
-    message: `Resource not found: ${req.method} ${req.path}`,
-    statusCode: 404,
-    userMessage: 'The requested resource was not found.',
-    context: {
+  const notFoundError = new AppError(
+    `Resource not found: ${req.method} ${req.path}`,
+    404,
+    'RESOURCE_NOT_FOUND',
+    {
       correlationId,
       operation: `${req.method} ${req.path}`,
-    },
-    isRetryable: false,
-    severity: 'low',
-  });
+    }
+  );
 
   res.setHeader('X-Correlation-ID', correlationId);
   res.status(404).json(notFoundError.toApiResponse());
