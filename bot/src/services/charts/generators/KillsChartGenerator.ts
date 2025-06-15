@@ -4,6 +4,8 @@ import { logger } from '../../../lib/logger';
 import { KillsChartConfig } from '../config';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
+import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
+import { BigIntTransformer } from '../../../utils/BigIntTransformer';
 
 interface Kill {
   killmailId: bigint;
@@ -47,44 +49,64 @@ export class KillsChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    const { startDate, endDate, characterGroups } = options;
+    const correlationId = errorHandler.createCorrelationId();
+    
+    try {
+      const { startDate, endDate, characterGroups } = options;
 
-    logger.info(`KillsChartGenerator: Processing ${characterGroups.length} character groups`);
-    logger.info(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+      // Input validation
+      this.validateChartOptions(options, correlationId);
 
-    // Get all character IDs from all groups
-    const characterIds = characterGroups.flatMap(group => group.characters.map(c => BigInt(c.eveId)));
+      logger.info(`KillsChartGenerator: Processing ${characterGroups.length} character groups`, { correlationId });
+      logger.info(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`, { correlationId });
 
-    logger.info(`Total characters across all groups: ${characterIds.length}`);
+      // Get all character IDs from all groups using standardized transformer
+      const characterIds = characterGroups.flatMap(group => 
+        BigIntTransformer.migrateCharacterIds(group.characters)
+      );
 
-    // Get kills for all characters - use the new method that includes participation as attackers
-    const kills = await this.killRepository.getAllKillsForCharacters(characterIds, startDate, endDate);
+      logger.info(`Total characters across all groups: ${characterIds.length}`, { correlationId });
 
-    logger.info(`Found ${kills.length} total kills across all characters (including as attackers)`);
-
-    // Debug: Log the first few kills to see their structure
-    if (kills.length > 0) {
-      logger.info('Sample kill data structure:');
-      kills.slice(0, 3).forEach((kill, index) => {
-        logger.info(`Kill ${index + 1}:`);
-        logger.info(`  killmailId: ${kill.killmailId} (type: ${typeof kill.killmailId})`);
-        logger.info(`  victim: ${JSON.stringify(kill.victim)} (type: ${typeof kill.victim})`);
-        logger.info(`  attackers_count: ${kill.attackers?.length ?? 0}`);
-        logger.info(`  all_keys: ${Object.keys(kill).join(', ')}`);
-        if (kill.attackers?.[0]) {
-          logger.info(`  first_attacker: ${JSON.stringify(kill.attackers[0])}`);
-          logger.info(`  first_attacker_keys: ${Object.keys(kill.attackers[0]).join(', ')}`);
+      // Get kills for all characters with retry logic
+      const kills = await errorHandler.withRetry(
+        () => this.killRepository.getAllKillsForCharacters(characterIds, startDate, endDate),
+        {
+          retries: 3,
+          context: { operation: 'fetchKillsData', characterCount: characterIds.length, correlationId }
         }
-      });
-    }
+      );
 
-    // Debug: Log character IDs we're looking for
-    logger.info(
-      `Character IDs we're looking for: ${characterIds
-        .slice(0, 5)
-        .map(id => id.toString())
-        .join(', ')}`
-    );
+      logger.info(`Found ${kills.length} total kills across all characters (including as attackers)`, { correlationId });
+
+      // Check if we have any data to work with
+      if (kills.length === 0) {
+        logger.warn('No kills found for the specified time period and characters', { correlationId });
+        throw new ChartError('NO_DATA_AVAILABLE', 'No kills found in the specified time period', {
+          context: { startDate, endDate, characterCount: characterIds.length, correlationId }
+        });
+      }
+
+      // Debug: Log the first few kills to see their structure
+      if (kills.length > 0) {
+        logger.info('Sample kill data structure:', { correlationId });
+        kills.slice(0, 3).forEach((kill, index) => {
+          logger.info(`Kill ${index + 1}:`, { correlationId });
+          logger.info(`  killmailId: ${BigIntTransformer.forLogging(kill.killmailId)} (type: ${typeof kill.killmailId})`, { correlationId });
+          logger.info(`  victim: ${JSON.stringify(kill.victim)} (type: ${typeof kill.victim})`, { correlationId });
+          logger.info(`  attackers_count: ${kill.attackers?.length ?? 0}`, { correlationId });
+          logger.info(`  all_keys: ${Object.keys(kill).join(', ')}`, { correlationId });
+          if (kill.attackers?.[0]) {
+            logger.info(`  first_attacker: ${JSON.stringify(kill.attackers[0])}`, { correlationId });
+            logger.info(`  first_attacker_keys: ${Object.keys(kill.attackers[0]).join(', ')}`, { correlationId });
+          }
+        });
+      }
+
+      // Debug: Log character IDs we're looking for using standardized transformer
+      logger.info(
+        `Character IDs we're looking for: ${BigIntTransformer.arrayToStringArray(characterIds.slice(0, 5)).join(', ')}`,
+        { correlationId }
+      );
 
     // Log distribution of kills across characters
     const killsByCharacter = new Map<string, number>();
@@ -93,26 +115,27 @@ export class KillsChartGenerator extends BaseChartGenerator {
       if (kill.attackers) {
         kill.attackers.forEach((attacker: any) => {
           if (attacker.characterId !== null && attacker.characterId !== undefined) {
-            const charId = attacker.characterId.toString();
+            const charId = BigIntTransformer.forLogging(attacker.characterId);
             killsByCharacter.set(charId, (killsByCharacter.get(charId) ?? 0) + 1);
           }
         });
       }
     });
 
-    logger.info(`Kill distribution: ${killsByCharacter.size} characters have kills as main killer`);
-    logger.info(
-      `Characters with most kills as main: ${Array.from(killsByCharacter.entries())
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([charId, count]) => `${charId}:${count}`)
-        .join(', ')}`
-    );
+      logger.info(`Kill distribution: ${killsByCharacter.size} characters have kills as main killer`, { correlationId });
+      logger.info(
+        `Characters with most kills as main: ${Array.from(killsByCharacter.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([charId, count]) => `${charId}:${count}`)
+          .join(', ')}`,
+        { correlationId }
+      );
 
     // Group kills by character group, but now include any kill where a group member is on the killmail
     const groupData = characterGroups.map(group => {
       const groupName = this.getGroupDisplayName(group);
-      const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
+      const groupCharacterIds = BigIntTransformer.migrateCharacterIds(group.characters);
 
       // Use a Set to track unique killmail IDs to avoid double-counting
       const uniqueGroupKillIds = new Set<string>();
@@ -121,7 +144,7 @@ export class KillsChartGenerator extends BaseChartGenerator {
       // 1. The main character on the kill is in the group, OR
       // 2. Any of the attackers are in the group
       kills.forEach((kill: Kill) => {
-        const killmailIdStr = kill.killmailId?.toString();
+        const killmailIdStr = BigIntTransformer.forLogging(kill.killmailId);
         if (!killmailIdStr) return;
 
         // Skip if we've already counted this killmail
@@ -168,14 +191,14 @@ export class KillsChartGenerator extends BaseChartGenerator {
 
       // Now get the actual kill objects for the unique IDs
       const groupKills = kills.filter((kill: Kill) => {
-        const killmailIdStr = kill.killmailId?.toString();
+        const killmailIdStr = BigIntTransformer.forLogging(kill.killmailId);
         return killmailIdStr && uniqueGroupKillIds.has(killmailIdStr);
       });
 
       // Calculate total kills using the unique count
       const totalKills = uniqueGroupKillIds.size;
 
-      logger.info(`Group ${groupName}: ${totalKills} unique kills, ${group.characters.length} characters`);
+        logger.info(`Group ${groupName}: ${totalKills} unique kills, ${group.characters.length} characters`, { correlationId });
 
       if (groupKills.length > 0) {
         // List the first few character IDs that have kills in this group
@@ -236,88 +259,184 @@ export class KillsChartGenerator extends BaseChartGenerator {
       };
     });
 
-    // Log all group data before filtering
-    groupData.forEach(data => {
-      const groupName = this.getGroupDisplayName(data.group);
-      logger.info(`Group ${groupName}: ${data.totalKills} total kills, ${data.soloKills} solo kills`);
-    });
+      // Log all group data before filtering
+      groupData.forEach(data => {
+        const groupName = this.getGroupDisplayName(data.group);
+        logger.info(`Group ${groupName}: ${data.totalKills} total kills, ${data.soloKills} solo kills`, { correlationId });
+      });
 
     // Filter out groups with no kills
     const groupsWithKills = groupData.filter(data => data.totalKills > 0);
 
-    logger.info(`Filtered to ${groupsWithKills.length} groups with kills out of ${groupData.length} total groups`);
+      logger.info(`Filtered to ${groupsWithKills.length} groups with kills out of ${groupData.length} total groups`, { correlationId });
 
-    // List the groups that were filtered out
-    const filteredOutGroups = groupData
-      .filter(data => data.totalKills === 0)
-      .map(data => this.getGroupDisplayName(data.group));
+      // List the groups that were filtered out
+      const filteredOutGroups = groupData
+        .filter(data => data.totalKills === 0)
+        .map(data => this.getGroupDisplayName(data.group));
 
-    if (filteredOutGroups.length > 0) {
-      logger.info(
-        `Groups with no kills: ${filteredOutGroups.slice(0, 5).join(', ')}${
-          filteredOutGroups.length > 5 ? '...' : ''
-        } (${filteredOutGroups.length} total)`
-      );
-    }
+      if (filteredOutGroups.length > 0) {
+        logger.info(
+          `Groups with no kills: ${filteredOutGroups.slice(0, 5).join(', ')}${
+            filteredOutGroups.length > 5 ? '...' : ''
+          } (${filteredOutGroups.length} total)`,
+          { correlationId }
+        );
+      }
 
-    // If no groups have kills, return empty chart
-    if (groupsWithKills.length === 0) {
-      logger.info('No groups with kills found, returning empty chart');
-      return {
-        labels: [],
-        datasets: [],
-        displayType: 'horizontalBar' as ChartDisplayType,
-        summary: 'No kills found in the specified time period',
-      };
-    }
+      // If no groups have kills, return empty chart
+      if (groupsWithKills.length === 0) {
+        logger.info('No groups with kills found, returning empty chart', { correlationId });
+        return {
+          labels: [],
+          datasets: [],
+          displayType: 'horizontalBar' as ChartDisplayType,
+          summary: 'No kills found in the specified time period',
+        };
+      }
 
     // Sort groups by total kills
     groupsWithKills.sort((a, b) => b.totalKills - a.totalKills);
 
-    logger.info(
-      `Top 5 groups by kill count: ${groupsWithKills
-        .slice(0, 5)
-        .map(g => `${this.getGroupDisplayName(g.group)}: ${g.totalKills}`)
-        .join(', ')}`
-    );
+      logger.info(
+        `Top 5 groups by kill count: ${groupsWithKills
+          .slice(0, 5)
+          .map(g => `${this.getGroupDisplayName(g.group)}: ${g.totalKills}`)
+          .join(', ')}`,
+        { correlationId }
+      );
 
-    // Create chart data
-    return {
-      labels: groupsWithKills.map(data => this.getGroupDisplayName(data.group)),
-      datasets: [
-        {
-          label: 'Total Kills',
-          data: groupsWithKills.map(data => data.totalKills),
-          backgroundColor: this.getDatasetColors('kills').primary,
-        },
-        {
-          label: 'Solo Kills',
-          data: groupsWithKills.map(data => data.soloKills),
-          backgroundColor: this.getDatasetColors('kills').secondary,
-        },
-      ],
-      displayType: 'horizontalBar' as ChartDisplayType,
-      options: {
-        indexAxis: 'y',
-        scales: {
-          x: {
-            stacked: true,
-            beginAtZero: true,
+      // Create chart data
+      return {
+        labels: groupsWithKills.map(data => this.getGroupDisplayName(data.group)),
+        datasets: [
+          {
+            label: 'Total Kills',
+            data: groupsWithKills.map(data => data.totalKills),
+            backgroundColor: this.getDatasetColors('kills').primary,
           },
-          y: {
-            stacked: true,
+          {
+            label: 'Solo Kills',
+            data: groupsWithKills.map(data => data.soloKills),
+            backgroundColor: this.getDatasetColors('kills').secondary,
+          },
+        ],
+        displayType: 'horizontalBar' as ChartDisplayType,
+        options: {
+          indexAxis: 'y',
+          scales: {
+            x: {
+              stacked: true,
+              beginAtZero: true,
+            },
+            y: {
+              stacked: true,
+            },
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+            },
           },
         },
-        plugins: {
-          legend: {
-            position: 'top',
-          },
-        },
-      },
-      summary: KillsChartConfig.getDefaultSummary(
-        groupsWithKills.reduce((total, data) => total + data.totalKills, 0),
-        groupsWithKills.reduce((total, data) => total + data.soloKills, 0)
-      ),
-    };
+        summary: KillsChartConfig.getDefaultSummary(
+          groupsWithKills.reduce((total, data) => total + data.totalKills, 0),
+          groupsWithKills.reduce((total, data) => total + data.soloKills, 0)
+        ),
+      };
+    } catch (error) {
+      logger.error('Error generating kills chart', { 
+        error, 
+        correlationId,
+        context: { 
+          operation: 'generateKillsChart',
+          hasOptions: !!options,
+          characterGroupCount: options?.characterGroups?.length || 0
+        }
+      });
+
+      if (error instanceof ChartError || error instanceof ValidationError) {
+        throw error;
+      }
+
+      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate kills chart', {
+        cause: error,
+        context: { correlationId, operation: 'generateKillsChart' }
+      });
+    }
+  }
+
+  /**
+   * Validate chart generation options
+   */
+  private validateChartOptions(options: {
+    startDate: Date;
+    endDate: Date;
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+      mainCharacterId?: string;
+    }>;
+    displayType: string;
+  }, correlationId: string): void {
+    const issues: Array<{ field: string; message: string }> = [];
+
+    // Validate dates
+    if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
+      issues.push({ field: 'startDate', message: 'Invalid start date' });
+    }
+
+    if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
+      issues.push({ field: 'endDate', message: 'Invalid end date' });
+    }
+
+    if (options.startDate && options.endDate && options.startDate >= options.endDate) {
+      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+    }
+
+    // Validate character groups
+    if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
+      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+    } else {
+      if (options.characterGroups.length === 0) {
+        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+      }
+
+      options.characterGroups.forEach((group, index) => {
+        if (!group.groupId || typeof group.groupId !== 'string') {
+          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+        }
+
+        if (!group.name || typeof group.name !== 'string') {
+          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+        }
+
+        if (!group.characters || !Array.isArray(group.characters)) {
+          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+        } else {
+          group.characters.forEach((char, charIndex) => {
+            if (!char.eveId || typeof char.eveId !== 'string') {
+              issues.push({ 
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                message: 'Character eveId is required' 
+              });
+            }
+            if (!char.name || typeof char.name !== 'string') {
+              issues.push({ 
+                field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                message: 'Character name is required' 
+              });
+            }
+          });
+        }
+      });
+    }
+
+    if (issues.length > 0) {
+      throw new ValidationError('Invalid chart generation options', issues, { 
+        context: { correlationId, operation: 'validateKillsChartOptions' }
+      });
+    }
   }
 }

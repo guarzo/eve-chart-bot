@@ -1,6 +1,7 @@
 import { BaseChartRenderStrategy } from './BaseChartRenderStrategy';
 import { ChartData, ChartOptions } from '../ChartService';
 import { logger } from '../../../lib/logger';
+import { HtmlStyling, HtmlStylingPresets } from '../builders/ChartHtmlBuilder';
 
 /**
  * Advanced chart rendering strategy using Chart.js for full-featured rendering
@@ -39,47 +40,10 @@ export class AdvancedChartRenderStrategy extends BaseChartRenderStrategy {
   }
 
   /**
-   * Override to add enhanced styling to dataset headers
+   * Override to use advanced styling configuration
    */
-  protected override buildDatasetHeaders(chartData: ChartData): string {
-    return chartData.datasets
-      .map(dataset => `<th style="padding: 12px; border: 1px solid #ddd;">${dataset.label}</th>`)
-      .join('');
-  }
-
-  /**
-   * Override to add enhanced styling to data rows
-   */
-  protected override buildDataRows(chartData: ChartData): string {
-    return chartData.labels
-      .map((label, index) => {
-        let row = `<tr><td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">${label}</td>`;
-        chartData.datasets.forEach(dataset => {
-          row += `<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">${dataset.data[index]}</td>`;
-        });
-        row += `</tr>`;
-        return row;
-      })
-      .join('');
-  }
-
-  /**
-   * Override to add enhanced styling to legend
-   */
-  protected override buildLegend(chartData: ChartData): string {
-    let legendSection = '<div class="legend" style="margin-top: 20px;"><h3>Legend</h3>';
-
-    chartData.datasets.forEach(dataset => {
-      const colors = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor : [dataset.backgroundColor];
-
-      legendSection += `<div class="legend-item" style="display: flex; align-items: center; margin: 5px 0;">
-        <div class="color-box" style="width: 20px; height: 20px; background-color: ${colors[0]}; margin-right: 10px; border-radius: 3px;"></div>
-        <span style="font-weight: 500;">${dataset.label}</span>
-      </div>`;
-    });
-
-    legendSection += '</div>';
-    return legendSection;
+  protected override getHtmlStyling(): HtmlStyling {
+    return HtmlStylingPresets.ADVANCED;
   }
 
   /**

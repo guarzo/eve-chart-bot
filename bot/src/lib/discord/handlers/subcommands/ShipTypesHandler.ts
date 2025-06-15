@@ -4,6 +4,7 @@ import { ChartData, ChartOptions } from '../../../../types/chart';
 import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { ChartFactory } from '../../../../services/charts';
+import { errorHandler, ChartError, ValidationError } from '../../../errors';
 
 /**
  * Handler for the /charts shiptypes command
@@ -19,39 +20,86 @@ export class ShipTypesHandler extends BaseChartHandler {
   async handle(interaction: CommandInteraction): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
+      
+      // Validate time parameter
+      const timeValue = parseInt(time, 10);
+      if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
+        throw ValidationError.outOfRange(
+          'time',
+          1,
+          365,
+          time,
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'shiptypes_command',
+            metadata: { interactionId: interaction.id },
+          }
+        );
+      }
+
       const { startDate, endDate } = this.getTimeRange(time);
 
-      logger.info(`Generating ship types chart for ${time} days`);
+      logger.info(`Generating ship types chart for ${time} days`, {
+        correlationId,
+        userId: interaction.user.id,
+        guildId: interaction.guildId,
+        timePeriod: time,
+      });
 
-      // Get character groups
+      // Get character groups with error handling
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        await interaction.editReply({
-          content: 'No character groups found. Please add characters to groups first.',
-        });
-        return;
+        throw ChartError.noDataError(
+          'shiptypes',
+          'No character groups found. Please add characters to groups first.',
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'shiptypes_chart_generation',
+          }
+        );
       }
 
       // Get the chart generator from the factory
       const shipTypesGenerator = ChartFactory.createGenerator('shiptypes');
 
-      // Generate chart data
-      const chartData = await shipTypesGenerator.generateChart({
-        characterGroups: groups,
-        startDate,
-        endDate,
-        displayType: 'horizontalBar', // horizontal bar is the default for ship types
-      });
+      // Generate chart data with retry logic
+      const chartData = await errorHandler.withRetry(
+        async () => {
+          return await shipTypesGenerator.generateChart({
+            characterGroups: groups,
+            startDate,
+            endDate,
+            displayType: 'horizontalBar', // horizontal bar is the default for ship types
+          });
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'chart.generate.shiptypes',
+          userId: interaction.user.id,
+          metadata: {
+            groupCount: groups.length,
+            timePeriod: time,
+          },
+        }
+      );
 
-      // Render chart to buffer
-      logger.info('Rendering ship types chart');
-      const buffer = await this.renderChart(chartData);
+      // Render chart to buffer with error handling
+      logger.info('Rendering ship types chart', { correlationId });
+      const buffer = await this.renderChart(chartData, correlationId);
 
       // Send the chart with summary
       await interaction.editReply({
@@ -59,9 +107,26 @@ export class ShipTypesHandler extends BaseChartHandler {
         files: [{ attachment: buffer, name: 'shiptypes-chart.png' }],
       });
 
-      logger.info('Successfully sent ship types chart');
+      logger.info('Successfully sent ship types chart', {
+        correlationId,
+        bufferSize: buffer.length,
+      });
+
     } catch (error) {
-      await this.handleError(interaction, error);
+      // Enhanced error handling with correlation ID context
+      const enhancedError = errorHandler.handleError(error, {
+        correlationId,
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        operation: 'shiptypes_command',
+        metadata: {
+          interactionId: interaction.id,
+          commandName: interaction.commandName,
+          subcommand: 'shiptypes',
+        },
+      });
+
+      await this.handleError(interaction, enhancedError);
     }
   }
 

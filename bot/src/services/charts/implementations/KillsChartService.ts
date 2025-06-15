@@ -5,6 +5,7 @@ import { Character } from '../../../domain/character/Character';
 import { format } from 'date-fns';
 /* eslint-disable max-lines */
 import { logger } from '../../../lib/logger';
+import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
 
 interface KillData {
   killTime: Date;
@@ -22,39 +23,58 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
     displayMetric: ChartMetric,
     limit: number
   ): Promise<ChartData> {
-    const characterIdsBigInt = characterIds.map(id => BigInt(id));
-
-    logger.info(`Generating kills chart for ${characterIds.length} characters from ${startDate.toISOString()}`);
-    logger.info(`Character IDs: ${characterIds.join(', ')}`);
-
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
-      // Find all related characters via character groups
+      // Input validation
+      this.validateKillsChartInput({ characterIds, startDate, groupBy, displayMetric, limit }, correlationId);
+
+      const characterIdsBigInt = characterIds.map(id => BigInt(id));
+
+      logger.info(`Generating kills chart for ${characterIds.length} characters from ${startDate.toISOString()}`, { correlationId });
+      logger.info(`Character IDs: ${characterIds.join(', ')}`, { correlationId });
+      // Find all related characters via character groups with retry logic
       const allCharactersNested = await Promise.all(
         characterIds.map(async (id: string) => {
-          const character = await this.characterRepository.getCharacter(BigInt(id));
-          if (character?.characterGroupId) {
-            return this.characterRepository.getCharactersByGroup(character.characterGroupId);
-          }
-          return character ? [character] : [];
+          return errorHandler.withRetry(
+            async () => {
+              const character = await this.characterRepository.getCharacter(BigInt(id));
+              if (character?.characterGroupId) {
+                return this.characterRepository.getCharactersByGroup(character.characterGroupId);
+              }
+              return character ? [character] : [];
+            },
+            {
+              retries: 3,
+              context: { operation: 'fetchCharacterGroups', characterId: id, correlationId }
+            }
+          );
         })
       );
       const allCharacters = allCharactersNested.flat();
       const allCharacterIds = allCharacters.map((c: Character) => c.eveId);
 
-      logger.info(`Including all characters in same groups: ${allCharacters.length} characters total`);
+      logger.info(`Including all characters in same groups: ${allCharacters.length} characters total`, { correlationId });
 
-      // Get kills for characters
-      logger.info('Querying killFact table with expanded character list...');
-      const killsQuery = await this.killRepository.getKillsForCharacters(
-        allCharacterIds.map(id => BigInt(id)),
-        startDate,
-        new Date()
+      // Get kills for characters with retry logic
+      logger.info('Querying killFact table with expanded character list...', { correlationId });
+      const killsQuery = await errorHandler.withRetry(
+        () => this.killRepository.getKillsForCharacters(
+          allCharacterIds.map(id => BigInt(id)),
+          startDate,
+          new Date()
+        ),
+        {
+          retries: 3,
+          context: { operation: 'fetchKillsData', characterCount: allCharacterIds.length, correlationId }
+        }
       );
 
-      logger.info(`Found ${killsQuery.length} kill records in database`);
+      logger.info(`Found ${killsQuery.length} kill records in database`, { correlationId });
 
       if (killsQuery.length === 0) {
-        return this.createEmptyKillsChart(characterIdsBigInt, groupBy, limit);
+        logger.warn('No kills found for specified characters and time period', { correlationId });
+        return this.createEmptyKillsChart(characterIdsBigInt, groupBy, limit, correlationId);
       }
 
       const kills = killsQuery.map((kill: any) => {
@@ -88,8 +108,26 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
         displayType: 'line' as ChartDisplayType,
       };
     } catch (error) {
-      logger.error('Error generating kills chart:', error);
-      throw error;
+      logger.error('Error generating kills chart', { 
+        error, 
+        correlationId,
+        context: { 
+          operation: 'generateKillsChart',
+          characterCount: characterIds?.length || 0,
+          groupBy,
+          displayMetric,
+          limit
+        }
+      });
+
+      if (error instanceof ChartError || error instanceof ValidationError) {
+        throw error;
+      }
+
+      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate kills chart', {
+        cause: error,
+        context: { correlationId, operation: 'generateKillsChart' }
+      });
     }
   }
 
@@ -173,8 +211,8 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
     }
   }
 
-  private async createEmptyKillsChart(characterIds: bigint[], groupBy: string, limit: number): Promise<ChartData> {
-    logger.warn('No kills found for the specified characters and time period');
+  private async createEmptyKillsChart(characterIds: bigint[], groupBy: string, limit: number, correlationId: string): Promise<ChartData> {
+    logger.warn('No kills found for the specified characters and time period', { correlationId });
 
     const emptyDatasets = await Promise.all(
       characterIds.slice(0, limit).map(async (characterId, index) => {
@@ -412,5 +450,57 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
     if (diffDays <= 7) return '7d';
     if (diffDays <= 30) return '30d';
     return '90d';
+  }
+
+  /**
+   * Validate kills chart input parameters
+   */
+  private validateKillsChartInput(params: {
+    characterIds: string[];
+    startDate: Date;
+    groupBy: string;
+    displayMetric: ChartMetric;
+    limit: number;
+  }, correlationId: string): void {
+    const issues: Array<{ field: string; message: string }> = [];
+
+    // Validate character IDs
+    if (!params.characterIds || !Array.isArray(params.characterIds) || params.characterIds.length === 0) {
+      issues.push({ field: 'characterIds', message: 'At least one character ID is required' });
+    } else {
+      params.characterIds.forEach((id, index) => {
+        if (!id || typeof id !== 'string') {
+          issues.push({ field: `characterIds[${index}]`, message: 'Character ID must be a non-empty string' });
+        }
+      });
+    }
+
+    // Validate start date
+    if (!params.startDate || !(params.startDate instanceof Date) || isNaN(params.startDate.getTime())) {
+      issues.push({ field: 'startDate', message: 'Invalid start date' });
+    }
+
+    // Validate groupBy
+    const validGroupBy = ['hour', 'day', 'week'];
+    if (!params.groupBy || !validGroupBy.includes(params.groupBy)) {
+      issues.push({ field: 'groupBy', message: `GroupBy must be one of: ${validGroupBy.join(', ')}` });
+    }
+
+    // Validate display metric
+    const validMetrics = ['kills', 'value', 'points', 'attackers'];
+    if (!params.displayMetric || !validMetrics.includes(params.displayMetric)) {
+      issues.push({ field: 'displayMetric', message: `Display metric must be one of: ${validMetrics.join(', ')}` });
+    }
+
+    // Validate limit
+    if (typeof params.limit !== 'number' || params.limit < 1 || params.limit > 100) {
+      issues.push({ field: 'limit', message: 'Limit must be a number between 1 and 100' });
+    }
+
+    if (issues.length > 0) {
+      throw new ValidationError('Invalid kills chart input parameters', issues, { 
+        context: { correlationId, operation: 'validateKillsChartInput' }
+      });
+    }
   }
 }

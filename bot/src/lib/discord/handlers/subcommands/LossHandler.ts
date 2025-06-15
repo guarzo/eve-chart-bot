@@ -5,6 +5,7 @@ import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { TooltipItem, Scale } from 'chart.js';
 import { ChartFactory } from '../../../../services/charts';
+import { errorHandler, ChartError, ValidationError } from '../../../errors';
 
 /**
  * Handler for the /charts loss command
@@ -20,35 +21,82 @@ export class LossHandler extends BaseChartHandler {
   async handle(interaction: CommandInteraction): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
+      
+      // Validate time parameter
+      const timeValue = parseInt(time, 10);
+      if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
+        throw ValidationError.outOfRange(
+          'time',
+          1,
+          365,
+          time,
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'loss_command',
+            metadata: { interactionId: interaction.id },
+          }
+        );
+      }
+
       const { startDate, endDate } = this.getTimeRange(time);
 
-      logger.info(`Generating loss chart for ${time} days`);
+      logger.info(`Generating loss chart for ${time} days`, {
+        correlationId,
+        userId: interaction.user.id,
+        guildId: interaction.guildId,
+        timePeriod: time,
+      });
 
-      // Get character groups
+      // Get character groups with error handling
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        await interaction.editReply({
-          content: 'No character groups found. Please add characters to groups first.',
-        });
-        return;
+        throw ChartError.noDataError(
+          'loss',
+          'No character groups found. Please add characters to groups first.',
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'loss_chart_generation',
+          }
+        );
       }
 
       // Get the chart generator from the factory
       const lossGenerator = ChartFactory.createGenerator('loss');
 
-      // Generate chart data
-      const chartData = await lossGenerator.generateChart({
-        characterGroups: groups,
-        startDate,
-        endDate,
-        displayType: 'horizontalBar',
-      });
+      // Generate chart data with retry logic
+      const chartData = await errorHandler.withRetry(
+        async () => {
+          return await lossGenerator.generateChart({
+            characterGroups: groups,
+            startDate,
+            endDate,
+            displayType: 'horizontalBar',
+          });
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'chart.generate.loss',
+          userId: interaction.user.id,
+          metadata: {
+            groupCount: groups.length,
+            timePeriod: time,
+          },
+        }
+      );
 
       // Render chart to buffer
       const buffer = await this.renderChart(chartData);

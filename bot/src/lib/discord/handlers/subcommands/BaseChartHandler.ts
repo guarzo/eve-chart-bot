@@ -5,6 +5,7 @@ import { logger } from '../../../logger';
 import { RepositoryManager } from '../../../../infrastructure/repositories/RepositoryManager';
 import { CharacterGroup } from '../../../../domain/character/CharacterGroup';
 import { MessageFlags } from 'discord.js';
+import { errorHandler, createDiscordErrorResponse } from '../../../errors';
 
 /**
  * Base class for all chart command handlers
@@ -56,10 +57,29 @@ export abstract class BaseChartHandler {
       mainCharacterId?: string;
     }>
   > {
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
-      logger.info('BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()');
-      const groups = await this.characterRepository.getAllCharacterGroups();
-      logger.info(`BaseChartHandler.getCharacterGroups() - got ${groups.length} raw groups from repository`);
+      logger.info('BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()', {
+        correlationId,
+      });
+
+      const groups = await errorHandler.withRetry(
+        async () => {
+          return await this.characterRepository.getAllCharacterGroups();
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'db.getAllCharacterGroups',
+        }
+      );
+
+      logger.info(`BaseChartHandler.getCharacterGroups() - got ${groups.length} raw groups from repository`, {
+        correlationId,
+        groupCount: groups.length,
+      });
 
       // Filter out groups with no characters and transform to expected format
       const result = groups
@@ -74,21 +94,25 @@ export abstract class BaseChartHandler {
           mainCharacterId: group.mainCharacterId,
         }));
 
-      logger.info(`BaseChartHandler.getCharacterGroups() - returning ${result.length} filtered groups`);
+      logger.info(`BaseChartHandler.getCharacterGroups() - returning ${result.length} filtered groups`, {
+        correlationId,
+        filteredGroupCount: result.length,
+      });
+      
       return result;
     } catch (error) {
-      logger.error('Error fetching character groups:', {
-        error:
-          error instanceof Error
-            ? {
-                name: error.name,
-                message: error.message,
-                stack: error.stack,
-              }
-            : error,
-        errorType: typeof error,
-        errorString: String(error),
-      });
+      const dbError = errorHandler.handleDatabaseError(
+        error,
+        'read',
+        'character_group',
+        undefined,
+        {
+          correlationId,
+          operation: 'getAllCharacterGroups',
+        }
+      );
+
+      logger.warn('Error fetching character groups, returning empty array', dbError.toLogFormat());
       return [];
     }
   }
@@ -97,42 +121,53 @@ export abstract class BaseChartHandler {
    * Handle any errors that occur during command execution
    */
   protected async handleError(interaction: CommandInteraction, error: any): Promise<void> {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(`Error handling chart command: ${errorMessage}`, {
-      error:
-        error instanceof Error
-          ? {
-              name: error.name,
-              message: error.message,
-              stack: error.stack,
-            }
-          : error,
-      interactionId: interaction.id,
-      commandName: interaction.commandName,
-      subcommand: interaction.isChatInputCommand() ? interaction.options.getSubcommand(false) : 'unknown',
-      replied: interaction.replied,
-      deferred: interaction.deferred,
-    });
+    const subcommand = interaction.isChatInputCommand() ? interaction.options.getSubcommand(false) : 'unknown';
+    
+    // Handle the error with full context using the new error handling system
+    const standardizedError = errorHandler.handleDiscordError(
+      error,
+      interaction.commandName,
+      interaction.user.id,
+      interaction.guildId || undefined,
+      interaction.id
+    );
+
+    // Create user-friendly Discord response
+    const discordResponse = createDiscordErrorResponse(standardizedError);
 
     try {
-      // Reply with error message
-      const content = `❌ Error generating chart: ${errorMessage}`;
-
       if (interaction.deferred) {
-        await interaction.editReply({ content });
+        await interaction.editReply(discordResponse);
       } else if (!interaction.replied) {
         await interaction.reply({
-          content,
+          ...discordResponse,
           flags: MessageFlags.Ephemeral,
         });
       } else {
         await interaction.followUp({
-          content,
+          ...discordResponse,
           flags: MessageFlags.Ephemeral,
         });
       }
     } catch (replyError) {
-      logger.error('Error sending error response:', replyError);
+      const replyErrorHandled = errorHandler.handleDiscordError(
+        replyError,
+        'error_response',
+        interaction.user.id,
+        interaction.guildId || undefined,
+        interaction.id
+      );
+
+      logger.error('Failed to send error response to Discord', {
+        originalError: standardizedError.toJSON(),
+        replyError: replyErrorHandled.toJSON(),
+        interactionState: {
+          deferred: interaction.deferred,
+          replied: interaction.replied,
+          commandName: interaction.commandName,
+          subcommand,
+        },
+      });
     }
   }
 }

@@ -3,7 +3,8 @@ import { ClassConstructor } from 'class-transformer';
 import { logger } from '../../lib/logger';
 import prisma from '../persistence/client';
 import { PrismaMapper } from '../mapper/PrismaMapper';
-import { ensureBigInt } from '../../utils/conversion';
+import { ensureBigInt } from '../../shared/utilities/conversion';
+import { errorHandler, DatabaseError } from '../../shared/errors';
 
 /**
  * Base repository class that all specific repositories will extend.
@@ -19,16 +20,46 @@ export abstract class BaseRepository {
   }
 
   /**
-   * Execute a database query with error handling
+   * Execute a database query with error handling and retry logic
    */
-  protected async executeQuery<R>(queryFn: () => Promise<R>): Promise<R> {
+  protected async executeQuery<R>(
+    queryFn: () => Promise<R>,
+    operation?: string,
+    correlationId?: string
+  ): Promise<R> {
+    const actualCorrelationId = correlationId || errorHandler.createCorrelationId();
+    const actualOperation = operation || 'db.query';
+    
     try {
-      // Execute query directly
-      const result = await queryFn();
+      const result = await errorHandler.withRetry(
+        queryFn,
+        3,
+        1000,
+        {
+          correlationId: actualCorrelationId,
+          operation: `${this.modelName}.${actualOperation}`,
+        }
+      );
+      
+      logger.debug('Database query executed successfully', {
+        correlationId: actualCorrelationId,
+        modelName: this.modelName,
+        operation: actualOperation,
+      });
+      
       return result;
     } catch (error) {
-      logger.error(`Error in ${this.modelName} repository:`, error);
-      throw error;
+      throw errorHandler.handleDatabaseError(
+        error,
+        'query',
+        this.modelName.toLowerCase(),
+        undefined,
+        {
+          correlationId: actualCorrelationId,
+          operation: actualOperation,
+          metadata: { modelName: this.modelName },
+        }
+      );
     }
   }
 

@@ -3,6 +3,7 @@ import { RepositoryManager } from '../../infrastructure/repositories/RepositoryM
 import { FormatUtils } from './utils/FormatUtils';
 import { TimeUtils } from './utils/TimeUtils';
 import { logger } from '../../lib/logger';
+import { errorHandler, ChartError, ValidationError } from '../../lib/errors';
 
 /**
  * Base class for all chart generators

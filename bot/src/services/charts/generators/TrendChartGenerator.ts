@@ -6,6 +6,7 @@ import { KillRepository } from '../../../infrastructure/repositories/KillReposit
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
+import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
 
 /**
  * Generator for trend charts showing kills over time
@@ -35,23 +36,46 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
       const { startDate, endDate, characterGroups, displayType } = options;
-      logger.info(`Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`);
-      logger.debug(`Chart type: ${displayType}, Groups: ${characterGroups.length}`);
+
+      // Input validation
+      this.validateChartOptions(options, correlationId);
+
+      logger.info(`Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`, { correlationId });
+      logger.debug(`Chart type: ${displayType}, Groups: ${characterGroups.length}`, { correlationId });
 
       // Select chart generation function based on display type
       if (displayType === 'area') {
-        return this.generateAreaChart(characterGroups, startDate, endDate);
+        return this.generateAreaChart(characterGroups, startDate, endDate, correlationId);
       } else if (displayType === 'dual') {
-        return this.generateDualAxisChart(characterGroups, startDate, endDate);
+        return this.generateDualAxisChart(characterGroups, startDate, endDate, correlationId);
       } else {
         // Default to line chart (timeline)
-        return this.generateTimelineChart(characterGroups, startDate, endDate);
+        return this.generateTimelineChart(characterGroups, startDate, endDate, correlationId);
       }
     } catch (error) {
-      logger.error('Error generating trend chart:', error);
-      throw error;
+      logger.error('Error generating trend chart', { 
+        error, 
+        correlationId,
+        context: { 
+          operation: 'generateTrendChart',
+          hasOptions: !!options,
+          displayType: options?.displayType,
+          characterGroupCount: options?.characterGroups?.length || 0
+        }
+      });
+
+      if (error instanceof ChartError || error instanceof ValidationError) {
+        throw error;
+      }
+
+      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate trend chart', {
+        cause: error,
+        context: { correlationId, operation: 'generateTrendChart' }
+      });
     }
   }
 
@@ -65,7 +89,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
       characters: Array<{ eveId: string; name: string }>;
     }>,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    correlationId: string
   ): Promise<ChartData> {
     // First, determine the appropriate time grouping based on date range
     const dateRange = endDate.getTime() - startDate.getTime();
@@ -95,11 +120,18 @@ export class TrendChartGenerator extends BaseChartGenerator {
         continue;
       }
 
-      // Get kill data grouped by time
-      const killData = await this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy);
+      // Get kill data grouped by time with retry logic
+      const killData = await errorHandler.withRetry(
+        () => this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy),
+        {
+          retries: 3,
+          context: { operation: 'fetchKillData', groupBy, correlationId }
+        }
+      );
 
       // Skip if no data
       if (killData.length === 0) {
+        logger.debug(`No kill data found for group ${group.name}`, { correlationId });
         continue;
       }
 
@@ -185,7 +217,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
       characters: Array<{ eveId: string; name: string }>;
     }>,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    correlationId: string
   ): Promise<ChartData> {
     // First, determine the appropriate time grouping based on date range
     const dateRange = endDate.getTime() - startDate.getTime();
@@ -215,11 +248,18 @@ export class TrendChartGenerator extends BaseChartGenerator {
         continue;
       }
 
-      // Get kill data grouped by time
-      const killData = await this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy);
+      // Get kill data grouped by time with retry logic
+      const killData = await errorHandler.withRetry(
+        () => this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy),
+        {
+          retries: 3,
+          context: { operation: 'fetchKillData', groupBy, correlationId }
+        }
+      );
 
       // Skip if no data
       if (killData.length === 0) {
+        logger.debug(`No kill data found for group ${group.name}`, { correlationId });
         continue;
       }
 
@@ -310,7 +350,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
       characters: Array<{ eveId: string; name: string }>;
     }>,
     startDate: Date,
-    endDate: Date
+    endDate: Date,
+    correlationId: string
   ): Promise<ChartData> {
     // Combine all groups for a total view
     const allCharacterIds: bigint[] = [];
@@ -321,7 +362,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }
 
     if (allCharacterIds.length === 0) {
-      throw new Error('No characters found in the provided groups');
+      throw new ChartError('NO_DATA_AVAILABLE', 'No characters found in the provided groups', {
+        context: { correlationId, operation: 'generateDualAxisChart' }
+      });
     }
 
     // Determine appropriate time grouping
@@ -335,11 +378,19 @@ export class TrendChartGenerator extends BaseChartGenerator {
       groupBy = 'week';
     }
 
-    // Get kill data grouped by time
-    const killData = await this.killRepository.getKillsGroupedByTime(allCharacterIds, startDate, endDate, groupBy);
+    // Get kill data grouped by time with retry logic
+    const killData = await errorHandler.withRetry(
+      () => this.killRepository.getKillsGroupedByTime(allCharacterIds, startDate, endDate, groupBy),
+      {
+        retries: 3,
+        context: { operation: 'fetchDualAxisKillData', groupBy, correlationId }
+      }
+    );
 
     if (killData.length === 0) {
-      throw new Error('No kill data found for the specified time period');
+      throw new ChartError('NO_DATA_AVAILABLE', 'No kill data found for the specified time period', {
+        context: { startDate, endDate, characterCount: allCharacterIds.length, correlationId }
+      });
     }
 
     // Prepare data for the dual-axis chart
@@ -477,5 +528,78 @@ export class TrendChartGenerator extends BaseChartGenerator {
       return color.replace(/,\s*[\d.]+\)$/, `, ${alpha})`);
     }
     return color;
+  }
+
+  /**
+   * Validate chart generation options
+   */
+  private validateChartOptions(options: {
+    startDate: Date;
+    endDate: Date;
+    characterGroups: Array<{
+      groupId: string;
+      name: string;
+      characters: Array<{ eveId: string; name: string }>;
+    }>;
+    displayType: string;
+  }, correlationId: string): void {
+    const issues: Array<{ field: string; message: string }> = [];
+
+    // Validate dates
+    if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
+      issues.push({ field: 'startDate', message: 'Invalid start date' });
+    }
+
+    if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
+      issues.push({ field: 'endDate', message: 'Invalid end date' });
+    }
+
+    if (options.startDate && options.endDate && options.startDate >= options.endDate) {
+      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+    }
+
+    // Validate character groups
+    if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
+      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+    } else {
+      if (options.characterGroups.length === 0) {
+        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+      }
+
+      options.characterGroups.forEach((group, index) => {
+        if (!group.groupId || typeof group.groupId !== 'string') {
+          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+        }
+
+        if (!group.name || typeof group.name !== 'string') {
+          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+        }
+
+        if (!group.characters || !Array.isArray(group.characters)) {
+          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+        } else {
+          group.characters.forEach((char, charIndex) => {
+            if (!char.eveId || typeof char.eveId !== 'string') {
+              issues.push({ 
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                message: 'Character eveId is required' 
+              });
+            }
+            if (!char.name || typeof char.name !== 'string') {
+              issues.push({ 
+                field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                message: 'Character name is required' 
+              });
+            }
+          });
+        }
+      });
+    }
+
+    if (issues.length > 0) {
+      throw new ValidationError('Invalid chart generation options', issues, { 
+        context: { correlationId, operation: 'validateTrendChartOptions' }
+      });
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { BaseEntity } from '../BaseEntity';
-import { ensureRequiredBigInt } from '../../utils/conversion';
-import { validateRequired, validatePositive, validateNonNegative } from '../../utils/validation';
+import { ensureRequiredBigInt } from '../../shared/utilities/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../shared/validation/validation';
 
 /**
  * LossFact domain entity
@@ -116,13 +116,13 @@ export class LossFact extends BaseEntity {
    */
   static fromModel(model: any): LossFact {
     return new LossFact({
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      killTime: model.kill_time,
-      shipTypeId: model.ship_type_id,
-      systemId: model.system_id,
-      totalValue: model.total_value,
-      attackerCount: model.attacker_count,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      killTime: model.killTime,
+      shipTypeId: model.shipTypeId,
+      systemId: model.systemId,
+      totalValue: model.totalValue,
+      attackerCount: model.attackerCount,
       labels: model.labels ?? [],
     });
   }

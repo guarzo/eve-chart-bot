@@ -1,6 +1,6 @@
 import { ChartData, ChartOptions } from './ChartService';
 import { logger } from '../../lib/logger';
-import { flags } from '../../utils/feature-flags';
+import { flags } from '../../shared/utilities/feature-flags';
 import { IChartRenderStrategy } from './strategies/IChartRenderStrategy';
 import { BasicChartRenderStrategy } from './strategies/BasicChartRenderStrategy';
 import { AdvancedChartRenderStrategy } from './strategies/AdvancedChartRenderStrategy';

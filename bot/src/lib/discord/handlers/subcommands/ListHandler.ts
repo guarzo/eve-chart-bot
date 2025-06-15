@@ -1,6 +1,7 @@
 import { BaseChartHandler } from './BaseChartHandler';
 import { CommandInteraction, EmbedBuilder } from 'discord.js';
 import { logger } from '../../../logger';
+import { errorHandler, ChartError, ValidationError } from '../../../errors';
 
 /**
  * Handler for the /charts list command
@@ -15,8 +16,10 @@ export class ListHandler extends BaseChartHandler {
    * Handle the list command interaction
    */
   async handle(interaction: CommandInteraction): Promise<void> {
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
-      logger.info('Handling list subcommand');
+      logger.info('Handling list subcommand', { correlationId });
 
       // Define available subcommands directly to avoid circular dependency
       const subcommands = [
@@ -92,19 +95,16 @@ export class ListHandler extends BaseChartHandler {
         });
 
       await interaction.reply({ embeds: [embed] });
-      logger.info('Successfully sent list of chart types');
+      logger.info('Successfully sent list of chart types', { correlationId });
     } catch (error) {
-      logger.error('Error handling list command:', error);
-
-      // Send a generic error message to the user
-      await interaction
-        .reply({
-          content: 'Sorry, there was an error processing your request. Please try again later.',
-          ephemeral: true,
-        })
-        .catch(e => {
-          logger.error('Error sending error response:', e);
-        });
+      logger.error('Error in list command handler', { 
+        error, 
+        correlationId, 
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        metadata: { interactionId: interaction.id }
+      });
+      await this.handleError(interaction, error);
     }
   }
 }

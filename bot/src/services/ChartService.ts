@@ -12,6 +12,7 @@ import { ChartConfigInput, ChartData, ChartDisplayType, ChartMetric } from '../t
 import { format } from 'date-fns';
 import { BaseRepository } from '../infrastructure/repositories/BaseRepository';
 import { PrismaClient } from '@prisma/client';
+import { errorHandler, ValidationError, DatabaseError, ChartError } from '../lib/errors';
 
 interface KillData {
   killTime: Date;
@@ -61,67 +62,164 @@ export class ChartService extends BaseRepository {
   }
 
   async generateChart(config: ChartConfigInput): Promise<ChartData> {
-    const {
-      type,
-      characterIds,
-      period,
-      groupBy = 'hour',
-      displayType = 'line',
-      displayMetric = 'value', // Default to value, but can be "kills", "value", "points", "attackers"
-      limit = 10, // Limit number of characters to display
-    } = config;
+    const correlationId = errorHandler.createCorrelationId();
+    
+    try {
+      // Validate input parameters
+      if (!config) {
+        throw ValidationError.missingRequiredField(
+          'config',
+          {
+            correlationId,
+            operation: 'chart.generateChart',
+          }
+        );
+      }
 
-    // Calculate start date based on period
-    const startDate = new Date();
-    switch (period) {
-      case '24h':
-        startDate.setHours(startDate.getHours() - 24);
-        break;
-      case '7d':
-        startDate.setDate(startDate.getDate() - 7);
-        break;
-      case '30d':
-        startDate.setDate(startDate.getDate() - 30);
-        break;
-      case '90d':
-        startDate.setDate(startDate.getDate() - 90);
-        break;
-      default:
-        throw new Error(`Invalid period: ${period}`);
+      const {
+        type,
+        characterIds,
+        period,
+        groupBy = 'hour',
+        displayType = 'line',
+        displayMetric = 'value', // Default to value, but can be "kills", "value", "points", "attackers"
+        limit = 10, // Limit number of characters to display
+      } = config;
+
+      // Validate required fields
+      if (!type) {
+        throw ValidationError.missingRequiredField(
+          'type',
+          {
+            correlationId,
+            operation: 'chart.generateChart',
+          }
+        );
+      }
+
+      if (!characterIds || !Array.isArray(characterIds)) {
+        throw ValidationError.missingRequiredField(
+          'characterIds',
+          {
+            correlationId,
+            operation: 'chart.generateChart',
+            metadata: { type },
+          }
+        );
+      }
+
+      if (!period) {
+        throw ValidationError.missingRequiredField(
+          'period',
+          {
+            correlationId,
+            operation: 'chart.generateChart',
+            metadata: { type },
+          }
+        );
+      }
+
+      logger.info('Generating chart', {
+        correlationId,
+        type,
+        period,
+        characterCount: characterIds.length,
+        groupBy,
+        displayType,
+        displayMetric,
+        limit,
+      });
+
+      // Calculate start date based on period
+      const startDate = new Date();
+      switch (period) {
+        case '24h':
+          startDate.setHours(startDate.getHours() - 24);
+          break;
+        case '7d':
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case '30d':
+          startDate.setDate(startDate.getDate() - 30);
+          break;
+        case '90d':
+          startDate.setDate(startDate.getDate() - 90);
+          break;
+        default:
+          throw ValidationError.invalidFormat(
+            'period',
+            'one of: 24h, 7d, 30d, 90d',
+            period,
+            {
+              correlationId,
+              operation: 'chart.generateChart',
+              metadata: { type },
+            }
+          );
+      }
+
+      // Generate chart title
+      const metricLabel =
+        displayMetric === 'value'
+          ? 'ISK Value'
+          : displayMetric === 'kills'
+            ? 'Kill Count'
+            : displayMetric === 'points'
+              ? 'Points'
+              : 'Attacker Count';
+
+      const chartTitle = `${type === 'kills' ? 'Kills' : 'Map Activity'} - ${metricLabel} - Last ${
+        period === '24h' ? '24 Hours' : period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
+      }`;
+
+      // Generate chart based on type
+      let chartData;
+      switch (type) {
+        case 'kills':
+          chartData = await this.generateKillsChart(characterIds, startDate, groupBy, displayMetric, limit);
+          break;
+        case 'map_activity':
+          chartData = await this.generateMapActivityChart(characterIds, startDate, groupBy);
+          break;
+        default:
+          throw ValidationError.invalidFormat(
+            'type',
+            'one of: kills, map_activity',
+            type,
+            {
+              correlationId,
+              operation: 'chart.generateChart',
+            }
+          );
+      }
+
+      // Add title and displayType to chart data
+      chartData.title = chartTitle;
+      chartData.displayType = displayType;
+
+      logger.info('Successfully generated chart', {
+        correlationId,
+        type,
+        datasetCount: chartData.datasets.length,
+        labelCount: chartData.labels.length,
+      });
+
+      return chartData;
+    } catch (error) {
+      throw errorHandler.handleChartError(
+        error,
+        'generation',
+        {
+          correlationId,
+          operation: 'generateChart',
+          metadata: { 
+            type: config?.type,
+            period: config?.period,
+            characterCount: config?.characterIds?.length,
+          },
+        }
+      );
     }
-
-    // Generate chart title
-    const metricLabel =
-      displayMetric === 'value'
-        ? 'ISK Value'
-        : displayMetric === 'kills'
-          ? 'Kill Count'
-          : displayMetric === 'points'
-            ? 'Points'
-            : 'Attacker Count';
-
-    const chartTitle = `${type === 'kills' ? 'Kills' : 'Map Activity'} - ${metricLabel} - Last ${
-      period === '24h' ? '24 Hours' : period === '7d' ? '7 Days' : period === '30d' ? '30 Days' : '90 Days'
-    }`;
-
-    // Generate chart based on type
-    let chartData;
-    switch (type) {
-      case 'kills':
-        chartData = await this.generateKillsChart(characterIds, startDate, groupBy, displayMetric, limit);
-        break;
-      case 'map_activity':
-        chartData = await this.generateMapActivityChart(characterIds, startDate, groupBy);
-        break;
-      default:
-        throw new Error(`Invalid chart type: ${type}`);
-    }
-
-    // Add title and displayType to chart data
-    chartData.title = chartTitle;
-    chartData.displayType = displayType;
-
-    return chartData;
   }
 
   private async generateKillsChart(

@@ -31,6 +31,7 @@ import { KillRepository } from '../../infrastructure/repositories/KillRepository
 import { WebSocketKillmail, WebSocketKillmailUpdate } from '../../types/websocket';
 import { WebSocketDataMapper } from './WebSocketDataMapper';
 import { PrismaClient } from '@prisma/client';
+import { errorHandler, ExternalServiceError, DatabaseError, ValidationError } from '../../lib/errors';
 
 interface WebSocketPreloadConfig {
   enabled: boolean;
@@ -83,48 +84,98 @@ export class WebSocketIngestionService {
    * ---------------------------------------------------------------- */
 
   async start(): Promise<void> {
+    const correlationId = errorHandler.createCorrelationId();
+    
     if (this.isRunning) {
-      logger.warn('WebSocket ingestion service is already running');
+      logger.warn('WebSocket ingestion service is already running', {
+        correlationId,
+      });
       return;
     }
 
     this.isRunning = true;
-    logger.info('Starting WebSocket ingestion service');
+    logger.info('Starting WebSocket ingestion service', {
+      correlationId,
+      url: this.config.url,
+    });
 
     try {
-      await this.connect();
-      await this.subscribeToTrackedCharacters();
-    } catch (error) {
-      logger.error('Failed to start WebSocket ingestion service', {
-        error,
-        url: this.config.url,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
+      await errorHandler.withRetry(
+        async () => {
+          await this.connect();
+          await this.subscribeToTrackedCharacters();
+        },
+        3,
+        2000,
+        {
+          correlationId,
+          operation: 'websocket.service.start',
+          metadata: { url: this.config.url },
+        }
+      );
+
+      logger.info('WebSocket ingestion service started successfully', {
+        correlationId,
       });
+    } catch (error) {
       this.isRunning = false;
-      throw error;
+      throw errorHandler.handleExternalServiceError(
+        error,
+        'WebSocket',
+        'start',
+        {
+          correlationId,
+          operation: 'start',
+          metadata: { url: this.config.url },
+        }
+      );
     }
   }
 
   async stop(): Promise<void> {
-    if (!this.isRunning) return;
+    const correlationId = errorHandler.createCorrelationId();
+    
+    if (!this.isRunning) {
+      logger.debug('WebSocket ingestion service is not running', {
+        correlationId,
+      });
+      return;
+    }
 
-    logger.info('Stopping WebSocket ingestion service');
+    logger.info('Stopping WebSocket ingestion service', {
+      correlationId,
+    });
+    
     this.isRunning = false;
 
     if (this.socket) {
       try {
         this.socket.unsubscribeToTopic(this.TOPIC);
+        logger.debug('Unsubscribed from topic', {
+          correlationId,
+          topic: this.TOPIC,
+        });
       } catch (err) {
-        logger.debug('Topic unsubscribe threw (ignoring)', err);
+        logger.debug('Topic unsubscribe threw (ignoring)', {
+          correlationId,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
+      
       this.socket.disconnect();
       this.socket = null;
+      logger.debug('Disconnected WebSocket', {
+        correlationId,
+      });
     }
 
     this.connected = false;
     this.subscribedCharacters.clear();
     this.subscribedSystems.clear();
+    
+    logger.info('WebSocket ingestion service stopped successfully', {
+      correlationId,
+    });
   }
 
   /* ------------------------------------------------------------------
@@ -132,26 +183,68 @@ export class WebSocketIngestionService {
    * ---------------------------------------------------------------- */
 
   private async connect(): Promise<void> {
-    logger.info(`Connecting to Phoenix WebSocket at ${this.config.url}`);
+    const correlationId = errorHandler.createCorrelationId();
+    
+    try {
+      // Validate configuration
+      if (!this.config.url) {
+        throw ValidationError.missingRequiredField(
+          'config.url',
+          {
+            correlationId,
+            operation: 'websocket.connect',
+          }
+        );
+      }
 
-    this.socket = new PhoenixWebsocket(this.config.url, { client_identifier: 'eve-chart-bot' }, this.config.timeout);
+      logger.info(`Connecting to Phoenix WebSocket at ${this.config.url}`, {
+        correlationId,
+        url: this.config.url,
+        timeout: this.config.timeout,
+      });
 
-    // Track connection status for metrics.
-    this.socket.onConnectedCallback = () => {
-      this.connected = true;
-      logger.info('WebSocket connected');
-    };
+      this.socket = new PhoenixWebsocket(
+        this.config.url, 
+        { client_identifier: 'eve-chart-bot' }, 
+        this.config.timeout
+      );
 
-    this.socket.onDisconnectedCallback = () => {
-      this.connected = false;
-      logger.warn('WebSocket disconnected – library will retry automatically');
-    };
+      // Track connection status for metrics.
+      this.socket.onConnectedCallback = () => {
+        this.connected = true;
+        logger.info('WebSocket connected', {
+          correlationId,
+        });
+      };
 
-    // Establish the low‑level connection.
-    await this.socket.connect();
+      this.socket.onDisconnectedCallback = () => {
+        this.connected = false;
+        logger.warn('WebSocket disconnected – library will retry automatically', {
+          correlationId,
+        });
+      };
 
-    // Join the lobby topic & attach broadcast handlers.
-    await this.joinLobby();
+      // Establish the low‑level connection.
+      await this.socket.connect();
+
+      // Join the lobby topic & attach broadcast handlers.
+      await this.joinLobby();
+      
+      logger.info('WebSocket connection established successfully', {
+        correlationId,
+      });
+    } catch (error) {
+      throw errorHandler.handleExternalServiceError(
+        error,
+        'WebSocket',
+        'connect',
+        {
+          correlationId,
+          operation: 'connect',
+          metadata: { url: this.config.url },
+        }
+      );
+    }
   }
 
   private async joinLobby(): Promise<void> {
@@ -225,34 +318,77 @@ export class WebSocketIngestionService {
    * ---------------------------------------------------------------- */
 
   private async subscribeToTrackedCharacters(): Promise<void> {
-    if (!this.socket) throw new Error('Socket not initialized');
-
-    const characters = await this.characterRepository.getAllCharacters();
-    const characterIds = characters.map(c => Number(c.eveId));
-
-    if (characterIds.length === 0) {
-      logger.warn('No tracked characters found');
-      return;
-    }
-
-    const preload = this.getPreloadConfig();
-    const payload: any = { character_ids: characterIds };
-    if (preload) payload.preload = preload;
-
-    logger.info(`Subscribing to ${characterIds.length} characters...`, {
-      sampleIds: characterIds.slice(0, 5),
-      preloadEnabled: !!preload,
-    });
-
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
+      if (!this.socket) {
+        throw new ExternalServiceError(
+          'WebSocket',
+          'Socket not initialized',
+          {
+            correlationId,
+            operation: 'subscribeToTrackedCharacters',
+          }
+        );
+      }
+
+      logger.debug('Getting tracked characters for subscription', {
+        correlationId,
+      });
+
+      const characters = await errorHandler.withRetry(
+        async () => {
+          return await this.characterRepository.getAllCharacters();
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'websocket.getTrackedCharacters',
+        }
+      );
+
+      const characterIds = characters.map(c => Number(c.eveId));
+
+      if (characterIds.length === 0) {
+        logger.warn('No tracked characters found', {
+          correlationId,
+        });
+        return;
+      }
+
+      const preload = this.getPreloadConfig();
+      const payload: any = { character_ids: characterIds };
+      if (preload) payload.preload = preload;
+
+      logger.info(`Subscribing to ${characterIds.length} characters...`, {
+        correlationId,
+        characterCount: characterIds.length,
+        sampleIds: characterIds.slice(0, 5),
+        preloadEnabled: !!preload,
+      });
+
       const startTime = Date.now();
-      const response = await this.socket.sendMessage(this.TOPIC, 'subscribe_characters', payload);
+      const response = await errorHandler.withRetry(
+        async () => {
+          return await this.socket!.sendMessage(this.TOPIC, 'subscribe_characters', payload);
+        },
+        3,
+        2000,
+        {
+          correlationId,
+          operation: 'websocket.subscribeCharacters',
+          metadata: { characterCount: characterIds.length },
+        }
+      );
+      
       const duration = Date.now() - startTime;
 
       characterIds.forEach(id => this.subscribedCharacters.add(id));
       logger.info(
         `Successfully subscribed to ${characterIds.length} characters in ${duration}ms${preload ? ' with preload' : ''}`,
         {
+          correlationId,
           response,
           characterIds: characterIds.slice(0, 10), // Log first 10 for debugging
           totalCount: characterIds.length,
@@ -260,12 +396,15 @@ export class WebSocketIngestionService {
         }
       );
     } catch (error) {
-      logger.error('Failed to subscribe to characters', {
+      throw errorHandler.handleExternalServiceError(
         error,
-        characterCount: characterIds.length,
-        errorMessage: error instanceof Error ? error.message : String(error),
-      });
-      throw error;
+        'WebSocket',
+        'subscribeToTrackedCharacters',
+        {
+          correlationId,
+          operation: 'subscribeToTrackedCharacters',
+        }
+      );
     }
   }
 

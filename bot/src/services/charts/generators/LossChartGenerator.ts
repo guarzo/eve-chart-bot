@@ -5,6 +5,7 @@ import { logger } from '../../../lib/logger';
 import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 import { LossFact } from '../../../domain/killmail/LossFact';
+import { BigIntTransformer } from '../../../utils/BigIntTransformer';
 
 /**
  * Generator for loss charts
@@ -37,11 +38,13 @@ export class LossChartGenerator extends BaseChartGenerator {
   }): Promise<ChartData> {
     const { startDate, endDate, characterGroups } = options;
 
-    // Get all character IDs from all groups
-    const characterIds = characterGroups.flatMap(group => group.characters.map(c => BigInt(c.eveId)));
+    // Get all character IDs from all groups using standardized transformer
+    const characterIds = characterGroups.flatMap(group => 
+      BigIntTransformer.migrateCharacterIds(group.characters)
+    );
 
-    // Debug: Log character IDs and time range
-    logger.info(`[LossChart] Character IDs: ${characterIds.map(String).join(', ')}`);
+    // Debug: Log character IDs and time range using standardized transformer
+    logger.info(`[LossChart] Character IDs: ${BigIntTransformer.arrayToStringArray(characterIds).join(', ')}`);
     logger.info(`[LossChart] Time range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
 
     // Get losses for all characters
@@ -68,9 +71,9 @@ export class LossChartGenerator extends BaseChartGenerator {
       logger.info(`[LossChart] No duplicate losses found by killmail_id`);
     }
 
-    // Group losses by character group
+    // Group losses by character group using standardized transformer
     const groupData = characterGroups.map(group => {
-      const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
+      const groupCharacterIds = BigIntTransformer.migrateCharacterIds(group.characters);
       const groupLosses = dedupedLosses.filter((loss: LossFact) => groupCharacterIds.includes(loss.characterId));
 
       // Debug: Log number of losses for this group
@@ -116,20 +119,9 @@ export class LossChartGenerator extends BaseChartGenerator {
     const totalHighValueLosses = groupsWithLosses.reduce((sum, data) => sum + data.highValueLosses, 0);
     const totalIskLost = groupsWithLosses.reduce((sum, data) => sum + data.totalValue, BigInt(0));
 
-    // Format ISK value
+    // Use standardized ISK formatting from BigIntTransformer
     const formatIsk = (value: bigint): string => {
-      const valueNumber = Number(value);
-      if (valueNumber >= 1_000_000_000_000) {
-        return `${(valueNumber / 1_000_000_000_000).toFixed(2)}T`;
-      } else if (valueNumber >= 1_000_000_000) {
-        return `${(valueNumber / 1_000_000_000).toFixed(2)}B`;
-      } else if (valueNumber >= 1_000_000) {
-        return `${(valueNumber / 1_000_000).toFixed(2)}M`;
-      } else if (valueNumber >= 1_000) {
-        return `${(valueNumber / 1_000).toFixed(2)}K`;
-      } else {
-        return valueNumber.toString();
-      }
+      return BigIntTransformer.formatIsk(value).replace(' ISK', '');
     };
 
     // Create chart data

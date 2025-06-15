@@ -1,5 +1,5 @@
 import { logger } from '../../lib/logger';
-import { flags } from '../../utils/feature-flags';
+import { flags } from '../../shared/utilities/feature-flags';
 import { RepositoryManager } from '../../infrastructure/repositories/RepositoryManager';
 import { CacheAdapter } from '../../cache/CacheAdapter';
 import { CacheRedisAdapter } from '../../cache/CacheRedisAdapter';

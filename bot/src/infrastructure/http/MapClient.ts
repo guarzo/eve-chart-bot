@@ -2,8 +2,10 @@ import { UnifiedESIClient } from './UnifiedESIClient';
 import { MapActivityResponseSchema, UserCharactersResponseSchema } from '../../types/ingestion';
 import { z } from 'zod';
 import { logger } from '../../lib/logger';
-import { RateLimiter } from '../../utils/rateLimiter';
-import { rateLimiterManager } from '../../utils/RateLimiterManager';
+import { RateLimiter } from '../../shared/performance/rateLimiter';
+import { rateLimiterManager } from '../../shared/performance/RateLimiterManager';
+import { ExternalServiceError, ValidationError } from '../../shared/errors';
+import * as crypto from 'crypto';
 
 // Infer types from schemas
 type MapActivityResponse = z.infer<typeof MapActivityResponseSchema>;
@@ -48,10 +50,44 @@ export class MapClient {
    * Fetch character activity data from the Map API
    */
   async getCharacterActivity(slug: string, days: number = 7, signal?: AbortSignal): Promise<MapActivityResponse> {
+    const correlationId = crypto.randomUUID();
+    
     try {
-      logger.info(`Fetching character activity for map: ${slug}, days: ${days}`);
+      // Validate input parameters
+      if (!slug || typeof slug !== 'string') {
+        throw ValidationError.invalidFormat(
+          'slug',
+          'non-empty string',
+          slug,
+          {
+            correlationId,
+            operation: 'map.getCharacterActivity',
+            metadata: { days },
+          }
+        );
+      }
+      
+      if (days <= 0 || days > 365) {
+        throw ValidationError.outOfRange(
+          'days',
+          1,
+          365,
+          days.toString(),
+          {
+            correlationId,
+            operation: 'map.getCharacterActivity',
+            metadata: { slug },
+          }
+        );
+      }
 
-      // Respect rate limit
+      logger.info('Fetching character activity from Map API', {
+        correlationId,
+        slug,
+        days,
+      });
+
+      // Respect rate limit with retry logic
       await this.rateLimiter.wait(signal);
 
       const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
@@ -65,40 +101,99 @@ export class MapClient {
       if (response) {
         const dataArray = this.getDataArray(response);
         const dataCount = dataArray.length;
-        logger.info(`Received ${dataCount} records in response`);
+        
+        logger.info('Received character activity data', {
+          correlationId,
+          dataCount,
+          slug,
+          days,
+        });
 
         // Log date range in the response
         if (dataArray.length > 0) {
           const dates = dataArray.map((item: any) => new Date(item.timestamp));
           const oldestDate = new Date(Math.min(...dates.map((d: Date) => d.getTime())));
           const newestDate = new Date(Math.max(...dates.map((d: Date) => d.getTime())));
-          logger.info(`Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`);
+          
+          logger.debug('Date range in response', {
+            correlationId,
+            oldestDate: oldestDate.toISOString(),
+            newestDate: newestDate.toISOString(),
+          });
         }
 
         // Try to validate the response against our schema
         try {
           const validated = MapActivityResponseSchema.parse(response);
-          logger.info(`Successfully validated response with ${validated.data.length} activity records`);
+          
+          logger.info('Successfully validated character activity response', {
+            correlationId,
+            validatedRecords: validated.data.length,
+          });
+          
           return validated;
         } catch (schemaError) {
-          logger.error(`Schema validation error for map activity response:`, schemaError);
-          // Return empty data array if validation fails
-          return { data: [] };
+          throw ValidationError.fromZodError(
+            schemaError,
+            {
+              correlationId,
+              operation: 'map.validate.characterActivity',
+              metadata: { 
+                slug, 
+                days, 
+                responseDataCount: dataArray.length 
+              },
+            }
+          );
         }
       }
 
-      logger.warn(`No data received from map API`);
+      logger.warn('No data received from Map API', {
+        correlationId,
+        slug,
+        days,
+      });
+      
       return { data: [] };
     } catch (error) {
-      logger.error(`Error fetching character activity from Map API:`, error);
-      throw error;
+      throw ExternalServiceError.mapApiError(
+        error instanceof Error ? error.message : 'Failed to get character activity',
+        `/api/map/character-activity?slug=${slug}&days=${days}`,
+        undefined,
+        {
+          correlationId,
+          operation: 'getCharacterActivity',
+          metadata: { slug, days },
+        },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
   async getUserCharacters(slug: string, signal?: AbortSignal): Promise<UserCharactersResponse> {
+    const correlationId = crypto.randomUUID();
+    
     try {
+      // Validate input parameters
+      if (!slug || typeof slug !== 'string') {
+        throw ValidationError.invalidFormat(
+          'slug',
+          'non-empty string',
+          slug,
+          {
+            correlationId,
+            operation: 'map.getUserCharacters',
+          }
+        );
+      }
+
+      logger.info('Fetching user characters from Map API', {
+        correlationId,
+        slug,
+      });
+
+      // Respect rate limit with retry logic
       await this.rateLimiter.wait(signal);
-      logger.info(`Fetching user characters for slug: ${slug}`);
 
       const response = await this.client.fetch<ApiResponse>('/api/map/user_characters', {
         headers: {
@@ -110,14 +205,41 @@ export class MapClient {
         signal,
       });
 
+      // Validate response against schema
       const parsedData = UserCharactersResponseSchema.parse(response);
-      logger.info(`Parsed ${parsedData.data.length} user entries`);
-      logger.info(`Total characters: ${parsedData.data.reduce((acc, user) => acc + user.characters.length, 0)}`);
+      const totalCharacters = parsedData.data.reduce((acc, user) => acc + user.characters.length, 0);
+      
+      logger.info('Successfully fetched and validated user characters', {
+        correlationId,
+        userEntries: parsedData.data.length,
+        totalCharacters,
+        slug,
+      });
 
       return parsedData;
     } catch (error) {
-      logger.error({ error, slug }, 'Failed to fetch user characters from Map API');
-      throw error;
+      if (error instanceof z.ZodError) {
+        throw ValidationError.fromZodError(
+          error,
+          {
+            correlationId,
+            operation: 'map.validate.userCharacters',
+            metadata: { slug },
+          }
+        );
+      }
+      
+      throw ExternalServiceError.mapApiError(
+        error instanceof Error ? error.message : 'Failed to get user characters',
+        '/api/map/user_characters',
+        undefined,
+        {
+          correlationId,
+          operation: 'getUserCharacters',
+          metadata: { slug },
+        },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 

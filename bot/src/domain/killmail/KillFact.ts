@@ -1,6 +1,6 @@
 import { BaseEntity } from '../BaseEntity';
-import { ensureRequiredBigInt, ensureBigInt } from '../../utils/conversion';
-import { validateRequired, validatePositive, validateNonNegative } from '../../utils/validation';
+import { ensureRequiredBigInt, ensureBigInt } from '../../shared/utilities/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../shared/validation/validation';
 
 /**
  * KillFact domain entity
@@ -105,11 +105,28 @@ export class KillFact extends BaseEntity {
   }
 
   /**
-   * Get the attackers for this kill
+   * Get the attackers for this kill (nullable return)
+   * Returns null if attackers are not loaded
    */
-  get attackers(): KillAttacker[] {
+  get attackers(): KillAttacker[] | null {
+    return this._attackers;
+  }
+
+  /**
+   * Get the attackers for this kill with safe access
+   * Returns empty array if attackers are not loaded
+   */
+  getAttackersSafe(): KillAttacker[] {
+    return this._attackers || [];
+  }
+
+  /**
+   * Get loaded attackers or throw error if not loaded
+   * Use this only when you're certain attackers should be loaded
+   */
+  getAttackersRequired(): KillAttacker[] {
     if (!this._attackers) {
-      throw new Error('Attackers not loaded for this kill');
+      throw new Error('Attackers not loaded for this kill - ensure relations are included in query');
     }
     return this._attackers;
   }
@@ -122,11 +139,20 @@ export class KillFact extends BaseEntity {
   }
 
   /**
-   * Get the victim for this kill
+   * Get the victim for this kill (nullable return)
+   * Returns null if victim is not loaded
    */
-  get victim(): KillVictim {
+  get victim(): KillVictim | null {
+    return this._victim;
+  }
+
+  /**
+   * Get loaded victim or throw error if not loaded
+   * Use this only when you're certain victim should be loaded
+   */
+  getVictimRequired(): KillVictim {
     if (!this._victim) {
-      throw new Error('Victim not loaded for this kill');
+      throw new Error('Victim not loaded for this kill - ensure relations are included in query');
     }
     return this._victim;
   }
@@ -154,11 +180,19 @@ export class KillFact extends BaseEntity {
 
   /**
    * Get the number of attackers on the killmail
-   * @throws Error if attackers are not loaded
+   * Returns 0 if attackers are not loaded
    */
   get attackerCount(): number {
+    return this._attackers?.length || 0;
+  }
+
+  /**
+   * Get the exact number of attackers (requires attackers to be loaded)
+   * @throws Error if attackers are not loaded
+   */
+  getAttackerCountRequired(): number {
     if (!this._attackers) {
-      throw new Error('Attackers not loaded for this kill');
+      throw new Error('Attackers not loaded for this kill - ensure relations are included in query');
     }
     return this._attackers.length;
   }
@@ -185,29 +219,60 @@ export class KillFact extends BaseEntity {
   }
 
   /**
+   * Explicitly load attackers for this kill
+   * This method should be used by repository layer to safely load relations
+   */
+  loadAttackers(attackers: KillAttacker[]): void {
+    this._attackers = attackers;
+  }
+
+  /**
+   * Explicitly load victim for this kill  
+   * This method should be used by repository layer to safely load relations
+   */
+  loadVictim(victim: KillVictim): void {
+    this._victim = victim;
+  }
+
+  /**
+   * Clear loaded relations (useful for memory management)
+   */
+  clearRelations(): void {
+    this._attackers = null;
+    this._victim = null;
+  }
+
+  /**
+   * Check if all relations are loaded
+   */
+  areRelationsLoaded(): boolean {
+    return this._attackers !== null && this._victim !== null;
+  }
+
+  /**
    * Create a KillFact domain entity from a database model
    */
   static fromModel(model: any, attackers?: any[], victim?: any): KillFact {
     const killFact = new KillFact({
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      killTime: model.kill_time,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      killTime: model.killTime,
       npc: model.npc,
       solo: model.solo,
       awox: model.awox,
-      shipTypeId: model.ship_type_id,
-      systemId: model.system_id,
+      shipTypeId: model.shipTypeId,
+      systemId: model.systemId,
       labels: model.labels ?? [],
-      totalValue: model.total_value,
+      totalValue: model.totalValue,
       points: model.points,
     });
 
     if (attackers) {
-      killFact.attackers = attackers.map(a => KillAttacker.fromModel(a));
+      killFact.loadAttackers(attackers.map(a => KillAttacker.fromModel(a)));
     }
 
     if (victim) {
-      killFact.victim = KillVictim.fromModel(victim);
+      killFact.loadVictim(KillVictim.fromModel(victim));
     }
 
     return killFact;
@@ -307,15 +372,15 @@ export class KillAttacker {
   static fromModel(model: any): KillAttacker {
     return new KillAttacker({
       id: model.id,
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      corporationId: model.corporation_id,
-      allianceId: model.alliance_id,
-      damageDone: model.damage_done,
-      finalBlow: model.final_blow,
-      securityStatus: model.security_status,
-      shipTypeId: model.ship_type_id,
-      weaponTypeId: model.weapon_type_id,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      corporationId: model.corporationId,
+      allianceId: model.allianceId,
+      damageDone: model.damageDone,
+      finalBlow: model.finalBlow,
+      securityStatus: model.securityStatus,
+      shipTypeId: model.shipTypeId,
+      weaponTypeId: model.weaponTypeId,
     });
   }
 }
@@ -386,12 +451,12 @@ export class KillVictim {
   static fromModel(model: any): KillVictim {
     return new KillVictim({
       id: model.id,
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      corporationId: model.corporation_id,
-      allianceId: model.alliance_id,
-      shipTypeId: model.ship_type_id,
-      damageTaken: model.damage_taken,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      corporationId: model.corporationId,
+      allianceId: model.allianceId,
+      shipTypeId: model.shipTypeId,
+      damageTaken: model.damageTaken,
     });
   }
 }

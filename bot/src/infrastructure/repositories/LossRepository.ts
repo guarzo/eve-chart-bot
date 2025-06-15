@@ -2,7 +2,8 @@ import { BaseRepository } from './BaseRepository';
 import { logger } from '../../lib/logger';
 import { LossFact } from '../../domain/killmail/LossFact';
 import { PrismaMapper } from '../mapper/PrismaMapper';
-import { buildWhereFilter } from '../../utils/query-helper';
+import { buildWhereFilter } from '../../shared/utilities/query-helper';
+import { errorHandler } from '../../shared/errors';
 
 /**
  * Repository for accessing ship loss data
@@ -19,21 +20,38 @@ export class LossRepository extends BaseRepository {
    * @param endDate End date for query range
    */
   async getLossesByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<number> {
-    return this.executeQuery(async () => {
-      logger.debug(`Fetching losses for character ${characterId} from ${startDate} to ${endDate}`);
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching losses for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
 
-      const where = buildWhereFilter({
-        character_id: characterId,
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      });
+        const where = buildWhereFilter({
+          characterId: characterId,
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
+        });
 
-      const result = await this.prisma.lossFact.count({ where });
+        const result = await this.prisma.lossFact.count({ where });
 
-      return result;
-    });
+        logger.debug('Successfully counted character losses', {
+          correlationId,
+          characterId: characterId.toString(),
+          lossCount: result,
+        });
+
+        return result;
+      },
+      'getLossesByCharacter',
+      correlationId
+    );
   }
 
   /**
@@ -49,24 +67,42 @@ export class LossRepository extends BaseRepository {
     endDate: Date,
     valueThreshold: bigint = BigInt(100000000) // 100M ISK default threshold
   ): Promise<number> {
-    return this.executeQuery(async () => {
-      logger.debug(`Fetching high value losses for character ${characterId} from ${startDate} to ${endDate}`);
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching high value losses for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          valueThreshold: valueThreshold.toString(),
+        });
 
-      const where = buildWhereFilter({
-        character_id: characterId,
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-        total_value: {
-          gte: valueThreshold,
-        },
-      });
+        const where = buildWhereFilter({
+          characterId: characterId,
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
+          totalValue: {
+            gte: valueThreshold,
+          },
+        });
 
-      const result = await this.prisma.lossFact.count({ where });
+        const result = await this.prisma.lossFact.count({ where });
 
-      return result;
-    });
+        logger.debug('Successfully counted high value character losses', {
+          correlationId,
+          characterId: characterId.toString(),
+          highValueLossCount: result,
+        });
+
+        return result;
+      },
+      'getHighValueLossesByCharacter',
+      correlationId
+    );
   }
 
   /**
@@ -76,27 +112,47 @@ export class LossRepository extends BaseRepository {
    * @param endDate End date for query range
    */
   async getTotalValueLostByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<bigint> {
-    return this.executeQuery(async () => {
-      logger.debug(`Fetching total value lost for character ${characterId} from ${startDate} to ${endDate}`);
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching total value lost for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
 
-      const where = buildWhereFilter({
-        character_id: characterId,
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      });
+        const where = buildWhereFilter({
+          characterId: characterId,
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
+        });
 
-      const results = await this.prisma.lossFact.findMany({
-        where,
-        select: {
-          total_value: true,
-        },
-      });
+        const results = await this.prisma.lossFact.findMany({
+          where,
+          select: {
+            totalValue: true,
+          },
+        });
 
-      // Sum up the total values
-      return results.reduce((sum, result) => sum + result.total_value, BigInt(0));
-    });
+        // Sum up the total values
+        const totalValue = results.reduce((sum, result) => sum + result.totalValue, BigInt(0));
+
+        logger.debug('Successfully calculated total value lost for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          recordCount: results.length,
+          totalValue: totalValue.toString(),
+        });
+
+        return totalValue;
+      },
+      'getTotalValueLostByCharacter',
+      correlationId
+    );
   }
 
   /**
@@ -114,34 +170,53 @@ export class LossRepository extends BaseRepository {
     highValueLosses: number;
     totalValueLost: bigint;
   }> {
-    return this.executeQuery(async () => {
-      logger.debug(`Fetching losses summary for ${characterIds.length} characters from ${startDate} to ${endDate}`);
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching losses summary for characters', {
+          correlationId,
+          characterCount: characterIds.length,
+          characterIds: characterIds.map(id => id.toString()),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
 
-      // Get all losses for these characters
-      const where = buildWhereFilter({
-        character_id: {
-          in: characterIds,
-        },
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      });
+        // Get all losses for these characters
+        const where = buildWhereFilter({
+          characterId: {
+            in: characterIds,
+          },
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
+        });
 
-      const losses = await this.prisma.lossFact.findMany({ where });
-      const lossFacts = PrismaMapper.mapArray(losses, LossFact);
+        const losses = await this.prisma.lossFact.findMany({ where });
+        const lossFacts = PrismaMapper.mapArray(losses, LossFact);
 
-      // Calculate summary
-      const totalLosses = lossFacts.length;
-      const highValueLosses = lossFacts.filter(loss => loss.totalValue >= BigInt(100000000)).length;
-      const totalValueLost = lossFacts.reduce((sum, loss) => sum + loss.totalValue, BigInt(0));
+        // Calculate summary
+        const totalLosses = lossFacts.length;
+        const highValueLosses = lossFacts.filter(loss => loss.totalValue >= BigInt(100000000)).length;
+        const totalValueLost = lossFacts.reduce((sum, loss) => sum + loss.totalValue, BigInt(0));
 
-      return {
-        totalLosses,
-        highValueLosses,
-        totalValueLost,
-      };
-    });
+        logger.debug('Successfully calculated losses summary for characters', {
+          correlationId,
+          totalLosses,
+          highValueLosses,
+          totalValueLost: totalValueLost.toString(),
+        });
+
+        return {
+          totalLosses,
+          highValueLosses,
+          totalValueLost,
+        };
+      },
+      'getLossesSummaryByCharacters',
+      correlationId
+    );
   }
 
   /**
@@ -149,17 +224,37 @@ export class LossRepository extends BaseRepository {
    * @param killmailId Killmail ID to look up
    */
   async getLoss(killmailId: bigint): Promise<LossFact | null> {
-    return this.executeQuery(async () => {
-      const loss = await this.prisma.lossFact.findUnique({
-        where: { killmail_id: killmailId },
-      });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching loss by killmail ID', {
+          correlationId,
+          killmailId: killmailId.toString(),
+        });
 
-      if (!loss) {
-        return null;
-      }
+        const loss = await this.prisma.lossFact.findUnique({
+          where: { killmailId: killmailId },
+        });
 
-      return PrismaMapper.map(loss, LossFact);
-    });
+        if (!loss) {
+          logger.debug('Loss not found for killmail ID', {
+            correlationId,
+            killmailId: killmailId.toString(),
+          });
+          return null;
+        }
+
+        logger.debug('Successfully fetched loss by killmail ID', {
+          correlationId,
+          killmailId: killmailId.toString(),
+        });
+
+        return PrismaMapper.map(loss, LossFact);
+      },
+      'getLoss',
+      correlationId
+    );
   }
 
   /**
@@ -169,22 +264,43 @@ export class LossRepository extends BaseRepository {
    * @param endDate End date for query range
    */
   async getLossesForCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<LossFact[]> {
-    return this.executeQuery(async () => {
-      const losses = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: characterId,
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        orderBy: {
-          kill_time: 'desc',
-        },
-      });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching losses for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
 
-      return PrismaMapper.mapArray(losses, LossFact);
-    });
+        const losses = await this.prisma.lossFact.findMany({
+          where: {
+            character_id: characterId,
+            kill_time: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+          orderBy: {
+            kill_time: 'desc',
+          },
+        });
+
+        const lossFacts = PrismaMapper.mapArray(losses, LossFact);
+
+        logger.debug('Successfully fetched losses for character', {
+          correlationId,
+          characterId: characterId.toString(),
+          lossCount: lossFacts.length,
+        });
+
+        return lossFacts;
+      },
+      'getLossesForCharacter',
+      correlationId
+    );
   }
 
   /**
@@ -192,51 +308,85 @@ export class LossRepository extends BaseRepository {
    * @param loss LossFact domain entity to save
    */
   async saveLoss(loss: LossFact): Promise<void> {
-    return this.executeQuery(async () => {
-      // Check if this character is tracked (exists in characters table)
-      const trackedCharacter = await this.prisma.character.findUnique({
-        where: { eveId: loss.characterId },
-        select: { eveId: true },
-      });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Saving loss record', {
+          correlationId,
+          killmailId: loss.killmailId.toString(),
+          characterId: loss.characterId.toString(),
+        });
 
-      if (!trackedCharacter) {
-        // Skip saving loss for untracked character
-        return;
-      }
+        // Check if this character is tracked (exists in characters table)
+        const trackedCharacter = await this.prisma.character.findUnique({
+          where: { eveId: loss.characterId },
+          select: { eveId: true },
+        });
 
-      const data = loss.toObject();
-      await this.prisma.lossFact.upsert({
-        where: { killmail_id: loss.killmailId },
-        update: {
-          kill_time: data.killTime,
-          system_id: data.systemId,
-          total_value: data.totalValue,
-          attacker_count: data.attackerCount,
-          labels: data.labels,
-          character_id: data.characterId,
-          ship_type_id: data.shipTypeId,
-        },
-        create: {
-          killmail_id: data.killmailId,
-          kill_time: data.killTime,
-          system_id: data.systemId,
-          total_value: data.totalValue,
-          attacker_count: data.attackerCount,
-          labels: data.labels,
-          character_id: data.characterId,
-          ship_type_id: data.shipTypeId,
-        },
-      });
-    });
+        if (!trackedCharacter) {
+          logger.debug('Skipping loss save for untracked character', {
+            correlationId,
+            characterId: loss.characterId.toString(),
+          });
+          return;
+        }
+
+        const data = loss.toObject();
+        await this.prisma.lossFact.upsert({
+          where: { killmail_id: loss.killmailId },
+          update: {
+            kill_time: data.killTime,
+            system_id: data.systemId,
+            total_value: data.totalValue,
+            attacker_count: data.attackerCount,
+            labels: data.labels,
+            character_id: data.characterId,
+            ship_type_id: data.shipTypeId,
+          },
+          create: {
+            killmail_id: data.killmailId,
+            kill_time: data.killTime,
+            system_id: data.systemId,
+            total_value: data.totalValue,
+            attacker_count: data.attackerCount,
+            labels: data.labels,
+            character_id: data.characterId,
+            ship_type_id: data.shipTypeId,
+          },
+        });
+
+        logger.debug('Successfully saved loss record', {
+          correlationId,
+          killmailId: loss.killmailId.toString(),
+          characterId: loss.characterId.toString(),
+        });
+      },
+      'saveLoss',
+      correlationId
+    );
   }
 
   /**
    * Delete all loss records
    */
   async deleteAllLosses(): Promise<void> {
-    await this.executeQuery(async () => {
-      await this.prisma.lossFact.deleteMany();
-    });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Deleting all loss records', { correlationId });
+
+        const result = await this.prisma.lossFact.deleteMany();
+
+        logger.debug('Successfully deleted all loss records', {
+          correlationId,
+          deletedCount: result.count,
+        });
+      },
+      'deleteAllLosses',
+      correlationId
+    );
   }
 
   /**
@@ -245,30 +395,64 @@ export class LossRepository extends BaseRepository {
    * @param endDate End date for query range
    */
   async getLossesByTimeRange(startDate: Date, endDate: Date): Promise<LossFact[]> {
-    return this.executeQuery(async () => {
-      const losses = await this.prisma.lossFact.findMany({
-        where: {
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        orderBy: {
-          kill_time: 'desc',
-        },
-      });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching losses by time range', {
+          correlationId,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+        });
 
-      return PrismaMapper.mapArray(losses, LossFact);
-    });
+        const losses = await this.prisma.lossFact.findMany({
+          where: {
+            kill_time: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
+          orderBy: {
+            kill_time: 'desc',
+          },
+        });
+
+        const lossFacts = PrismaMapper.mapArray(losses, LossFact);
+
+        logger.debug('Successfully fetched losses by time range', {
+          correlationId,
+          lossCount: lossFacts.length,
+        });
+
+        return lossFacts;
+      },
+      'getLossesByTimeRange',
+      correlationId
+    );
   }
 
   /**
    * Count total loss records
    */
   override async count(): Promise<number> {
-    return this.executeQuery(async () => {
-      return this.prisma.lossFact.count();
-    });
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Counting total loss records', { correlationId });
+
+        const count = await this.prisma.lossFact.count();
+
+        logger.debug('Successfully counted loss records', {
+          correlationId,
+          count,
+        });
+
+        return count;
+      },
+      'count',
+      correlationId
+    );
   }
 
   /**
@@ -280,32 +464,57 @@ export class LossRepository extends BaseRepository {
     endDate: Date,
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
-    return this.executeQuery(async () => {
-      // Find all losses for these characters in the date range
-      const losses = await this.prisma.lossFact.findMany({
-        where: {
-          character_id: {
-            in: characterIds.map(id => BigInt(id)),
+    const correlationId = errorHandler.createCorrelationId();
+    
+    return this.executeQuery(
+      async () => {
+        logger.debug('Fetching top ship types lost', {
+          correlationId,
+          characterCount: characterIds.length,
+          characterIds: characterIds.map(id => id.toString()),
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          limit,
+        });
+
+        // Find all losses for these characters in the date range
+        const losses = await this.prisma.lossFact.findMany({
+          where: {
+            character_id: {
+              in: characterIds.map(id => BigInt(id)),
+            },
+            kill_time: {
+              gte: startDate,
+              lte: endDate,
+            },
           },
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
+          select: {
+            ship_type_id: true,
           },
-        },
-        select: {
-          ship_type_id: true,
-        },
-      });
-      // Count occurrences of each ship type
-      const shipTypeCounts = new Map<string, number>();
-      for (const loss of losses) {
-        const shipTypeId = loss.ship_type_id.toString();
-        shipTypeCounts.set(shipTypeId, (shipTypeCounts.get(shipTypeId) ?? 0) + 1);
-      }
-      return Array.from(shipTypeCounts.entries())
-        .map(([shipTypeId, count]) => ({ shipTypeId, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, limit);
-    });
+        });
+        
+        // Count occurrences of each ship type
+        const shipTypeCounts = new Map<string, number>();
+        for (const loss of losses) {
+          const shipTypeId = loss.ship_type_id.toString();
+          shipTypeCounts.set(shipTypeId, (shipTypeCounts.get(shipTypeId) ?? 0) + 1);
+        }
+        
+        const topShipTypes = Array.from(shipTypeCounts.entries())
+          .map(([shipTypeId, count]) => ({ shipTypeId, count }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, limit);
+
+        logger.debug('Successfully fetched top ship types lost', {
+          correlationId,
+          totalShipTypes: shipTypeCounts.size,
+          topShipTypesCount: topShipTypes.length,
+        });
+
+        return topShipTypes;
+      },
+      'getTopShipTypesLost',
+      correlationId
+    );
   }
 }

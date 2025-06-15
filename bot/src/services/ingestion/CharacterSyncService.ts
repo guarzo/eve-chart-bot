@@ -7,6 +7,7 @@ import { MapClient } from '../../infrastructure/http/MapClient';
 import { PrismaClient } from '@prisma/client';
 import prisma from '../../infrastructure/persistence/client';
 import { Configuration } from '../../config';
+import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../lib/errors';
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;
@@ -29,40 +30,102 @@ export class CharacterSyncService {
    * Start the character sync service
    */
   public async start(): Promise<void> {
-    logger.info('Starting character sync service...');
-
-    const mapName = Configuration.apis.map.name;
-    if (!mapName) {
-      logger.warn('MAP_NAME environment variable not set, skipping character sync');
-      return;
-    }
-
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
+      logger.info('Starting character sync service...', {
+        correlationId,
+      });
+
+      const mapName = Configuration.apis.map.name;
+      if (!mapName) {
+        logger.warn('MAP_NAME environment variable not set, skipping character sync', {
+          correlationId,
+        });
+        return;
+      }
+
+      // Validate map name
+      if (typeof mapName !== 'string' || mapName.trim().length === 0) {
+        throw ValidationError.invalidFormat(
+          'mapName',
+          'non-empty string',
+          mapName,
+          {
+            correlationId,
+            operation: 'characterSync.start',
+          }
+        );
+      }
+
+      logger.debug(`Fetching character data for map ${mapName}`, {
+        correlationId,
+        mapName,
+      });
+
       // Fetch map data once and use it for both operations
-      const mapData = await retryOperation(
-        () => this.map.getUserCharacters(mapName),
-        `Fetching character data for map ${mapName}`,
+      const mapData = await errorHandler.withRetry(
+        async () => {
+          const result = await this.map.getUserCharacters(mapName);
+          if (!result) {
+            throw new ExternalServiceError(
+              'Map API',
+              'No data returned from Map API',
+              {
+                correlationId,
+                operation: 'getUserCharacters',
+                metadata: { mapName },
+              }
+            );
+          }
+          return result;
+        },
+        this.maxRetries,
+        this.retryDelay,
         {
-          maxRetries: this.maxRetries,
-          initialRetryDelay: this.retryDelay,
-          timeout: 30000,
+          correlationId,
+          operation: 'characterSync.getUserCharacters',
+          metadata: { mapName },
         }
       );
 
       if (!mapData?.data || !Array.isArray(mapData.data)) {
-        logger.warn(`No valid character data available for map ${mapName}`);
+        logger.warn(`No valid character data available for map ${mapName}`, {
+          correlationId,
+          mapName,
+          hasData: !!mapData,
+          dataType: typeof mapData?.data,
+        });
         return;
       }
+
+      logger.debug(`Retrieved character data for map ${mapName}`, {
+        correlationId,
+        mapName,
+        userCount: mapData.data.length,
+      });
 
       const characterSyncResults = await this.syncUserCharacters(mapData);
       const groupResults = await this.createCharacterGroups(mapData, mapName);
 
       logger.info(
-        `Character sync service started successfully - Characters: ${characterSyncResults.total} total (${characterSyncResults.synced} synced, ${characterSyncResults.skipped} skipped, ${characterSyncResults.errors} errors), Groups: ${groupResults.total} total (${groupResults.created} created, ${groupResults.updated} updated)`
+        `Character sync service started successfully - Characters: ${characterSyncResults.total} total (${characterSyncResults.synced} synced, ${characterSyncResults.skipped} skipped, ${characterSyncResults.errors} errors), Groups: ${groupResults.total} total (${groupResults.created} created, ${groupResults.updated} updated)`,
+        {
+          correlationId,
+          mapName,
+          characterSyncResults,
+          groupResults,
+        }
       );
     } catch (error) {
-      logger.error(`Error during character sync: ${error}`);
-      throw error;
+      throw errorHandler.handleError(
+        error,
+        {
+          correlationId,
+          operation: 'start',
+          metadata: { mapName: Configuration.apis.map.name },
+        }
+      );
     }
   }
 
@@ -72,21 +135,42 @@ export class CharacterSyncService {
     skipped: number;
     errors: number;
   }> {
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
+      // Validate input
       if (!mapData?.data || !Array.isArray(mapData.data)) {
-        logger.warn(`No valid character data available`);
+        logger.warn(`No valid character data available`, {
+          correlationId,
+          hasMapData: !!mapData,
+          dataType: typeof mapData?.data,
+        });
         return { total: 0, synced: 0, skipped: 0, errors: 0 };
       }
+
+      logger.info(`Syncing user characters from map data`, {
+        correlationId,
+        userCount: mapData.data.length,
+      });
 
       // Extract unique characters from the map data
       const uniqueCharacters = new Map();
       for (const user of mapData.data) {
+        if (!user.characters || !Array.isArray(user.characters)) {
+          continue;
+        }
+        
         for (const character of user.characters) {
           if (character.eve_id) {
             uniqueCharacters.set(character.eve_id, character);
           }
         }
       }
+
+      logger.debug(`Extracted ${uniqueCharacters.size} unique characters`, {
+        correlationId,
+        uniqueCharacterCount: uniqueCharacters.size,
+      });
 
       // Track sync statistics
       let syncedCount = 0;
@@ -104,19 +188,40 @@ export class CharacterSyncService {
           }
         } catch (error) {
           errorCount++;
-          logger.error(`Error syncing character ${eveId}: ${error}`);
+          logger.error(`Error syncing character ${eveId}`, {
+            correlationId,
+            eveId,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
         }
       }
 
-      return {
+      const results = {
         total: uniqueCharacters.size,
         synced: syncedCount,
         skipped: skippedCount,
         errors: errorCount,
       };
-    } catch (error: any) {
-      logger.error(`Error syncing user characters: ${error.message}`);
-      throw error;
+
+      logger.info(`Character sync completed`, {
+        correlationId,
+        ...results,
+      });
+
+      return results;
+    } catch (error) {
+      throw errorHandler.handleError(
+        error,
+        {
+          correlationId,
+          operation: 'syncUserCharacters',
+          metadata: { 
+            hasMapData: !!mapData,
+            userCount: mapData?.data?.length,
+          },
+        }
+      );
     }
   }
 
@@ -172,7 +277,7 @@ export class CharacterSyncService {
         if (existingGroup) {
           // Use existing group
           groupId = existingGroup.id;
-          groupName = existingGroup.map_name;
+          groupName = existingGroup.mapName;
 
           // Check if we need to update the main character
           // Use the main_character_eve_id from API, or fall back to first character if null
@@ -197,7 +302,7 @@ export class CharacterSyncService {
 
           const group = await this.prisma.characterGroup.create({
             data: {
-              map_name: mapName, // Use the MAP_NAME environment variable
+              mapName: mapName, // Use the MAP_NAME environment variable
               mainCharacterId: mainCharacterId,
             },
           });
@@ -230,28 +335,85 @@ export class CharacterSyncService {
   }
 
   private async syncCharacter(eveId: string, mapCharacterData: any): Promise<'synced' | 'skipped'> {
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
+      // Validate inputs
+      if (!eveId || typeof eveId !== 'string') {
+        throw ValidationError.missingRequiredField(
+          'eveId',
+          {
+            correlationId,
+            operation: 'characterSync.syncCharacter',
+          }
+        );
+      }
+
+      if (!mapCharacterData) {
+        throw ValidationError.missingRequiredField(
+          'mapCharacterData',
+          {
+            correlationId,
+            operation: 'characterSync.syncCharacter',
+            metadata: { eveId },
+          }
+        );
+      }
+
+      logger.debug(`Syncing character ${eveId}`, {
+        correlationId,
+        eveId,
+        corporationId: mapCharacterData.corporation_id,
+      });
+
       // Check if character already exists
-      const existingCharacter = await this.characterRepository.getCharacter(BigInt(eveId));
+      const existingCharacter = await errorHandler.withRetry(
+        async () => {
+          return await this.characterRepository.getCharacter(BigInt(eveId));
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'characterSync.getExistingCharacter',
+          metadata: { eveId },
+        }
+      );
 
       let characterName: string;
       if (existingCharacter) {
         // Use existing name for updates
         characterName = existingCharacter.name;
+        logger.debug(`Using existing character name: ${characterName}`, {
+          correlationId,
+          eveId,
+          characterName,
+        });
       } else {
         // Get character name from ESI only for new characters
-        const esiData = await retryOperation(
-          () => this.esiService.getCharacter(parseInt(eveId)),
-          `Fetching character name for ${eveId}`,
+        logger.debug(`Fetching character name from ESI for new character ${eveId}`, {
+          correlationId,
+          eveId,
+        });
+        
+        const esiData = await errorHandler.withRetry(
+          async () => {
+            return await this.esiService.getCharacter(parseInt(eveId));
+          },
+          this.maxRetries,
+          this.retryDelay,
           {
-            maxRetries: this.maxRetries,
-            initialRetryDelay: this.retryDelay,
-            timeout: 30000,
+            correlationId,
+            operation: 'characterSync.getCharacterFromESI',
+            metadata: { eveId },
           }
         );
 
         if (!esiData) {
-          logger.warn(`No ESI data available for character ${eveId}`);
+          logger.warn(`No ESI data available for character ${eveId}`, {
+            correlationId,
+            eveId,
+          });
           return 'skipped';
         }
         characterName = esiData.name;
@@ -269,20 +431,54 @@ export class CharacterSyncService {
         updatedAt: new Date(),
       });
 
-      // Save character using repository
-      await this.characterRepository.upsertCharacter({
-        eveId: BigInt(character.eveId),
-        name: character.name,
+      logger.debug(`Upserting character ${eveId}`, {
+        correlationId,
+        eveId,
+        characterName: character.name,
         corporationId: character.corporationId,
-        corporationTicker: character.corporationTicker,
-        allianceId: character.allianceId,
-        allianceTicker: character.allianceTicker,
-        characterGroupId: character.characterGroupId,
       });
+
+      // Save character using repository
+      await errorHandler.withRetry(
+        async () => {
+          await this.characterRepository.upsertCharacter({
+            eveId: BigInt(character.eveId),
+            name: character.name,
+            corporationId: character.corporationId,
+            corporationTicker: character.corporationTicker,
+            allianceId: character.allianceId,
+            allianceTicker: character.allianceTicker,
+            characterGroupId: character.characterGroupId,
+          });
+        },
+        3,
+        1000,
+        {
+          correlationId,
+          operation: 'characterSync.upsertCharacter',
+          metadata: { eveId, characterName },
+        }
+      );
+      
+      logger.debug(`Successfully synced character ${eveId}`, {
+        correlationId,
+        eveId,
+        characterName,
+      });
+      
       return 'synced';
-    } catch (error: any) {
-      logger.error(`Error syncing character ${eveId}: ${error.message}`);
-      throw error;
+    } catch (error) {
+      throw errorHandler.handleError(
+        error,
+        {
+          correlationId,
+          operation: 'syncCharacter',
+          metadata: { 
+            eveId,
+            corporationId: mapCharacterData?.corporation_id,
+          },
+        }
+      );
     }
   }
 

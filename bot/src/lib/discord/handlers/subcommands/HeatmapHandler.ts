@@ -4,6 +4,7 @@ import { ChartData, ChartOptions } from '../../../../types/chart';
 import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { ChartFactory } from '../../../../services/charts';
+import { errorHandler, ChartError, ValidationError } from '../../../errors';
 
 /**
  * Handler for the /charts heatmap command
@@ -17,39 +18,78 @@ export class HeatmapHandler extends BaseChartHandler {
   async handle(interaction: CommandInteraction): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
+    const correlationId = errorHandler.createCorrelationId();
+    
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
+      
+      // Validate time parameter
+      const timeValue = parseInt(time, 10);
+      if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
+        throw ValidationError.outOfRange(
+          'time',
+          1,
+          365,
+          time,
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'heatmap_command',
+            metadata: { interactionId: interaction.id },
+          }
+        );
+      }
+      
       const { startDate, endDate } = this.getTimeRange(time);
 
-      logger.info(`Generating heatmap chart for ${time} days`);
+      logger.info(`Generating heatmap chart for ${time} days`, { correlationId });
 
       // Get character groups
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        await interaction.editReply({
-          content: 'No character groups found. Please add characters to groups first.',
-        });
-        return;
+        throw ChartError.noDataError(
+          'No character groups found',
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'heatmap_command',
+            metadata: { interactionId: interaction.id },
+          }
+        );
       }
 
       // Get the chart generator from the factory
       const heatmapGenerator = ChartFactory.createGenerator('heatmap');
 
-      // Generate chart data
-      const chartData = await heatmapGenerator.generateChart({
-        characterGroups: groups,
-        startDate,
-        endDate,
-        displayType: 'heatmap',
-      });
+      // Generate chart data with retry mechanism
+      const chartData = await errorHandler.withRetry(
+        () => heatmapGenerator.generateChart({
+          characterGroups: groups,
+          startDate,
+          endDate,
+          displayType: 'heatmap',
+        }),
+        {
+          maxRetries: 2,
+          correlationId,
+          context: {
+            operation: 'heatmap_chart_generation',
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            metadata: { interactionId: interaction.id, timeRange: time },
+          },
+        }
+      );
 
       // Render chart to buffer
-      logger.info('Rendering heatmap chart');
-      const buffer = await this.renderChart(chartData);
+      logger.info('Rendering heatmap chart', { correlationId });
+      const buffer = await this.renderChart(chartData, correlationId);
 
       // Send the chart with summary
       await interaction.editReply({
@@ -57,8 +97,15 @@ export class HeatmapHandler extends BaseChartHandler {
         files: [{ attachment: buffer, name: 'heatmap-chart.png' }],
       });
 
-      logger.info('Successfully sent heatmap chart');
+      logger.info('Successfully sent heatmap chart', { correlationId });
     } catch (error) {
+      logger.error('Error in heatmap command handler', { 
+        error, 
+        correlationId, 
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        metadata: { interactionId: interaction.id }
+      });
       await this.handleError(interaction, error);
     }
   }
@@ -66,7 +113,7 @@ export class HeatmapHandler extends BaseChartHandler {
   /**
    * Render chart to buffer using appropriate options
    */
-  private async renderChart(chartData: ChartData): Promise<Buffer> {
+  private async renderChart(chartData: ChartData, correlationId?: string): Promise<Buffer> {
     const options: ChartOptions = {
       responsive: true,
       maintainAspectRatio: false,
@@ -109,6 +156,7 @@ export class HeatmapHandler extends BaseChartHandler {
 
     // Use a square canvas for heatmap display
     const renderer = new ChartRenderer(2400, 2400);
+    logger.debug('Rendering heatmap chart to buffer', { correlationId });
     return renderer.renderToBuffer(chartData, options);
   }
 }

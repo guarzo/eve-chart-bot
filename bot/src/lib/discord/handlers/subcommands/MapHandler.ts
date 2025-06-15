@@ -4,6 +4,7 @@ import { ChartData } from '../../../../types/chart';
 import { ChartRenderer } from '../../../../services/ChartRenderer';
 import { logger } from '../../../logger';
 import { ChartFactory } from '../../../../services/charts';
+import { errorHandler, ChartError, ValidationError } from '../../../errors';
 
 /**
  * Handler for the /charts map command
@@ -19,36 +20,70 @@ export class MapHandler extends BaseChartHandler {
   async handle(interaction: CommandInteraction): Promise<void> {
     if (!interaction.isChatInputCommand()) return;
 
+    const correlationId = errorHandler.createCorrelationId();
     const startTime = Date.now();
 
     try {
-      logger.info('Starting map activity chart generation');
-      logger.info(
-        `MapHandler - About to defer reply. Interaction state: replied=${interaction.replied}, deferred=${interaction.deferred}, id=${interaction.id}`
-      );
-      logger.info(`MapHandler - Interaction created at: ${interaction.createdAt}, current time: ${new Date()}`);
-      logger.info(`MapHandler - Time since interaction created: ${Date.now() - interaction.createdTimestamp}ms`);
+      logger.info('Starting map activity chart generation', {
+        correlationId,
+        userId: interaction.user.id,
+        guildId: interaction.guildId,
+        interactionId: interaction.id,
+      });
 
       await interaction.deferReply();
-      logger.info(`Deferred reply after ${Date.now() - startTime}ms`);
+      logger.info(`Deferred reply after ${Date.now() - startTime}ms`, { correlationId });
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
+      
+      // Validate time parameter
+      const timeValue = parseInt(time, 10);
+      if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
+        throw ValidationError.outOfRange(
+          'time',
+          1,
+          365,
+          time,
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'map_command',
+            metadata: { interactionId: interaction.id },
+          }
+        );
+      }
+
       const { startDate, endDate } = this.getTimeRange(time);
 
-      logger.info(`Generating map activity chart for ${time} days`);
+      logger.info(`Generating map activity chart for ${time} days`, {
+        correlationId,
+        timePeriod: time,
+        dateRange: `${startDate.toISOString()} to ${endDate.toISOString()}`,
+      });
 
-      // Get character groups
-      logger.info('Fetching character groups...');
+      // Get character groups with timing
+      logger.info('Fetching character groups...', { correlationId });
       const groupsStartTime = Date.now();
       const groups = await this.getCharacterGroups();
-      logger.info(`Got ${groups.length} character groups after ${Date.now() - groupsStartTime}ms`);
+      logger.info(`Got ${groups.length} character groups after ${Date.now() - groupsStartTime}ms`, {
+        correlationId,
+        groupCount: groups.length,
+        fetchTime: Date.now() - groupsStartTime,
+      });
 
       if (groups.length === 0) {
-        await interaction.editReply({
-          content: 'No character groups found. Please add characters to groups first.',
-        });
-        return;
+        throw ChartError.noDataError(
+          'map',
+          'No character groups found. Please add characters to groups first.',
+          {
+            correlationId,
+            userId: interaction.user.id,
+            guildId: interaction.guildId || undefined,
+            operation: 'map_chart_generation',
+          }
+        );
       }
 
       // Get the chart generator from the factory
