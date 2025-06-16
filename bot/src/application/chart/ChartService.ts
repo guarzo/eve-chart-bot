@@ -131,7 +131,7 @@ export class ChartService {
           );
 
           shipData = topShips.map(ship => ({
-            shipName: ship.shipTypeId, // In a real implementation, this would be mapped to ship names from ESI
+            shipName: ship.shipTypeId.toString(), // In a real implementation, this would be mapped to ship names from ESI
             count: ship.count,
           }));
 

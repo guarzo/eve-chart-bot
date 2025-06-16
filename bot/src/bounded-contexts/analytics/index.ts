@@ -11,9 +11,17 @@ export {
   type KillDataPoint,
   type LossDataPoint 
 } from './domain/services/ChartDataProcessor';
+export * from './domain/services/ChartProcessorFactory';
+export type { IChartDataProcessor } from './domain/services/IChartDataProcessor';
 export * from './domain/services/processors/KillsDataProcessor';
 export * from './domain/services/processors/LossDataProcessor';
 export * from './domain/services/processors/EfficiencyDataProcessor';
+export * from './domain/services/processors/HeatmapDataProcessor';
+export * from './domain/services/processors/ShipTypesDataProcessor';
+export * from './domain/services/processors/TrendDataProcessor';
+export * from './domain/services/processors/RatioDataProcessor';
+export * from './domain/services/processors/DistributionDataProcessor';
+export * from './domain/services/processors/CorpsDataProcessor';
 
 // Application exports  
 export * from './application/use-cases/GenerateChartUseCase';

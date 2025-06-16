@@ -29,9 +29,6 @@ export * from './performance';
 // General utilities
 export * from './utilities';
 
-// Cache utilities
-export * from './cache';
-
 // HTTP utilities
 export * from './http';
 

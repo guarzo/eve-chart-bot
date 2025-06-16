@@ -1,4 +1,4 @@
-import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { ChartData } from '../../../types/chart';
 
 /**
  * Utilities for creating chart layouts

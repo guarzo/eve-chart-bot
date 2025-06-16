@@ -3,7 +3,7 @@
  * Orchestrates all chart generation operations in a single, cohesive service
  */
 
-import { IChartService, IChartRenderer, IChartDataProcessor } from './IChartService';
+import { IChartService, IChartRenderer } from './IChartService';
 import { ChartConfiguration } from '../../domain/value-objects/ChartConfiguration';
 import { ChartData } from '../../domain/value-objects/ChartData';
 import { OperationResult, ChartType } from '../../../../shared/types/common';
@@ -215,7 +215,7 @@ export class UnifiedChartService implements IChartService {
   /**
    * Validate chart configuration
    */
-  async validateConfiguration(config: ChartConfiguration): Promise<boolean> {
+  async validateConfiguration(_config: ChartConfiguration): Promise<boolean> {
     try {
       // Configuration validates itself in constructor
       // Additional async validation could go here

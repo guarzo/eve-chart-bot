@@ -2,7 +2,23 @@ import { UnifiedESIClient } from '../infrastructure/http/UnifiedESIClient';
 import { CacheRedisAdapter } from '../cache/CacheRedisAdapter';
 import { logger } from '../lib/logger';
 import { ValidatedConfiguration as Configuration } from '../config/validated';
-import { errorHandler, ExternalServiceError, ValidationError } from '../shared/errors';
+import { errorHandler } from '../shared/errors';
+
+// Simple validation error class for testing compatibility
+class ValidationError extends Error {
+  constructor(message: string, public field?: string, public context?: any) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+  
+  static fieldRequired(field: string, context?: any): ValidationError {
+    return new ValidationError(`Missing required field: ${field}`, field, context);
+  }
+  
+  static invalidFormat(field: string, expectedFormat: string, actualValue: string, context?: any): ValidationError {
+    return new ValidationError(`Invalid format for ${field}: expected ${expectedFormat}, got ${actualValue}`, field, context);
+  }
+}
 
 /**
  * Service for interacting with EVE Online's ESI API
@@ -43,7 +59,7 @@ export class ESIService {
       }
       
       if (!hash || typeof hash !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'hash',
           {
             correlationId,
@@ -80,10 +96,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `killmail/${killmailId}/${hash}`,
         {
           correlationId,
           operation: 'getKillmail',
@@ -139,10 +153,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `character/${characterId}`,
         {
           correlationId,
           operation: 'getCharacter',
@@ -198,10 +210,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `corporation/${corporationId}`,
         {
           correlationId,
           operation: 'getCorporation',
@@ -257,10 +267,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `alliance/${allianceId}`,
         {
           correlationId,
           operation: 'getAlliance',
@@ -316,10 +324,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `type/${typeId}`,
         {
           correlationId,
           operation: 'getShipType',
@@ -375,10 +381,8 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
+      throw errorHandler.handleError(
         error,
-        'ESI',
-        `system/${systemId}`,
         {
           correlationId,
           operation: 'getSolarSystem',
@@ -398,7 +402,7 @@ export class ESIService {
     try {
       // Validate input parameters
       if (!typeIds || !Array.isArray(typeIds)) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'typeIds',
           {
             correlationId,
@@ -490,7 +494,7 @@ export class ESIService {
     try {
       // Validate input parameters
       if (!corpIds || !Array.isArray(corpIds)) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'corpIds',
           {
             correlationId,

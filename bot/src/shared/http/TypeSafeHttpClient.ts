@@ -7,7 +7,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { z } from 'zod';
 import { logger } from '../../lib/logger';
 import { ExternalServiceError, ValidationError } from '../errors';
-import { HttpClientConfig, ApiResponse, ApiErrorResponse } from '../types/api';
+import { HttpClientConfig } from '../types/api';
 import * as crypto from 'crypto';
 
 /**
@@ -188,7 +188,13 @@ export class TypeSafeHttpClient {
 
       throw ValidationError.fromZodError(
         error as z.ZodError,
-        `Invalid response format from ${response.config.url}`
+        {
+          operation: 'response_validation',
+          metadata: {
+            url: response.config.url,
+            message: `Invalid response format from ${response.config.url}`
+          }
+        }
       );
     }
   }
@@ -244,16 +250,21 @@ export class TypeSafeHttpClient {
       const message = error.response?.data?.message ?? error.message;
       
       return new ExternalServiceError(
+        'EXTERNAL_API',
         `API Error: ${message}`,
-        this.config.baseURL,
-        { correlationId, method, url, status }
+        url,
+        status,
+        { correlationId, metadata: { method, url } }
       );
     }
 
     return new ExternalServiceError(
+      'EXTERNAL_API',
       `Network Error: ${error.message}`,
-      this.config.baseURL,
-      { correlationId, method, url, cause: error }
+      url,
+      undefined,
+      { correlationId, metadata: { method: method as string, url } },
+      error
     );
   }
 

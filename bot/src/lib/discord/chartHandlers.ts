@@ -1,11 +1,11 @@
 import { CommandInteraction } from 'discord.js';
-import { logger } from '../logger';
-import { ChartService } from '../../services/ChartService';
-import { ChartRenderer } from '../../services/ChartRenderer';
+// import { logger } from '../logger';
+// import { ChartService } from '../../application/chart/ChartService';
+// import { ChartRenderer } from '../../services/ChartRenderer';
 import { ChartsCommandHandler } from './handlers/ChartsCommandHandler';
 
-const chartService = new ChartService();
-const chartRenderer = new ChartRenderer();
+// const chartService = new ChartService();
+// const chartRenderer = new ChartRenderer();
 const chartsCommandHandler = new ChartsCommandHandler();
 
 /**
@@ -18,6 +18,8 @@ export async function handleChartsCommand(interaction: CommandInteraction) {
 }
 
 // Legacy handlers kept for backward compatibility
+// NOTE: These are commented out as they use outdated ChartService API
+/*
 export async function handleKillsCommand(interaction: CommandInteraction) {
   if (!interaction.isChatInputCommand()) return;
 
@@ -185,5 +187,6 @@ async function handleLegacyMapCommand(interaction: CommandInteraction, displayTy
 // Helper function for getting character data
 async function getTrackedCharacters(): Promise<bigint[]> {
   const characters = await chartService.getTrackedCharacters();
-  return characters.map(c => BigInt(c.eveId));
+  return characters.map((c: any) => BigInt(c.eveId));
 }
+*/

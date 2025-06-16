@@ -1,7 +1,7 @@
 import { BaseChartHandler } from './BaseChartHandler';
 import { CommandInteraction, EmbedBuilder } from 'discord.js';
 import { logger } from '../../../logger';
-import { errorHandler, ChartError, ValidationError } from '../../../../shared/errors';
+import { errorHandler } from '../../../../shared/errors';
 
 /**
  * Handler for the /charts list command

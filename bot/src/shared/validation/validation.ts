@@ -286,7 +286,7 @@ export const FilterSchema = z.object({
  * Validation helper functions using Zod
  */
 
-export function validateWithSchema<T>(schema: z.ZodSchema<T>, data: unknown, entityName?: string): T {
+export function validateWithSchema<T>(schema: z.ZodSchema<T>, data: unknown, _entityName?: string): T {
   try {
     return schema.parse(data);
   } catch (error) {

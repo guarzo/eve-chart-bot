@@ -1,6 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { errorHandler, DatabaseError } from '../index';
-import { logger } from '../../logger';
+import { logger } from '../../../lib/logger';
 
 /**
  * Example: Enhanced repository with standardized error handling
@@ -20,7 +20,11 @@ export class EnhancedKillRepository {
         async () => {
           const result = await this.prisma.killFact.findMany({
             where: {
-              characterId: { in: characterIds },
+              characters: {
+                some: {
+                  characterId: { in: characterIds }
+                }
+              },
               killTime: { gte: startDate, lte: endDate },
             },
             include: {
@@ -54,13 +58,14 @@ export class EnhancedKillRepository {
         }
       );
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'select',
-        'kill_fact',
-        characterIds[0]?.toString(),
         {
           correlationId,
+          operation: 'select',
+          metadata: { table: 'kill_fact', characterId: characterIds[0]?.toString() }
+        },
+        {
           includeStackTrace: true,
         }
       );
@@ -102,12 +107,13 @@ export class EnhancedKillRepository {
       }
 
       // Generic database error
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'create',
-        'kill_fact',
-        killData.character_id?.toString(),
-        { correlationId }
+        {
+          correlationId,
+          operation: 'create',
+          metadata: { table: 'kill_fact', characterId: killData.character_id?.toString() }
+        }
       );
     }
   }
@@ -120,7 +126,7 @@ export class EnhancedKillRepository {
       return await this.prisma.$transaction(async (tx) => {
         // Check if character exists first
         const existingCharacter = await tx.character.findUnique({
-          where: { id: characterId },
+          where: { eveId: characterId },
         });
 
         if (!existingCharacter) {
@@ -133,7 +139,7 @@ export class EnhancedKillRepository {
 
         // Perform the update
         const updated = await tx.character.update({
-          where: { id: characterId },
+          where: { eveId: characterId },
           data: updateData,
         });
 
@@ -150,12 +156,13 @@ export class EnhancedKillRepository {
         throw error; // Re-throw our custom errors
       }
 
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'update',
-        'character',
-        characterId.toString(),
-        { correlationId }
+        {
+          correlationId,
+          operation: 'update',
+          metadata: { table: 'character', characterId: characterId.toString() }
+        }
       );
     }
   }
@@ -203,14 +210,13 @@ export class EnhancedKillRepository {
         batchCount: Math.ceil(killsData.length / batchSize),
       });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'create',
-        'kill_fact',
-        undefined,
         {
           correlationId,
+          operation: 'bulk_create',
           metadata: {
+            table: 'kill_fact',
             totalRecords: killsData.length,
             batchSize,
           },
@@ -270,18 +276,9 @@ export class DatabaseConnectionManager {
         ],
       });
 
-      // Set up error event handlers
-      this.prisma.$on('error', (event) => {
-        const dbError = errorHandler.handleDatabaseError(
-          new Error(event.message),
-          'query',
-          event.target || 'unknown',
-          undefined,
-          { correlationId }
-        );
-
-        logger.error('Database error event', dbError.toLogFormat());
-      });
+      // Note: Prisma doesn't support error event handlers
+      // Error event handling removed - Prisma doesn't support 'error' events
+      // Use try-catch blocks around queries instead
 
       // Test the connection
       await this.prisma.$connect();

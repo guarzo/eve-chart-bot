@@ -125,7 +125,7 @@ export async function retry<T>(fn: () => Promise<T>, description?: string, optio
       // Add jitter if enabled
       let finalDelay = currentDelay;
       if (addJitter) {
-        const jitter = Math.random() * Configuration.jitter.maxMs;
+        const jitter = Math.random() * 1000; // Default 1 second max jitter
         finalDelay = currentDelay + jitter;
       }
 
@@ -183,10 +183,10 @@ export const retryStrategies = {
    * HTTP request retry with exponential backoff
    * Retries on network errors and 5xx responses
    */
-  http: <T>(fn: () => Promise<T>, maxRetries = HTTP_MAX_RETRIES): Promise<T> =>
+  http: <T>(fn: () => Promise<T>, maxRetries = ValidatedConfiguration.http.maxRetries): Promise<T> =>
     retry(fn, 'HTTP request', {
       maxRetries,
-      baseDelayMs: HTTP_INITIAL_RETRY_DELAY,
+      baseDelayMs: ValidatedConfiguration.http.initialRetryDelay,
       maxDelayMs: ValidatedConfiguration.http.maxRetryDelay,
       useExponentialBackoff: true,
       timeout: ValidatedConfiguration.http.timeout,
@@ -232,118 +232,120 @@ export const retryStrategies = {
 
 /**
  * Rate limit helper for API clients
+ * NOTE: Commented out to avoid duplicate export - use ./rateLimiter.ts instead
  */
-export class RateLimiter {
-  private lastRequestTime: number = 0;
-
-  constructor(private readonly minDelayMs: number) {}
-
-  /**
-   * Wait if necessary to respect rate limits
-   */
-  async wait(signal?: AbortSignal): Promise<void> {
-    const now = Date.now();
-    const elapsed = now - this.lastRequestTime;
-    if (elapsed < this.minDelayMs) {
-      const delay = this.minDelayMs - elapsed;
-      if (signal) {
-        await timerManager.delay(delay, signal);
-      } else {
-        await new Promise(resolve => setTimeout(resolve, delay));
-      }
-    }
-    this.lastRequestTime = Date.now();
-  }
-}
+// export class RateLimiter {
+//   private lastRequestTime: number = 0;
+//
+//   constructor(private readonly minDelayMs: number) {}
+//
+//   /**
+//    * Wait if necessary to respect rate limits
+//    */
+//   async wait(signal?: AbortSignal): Promise<void> {
+//     const now = Date.now();
+//     const elapsed = now - this.lastRequestTime;
+//     if (elapsed < this.minDelayMs) {
+//       const delay = this.minDelayMs - elapsed;
+//       if (signal) {
+//         await timerManager.delay(delay, signal);
+//       } else {
+//         await new Promise(resolve => setTimeout(resolve, delay));
+//       }
+//     }
+//     this.lastRequestTime = Date.now();
+//   }
+// }
 
 /**
  * Circuit breaker pattern implementation
+ * NOTE: Commented out to avoid duplicate export - use ./circuit-breaker/CircuitBreaker.ts instead
  */
-export class CircuitBreaker {
-  private failureCount = 0;
-  private nextAttemptTime = 0;
-  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
-
-  constructor(
-    private readonly maxFailuresBeforeOpen: number = 3,
-    private readonly cooldownPeriodMs: number = 30000, // 30 seconds
-    private readonly serviceName: string = 'Unknown Service'
-  ) {}
-
-  /**
-   * Execute an operation through the circuit breaker
-   */
-  async execute<T>(operation: () => Promise<T>): Promise<T> {
-    if (this.state === 'OPEN') {
-      if (Date.now() < this.nextAttemptTime) {
-        throw new Error(
-          `Circuit breaker OPEN for ${
-            this.serviceName
-          }: cooling down until ${new Date(this.nextAttemptTime).toISOString()}`
-        );
-      } else {
-        // Transition to HALF_OPEN to test if service is back
-        this.state = 'HALF_OPEN';
-        logger.info(`Circuit breaker for ${this.serviceName} transitioning to HALF_OPEN for test`);
-      }
-    }
-
-    try {
-      const result = await operation();
-
-      // Success - reset failure count and close circuit if needed
-      if (this.state === 'HALF_OPEN') {
-        logger.info(`Circuit breaker for ${this.serviceName} test successful, transitioning to CLOSED`);
-        this.state = 'CLOSED';
-      }
-
-      this.failureCount = 0;
-      return result;
-    } catch (error) {
-      this.failureCount++;
-
-      logger.warn(
-        `Circuit breaker for ${this.serviceName} recorded failure ${this.failureCount}/${this.maxFailuresBeforeOpen}`,
-        {
-          error: error instanceof Error ? error.message : String(error),
-          currentState: this.state,
-        }
-      );
-
-      if (this.failureCount >= this.maxFailuresBeforeOpen || this.state === 'HALF_OPEN') {
-        // Open the circuit
-        this.state = 'OPEN';
-        this.nextAttemptTime = Date.now() + this.cooldownPeriodMs;
-
-        logger.error(
-          `Circuit breaker for ${this.serviceName} OPENED due to ${
-            this.failureCount
-          } failures. Will attempt retry at ${new Date(this.nextAttemptTime).toISOString()}`
-        );
-      }
-
-      throw error;
-    }
-  }
-
-  /**
-   * Get current circuit breaker state
-   */
-  getState(): { state: string; failureCount: number; nextAttemptTime: number } {
-    return {
-      state: this.state,
-      failureCount: this.failureCount,
-      nextAttemptTime: this.nextAttemptTime,
-    };
-  }
-
-  /**
-   * Manually reset the circuit breaker
-   */
-  reset(): void {
-    this.state = 'CLOSED';
-    this.failureCount = 0;
-    this.nextAttemptTime = 0;
-    logger.info(`Circuit breaker for ${this.serviceName} manually reset`);
-  }
-}
+// export class CircuitBreaker {
+//   private failureCount = 0;
+//   private nextAttemptTime = 0;
+//   private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+//
+//   constructor(
+//     private readonly maxFailuresBeforeOpen: number = 3,
+//     private readonly cooldownPeriodMs: number = 30000, // 30 seconds
+//     private readonly serviceName: string = 'Unknown Service'
+//   ) {}
+//
+//   /**
+//    * Execute an operation through the circuit breaker
+//    */
+//   async execute<T>(operation: () => Promise<T>): Promise<T> {
+//     if (this.state === 'OPEN') {
+//       if (Date.now() < this.nextAttemptTime) {
+//         throw new Error(
+//           `Circuit breaker OPEN for ${
+//             this.serviceName
+//           }: cooling down until ${new Date(this.nextAttemptTime).toISOString()}`
+//         );
+//       } else {
+//         // Transition to HALF_OPEN to test if service is back
+//         this.state = 'HALF_OPEN';
+//         logger.info(`Circuit breaker for ${this.serviceName} transitioning to HALF_OPEN for test`);
+//       }
+//     }
+// 
+//     try {
+//       const result = await operation();
+// 
+//       // Success - reset failure count and close circuit if needed
+//       if (this.state === 'HALF_OPEN') {
+//         logger.info(`Circuit breaker for ${this.serviceName} test successful, transitioning to CLOSED`);
+//         this.state = 'CLOSED';
+//       }
+// 
+//       this.failureCount = 0;
+//       return result;
+//     } catch (error) {
+//       this.failureCount++;
+// 
+//       logger.warn(
+//         `Circuit breaker for ${this.serviceName} recorded failure ${this.failureCount}/${this.maxFailuresBeforeOpen}`,
+//         {
+//           error: error instanceof Error ? error.message : String(error),
+//           currentState: this.state,
+//         }
+//       );
+// 
+//       if (this.failureCount >= this.maxFailuresBeforeOpen || this.state === 'HALF_OPEN') {
+//         // Open the circuit
+//         this.state = 'OPEN';
+//         this.nextAttemptTime = Date.now() + this.cooldownPeriodMs;
+// 
+//         logger.error(
+//           `Circuit breaker for ${this.serviceName} OPENED due to ${
+//             this.failureCount
+//           } failures. Will attempt retry at ${new Date(this.nextAttemptTime).toISOString()}`
+//         );
+//       }
+// 
+//       throw error;
+//     }
+//   }
+// 
+//   /**
+//    * Get current circuit breaker state
+//    */
+//   getState(): { state: string; failureCount: number; nextAttemptTime: number } {
+//     return {
+//       state: this.state,
+//       failureCount: this.failureCount,
+//       nextAttemptTime: this.nextAttemptTime,
+//     };
+//   }
+// 
+//   /**
+//    * Manually reset the circuit breaker
+//    */
+//   reset(): void {
+//     this.state = 'CLOSED';
+//     this.failureCount = 0;
+//     this.nextAttemptTime = 0;
+//     logger.info(`Circuit breaker for ${this.serviceName} manually reset`);
+//   }
+// }

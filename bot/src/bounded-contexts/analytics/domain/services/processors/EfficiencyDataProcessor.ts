@@ -6,6 +6,7 @@
 import { ChartData, ChartDataset, ChartMetadata } from '../../value-objects/ChartData';
 import { ChartConfiguration } from '../../value-objects/ChartConfiguration';
 import { ChartType } from '../../../../../shared/types/common';
+import { IChartDataProcessor } from '../IChartDataProcessor';
 import { KillDataPoint } from './KillsDataProcessor';
 import { LossDataPoint } from './LossDataProcessor';
 
@@ -19,7 +20,52 @@ export interface EfficiencyAggregation {
   iskEfficiency: number;
 }
 
-export class EfficiencyDataProcessor {
+export class EfficiencyDataProcessor implements IChartDataProcessor {
+  /**
+   * Process raw data based on configuration
+   */
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
+    const { killData, lossData } = this.separateKillsAndLosses(rawData);
+    return this.processEfficiencyData(config, killData, lossData, ['Default Group']);
+  }
+
+  /**
+   * Validate configuration for efficiency processor
+   */
+  validateConfiguration(config: ChartConfiguration): boolean {
+    return config.startDate && config.endDate && config.endDate > config.startDate;
+  }
+
+  /**
+   * Separate raw data into kills and losses
+   */
+  private separateKillsAndLosses(rawData: any[]): { killData: KillDataPoint[], lossData: LossDataPoint[] } {
+    const killData: KillDataPoint[] = rawData
+      .filter(item => item.type === 'kill' || item.isKill)
+      .map(item => ({
+        killTime: new Date(item.killTime),
+        killmailId: BigInt(item.killmailId),
+        characterId: BigInt(item.characterId),
+        groupId: item.groupId,
+        solo: Boolean(item.solo),
+        npc: Boolean(item.npc)
+      }));
+    
+    const lossData: LossDataPoint[] = rawData
+      .filter(item => item.type === 'loss' || item.isLoss)
+      .map(item => ({
+        killTime: new Date(item.killTime),
+        killmailId: BigInt(item.killmailId),
+        characterId: BigInt(item.characterId),
+        groupId: item.groupId,
+        totalValue: BigInt(item.totalValue || 0),
+        shipTypeId: Number(item.shipTypeId),
+        systemId: Number(item.systemId)
+      }));
+    
+    return { killData, lossData };
+  }
+
   /**
    * Process kill and loss data into efficiency chart format
    */
@@ -62,7 +108,7 @@ export class EfficiencyDataProcessor {
     killData: KillDataPoint[],
     lossData: LossDataPoint[],
     groupLabels: string[],
-    config: ChartConfiguration
+    _config: ChartConfiguration
   ): EfficiencyAggregation[] {
     const aggregations: Map<string, EfficiencyAggregation> = new Map();
     

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, KillAttacker, KillCharacter, Character } from '@prisma/client';
 import { logger } from '../../lib/logger';
 import { errorHandler, DatabaseError } from '../../shared/errors';
 
@@ -87,18 +87,18 @@ export class OptimizedKillRepository {
         killmailId: killFact.killmail_id.toString(),
       });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'transaction',
-        'kill_fact',
-        involvedCharacters[0]?.character_id?.toString(),
         {
-          correlationId,
           operation: 'ingestKillmail.optimized',
+          correlationId,
           metadata: {
+            service: 'OptimizedKillRepository',
             killmailId: killFact.killmail_id.toString(),
             characterCount: involvedCharacters.length,
             attackerCount: attackers.length,
+            entityId: involvedCharacters[0]?.character_id?.toString(),
+            entityType: 'kill_fact',
           },
         }
       );
@@ -143,14 +143,16 @@ export class OptimizedKillRepository {
 
       logger.debug(`Upserted kill fact ${killFact.killmail_id}`, { correlationId });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'upsert',
-        'kill_fact',
-        killFact.killmail_id.toString(),
         {
-          correlationId,
           operation: 'upsertKillFacts',
+          correlationId,
+          metadata: {
+            service: 'OptimizedKillRepository',
+            killmailId: killFact.killmail_id.toString(),
+            entityType: 'kill_fact',
+          },
         }
       );
     }
@@ -195,14 +197,16 @@ export class OptimizedKillRepository {
 
       logger.debug(`Upserted victim for killmail ${killmailId}`, { correlationId });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'upsert',
-        'kill_victim',
-        killmailId.toString(),
         {
-          correlationId,
           operation: 'upsertVictimData',
+          correlationId,
+          metadata: {
+            service: 'OptimizedKillRepository',
+            killmailId: killmailId.toString(),
+            entityType: 'kill_victim',
+          },
         }
       );
     }
@@ -235,29 +239,29 @@ export class OptimizedKillRepository {
 
       // Create normalized attacker data for comparison
       const newAttackerData = newAttackers.map((attacker, index) => ({
-        killmail_id: killmailId,
-        character_id: attacker.character_id ?? null,
-        corporation_id: attacker.corporation_id ?? null,
-        alliance_id: attacker.alliance_id ?? null,
-        damage_done: attacker.damage_done,
-        final_blow: attacker.final_blow,
-        security_status: attacker.security_status ?? null,
-        ship_type_id: attacker.ship_type_id ?? null,
-        weapon_type_id: attacker.weapon_type_id ?? null,
+        killmailId: killmailId,
+        characterId: attacker.character_id ?? null,
+        corporationId: attacker.corporation_id ?? null,
+        allianceId: attacker.alliance_id ?? null,
+        damageDone: attacker.damage_done,
+        finalBlow: attacker.final_blow,
+        securityStatus: attacker.security_status ?? null,
+        shipTypeId: attacker.ship_type_id ?? null,
+        weaponTypeId: attacker.weapon_type_id ?? null,
         // Use index as unique identifier for this killmail
         temp_index: index,
       }));
 
       // Find attackers to delete (exist in DB but not in new data)
-      const existingIds = new Set(existingAttackers.map(a => a.id));
-      const attackersToDelete = existingAttackers.filter((existing, index) => {
+      // const _existingIds = new Set(existingAttackers.map((a: KillAttacker) => a.id));
+      const attackersToDelete = existingAttackers.filter((existing: KillAttacker, index: number) => {
         // Compare with new data at same index, or mark for deletion if index doesn't exist
         const newAttacker = newAttackerData[index];
         return !newAttacker || !this.attackersEqual(existing, newAttacker);
       });
 
       // Find attackers to create/update
-      const attackersToUpsert = newAttackerData.filter((newAttacker, index) => {
+      const attackersToUpsert = newAttackerData.filter((newAttacker, index: number) => {
         const existing = existingAttackers[index];
         return !existing || !this.attackersEqual(existing, newAttacker);
       });
@@ -266,7 +270,7 @@ export class OptimizedKillRepository {
       if (attackersToDelete.length > 0) {
         await tx.killAttacker.deleteMany({
           where: {
-            id: { in: attackersToDelete.map(a => a.id) },
+            id: { in: attackersToDelete.map((a: KillAttacker) => a.id) },
           },
         });
         logger.debug(`Deleted ${attackersToDelete.length} attackers for killmail ${killmailId}`, { correlationId });
@@ -281,14 +285,16 @@ export class OptimizedKillRepository {
         logger.debug(`Created ${attackersToUpsert.length} attackers for killmail ${killmailId}`, { correlationId });
       }
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'sync',
-        'kill_attacker',
-        killmailId.toString(),
         {
-          correlationId,
           operation: 'syncAttackerData',
+          correlationId,
+          metadata: {
+            service: 'OptimizedKillRepository',
+            killmailId: killmailId.toString(),
+            entityType: 'kill_attacker',
+          },
         }
       );
     }
@@ -297,16 +303,16 @@ export class OptimizedKillRepository {
   /**
    * Compare two attackers for equality
    */
-  private attackersEqual(existing: any, newAttacker: any): boolean {
+  private attackersEqual(existing: KillAttacker, newAttacker: Partial<KillAttacker>): boolean {
     return (
-      existing.character_id === newAttacker.character_id &&
-      existing.corporation_id === newAttacker.corporation_id &&
-      existing.alliance_id === newAttacker.alliance_id &&
-      existing.damage_done === newAttacker.damage_done &&
-      existing.final_blow === newAttacker.final_blow &&
-      existing.security_status === newAttacker.security_status &&
-      existing.ship_type_id === newAttacker.ship_type_id &&
-      existing.weapon_type_id === newAttacker.weapon_type_id
+      existing.characterId === newAttacker.characterId &&
+      existing.corporationId === newAttacker.corporationId &&
+      existing.allianceId === newAttacker.allianceId &&
+      existing.damageDone === newAttacker.damageDone &&
+      existing.finalBlow === newAttacker.finalBlow &&
+      existing.securityStatus === newAttacker.securityStatus &&
+      existing.shipTypeId === newAttacker.shipTypeId &&
+      existing.weaponTypeId === newAttacker.weaponTypeId
     );
   }
 
@@ -328,11 +334,11 @@ export class OptimizedKillRepository {
         (await tx.character.findMany({
           where: { 
             eveId: { 
-              in: newInvolvedCharacters.map(c => c.character_id) 
+              in: newInvolvedCharacters.map((c: any) => c.character_id) 
             } 
           },
           select: { eveId: true },
-        })).map(c => c.eveId)
+        })).map((c: Character) => c.eveId)
       );
 
       // Filter to only tracked characters
@@ -347,15 +353,15 @@ export class OptimizedKillRepository {
 
       // Create sets for comparison
       const existingSet = new Set(
-        existingRelationships.map(r => `${r.character_id}-${r.role}`)
+        existingRelationships.map((r: KillCharacter) => `${r.characterId}-${r.role}`)
       );
       const newSet = new Set(
-        trackedInvolvedCharacters.map(c => `${c.character_id}-${c.role}`)
+        trackedInvolvedCharacters.map((c: any) => `${c.character_id}-${c.role}`)
       );
 
       // Find relationships to delete
-      const toDelete = existingRelationships.filter(r => 
-        !newSet.has(`${r.character_id}-${r.role}`)
+      const toDelete = existingRelationships.filter((r: KillCharacter) => 
+        !newSet.has(`${r.characterId}-${r.role}`)
       );
 
       // Find relationships to create
@@ -367,7 +373,13 @@ export class OptimizedKillRepository {
       if (toDelete.length > 0) {
         await tx.killCharacter.deleteMany({
           where: {
-            id: { in: toDelete.map(r => r.id) },
+            OR: toDelete.map((r: KillCharacter) => ({
+              AND: [
+                { killmailId: r.killmailId },
+                { characterId: r.characterId },
+                { role: r.role }
+              ]
+            }))
           },
         });
         logger.debug(`Deleted ${toDelete.length} character relationships for killmail ${killmailId}`, { correlationId });
@@ -386,14 +398,15 @@ export class OptimizedKillRepository {
         logger.debug(`Created ${toCreate.length} character relationships for killmail ${killmailId}`, { correlationId });
       }
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'sync',
-        'kill_character',
-        killmailId.toString(),
         {
-          correlationId,
           operation: 'syncCharacterRelationships',
+          correlationId,
+          metadata: {
+            killmailId: killmailId.toString(),
+            entityType: 'kill_character',
+          },
         }
       );
     }
@@ -446,14 +459,15 @@ export class OptimizedKillRepository {
         }
       }
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'upsert',
-        'loss_fact',
-        killFact.killmail_id.toString(),
         {
-          correlationId,
           operation: 'createLossFact',
+          correlationId,
+          metadata: {
+            killmailId: killFact.killmail_id.toString(),
+            entityType: 'loss_fact',
+          },
         }
       );
     }
@@ -469,39 +483,42 @@ export class OptimizedKillRepository {
     limit: number
   ): Promise<Array<{ shipTypeId: number; count: number }>> {
     try {
-      const result = await this.prisma.kill_attacker.groupBy({
-        by: ['ship_type_id'],
+      const result = await this.prisma.killAttacker.groupBy({
+        by: ['shipTypeId'],
         where: {
-          character_id: { in: characterIds },
-          ship_type_id: { not: null },
+          characterId: { in: characterIds },
+          shipTypeId: { not: null },
           kill: {
-            kill_time: {
+            killTime: {
               gte: startDate,
               lte: endDate,
             },
           },
         },
         _count: {
-          ship_type_id: true,
+          shipTypeId: true,
         },
         orderBy: {
           _count: {
-            ship_type_id: 'desc',
+            shipTypeId: 'desc',
           },
         },
         take: limit,
       });
 
       return result.map(r => ({
-        shipTypeId: r.ship_type_id!,
-        count: r._count.ship_type_id,
+        shipTypeId: r.shipTypeId!,
+        count: r._count.shipTypeId || 0,
       }));
     } catch (error) {
       logger.error('Failed to get top ship types used', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get top ship types used', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit }
-      });
+      throw new DatabaseError(
+        'Failed to get top ship types used',
+        'query',
+        'kill_attacker',
+        { metadata: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit } },
+        error as Error
+      );
     }
   }
 
@@ -515,42 +532,45 @@ export class OptimizedKillRepository {
     limit: number
   ): Promise<Array<{ shipTypeId: number; count: number }>> {
     try {
-      const result = await this.prisma.kill_victim.groupBy({
-        by: ['ship_type_id'],
+      const result = await this.prisma.killVictim.groupBy({
+        by: ['shipTypeId'],
         where: {
           kill: {
-            kill_time: {
+            killTime: {
               gte: startDate,
               lte: endDate,
             },
             attackers: {
               some: {
-                character_id: { in: characterIds },
+                characterId: { in: characterIds },
               },
             },
           },
         },
         _count: {
-          ship_type_id: true,
+          shipTypeId: true,
         },
         orderBy: {
           _count: {
-            ship_type_id: 'desc',
+            shipTypeId: 'desc',
           },
         },
         take: limit,
       });
 
-      return result.map(r => ({
-        shipTypeId: r.ship_type_id,
-        count: r._count.ship_type_id,
+      return result.map((r: any) => ({
+        shipTypeId: r.shipTypeId,
+        count: r._count?.shipTypeId || 0,
       }));
     } catch (error) {
       logger.error('Failed to get top ship types destroyed', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get top ship types destroyed', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit }
-      });
+      throw new DatabaseError(
+        'Failed to get top ship types destroyed',
+        'query',
+        'kill_victim',
+        { metadata: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, limit } },
+        error as Error
+      );
     }
   }
 
@@ -565,7 +585,6 @@ export class OptimizedKillRepository {
   ): Promise<Array<{ time: Date; count: number }>> {
     try {
       // For now, use raw SQL for time grouping as Prisma doesn't support it natively
-      const interval = groupBy === 'hour' ? '1 hour' : groupBy === 'day' ? '1 day' : '1 week';
       
       const result = await this.prisma.$queryRaw<Array<{ time: Date; count: bigint }>>`
         SELECT 
@@ -587,10 +606,13 @@ export class OptimizedKillRepository {
       }));
     } catch (error) {
       logger.error('Failed to get kills grouped by time', error);
-      throw new DatabaseError('QUERY_FAILED', 'Failed to get kills grouped by time', {
-        cause: error,
-        context: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, groupBy }
-      });
+      throw new DatabaseError(
+        'Failed to get kills grouped by time',
+        'query',
+        'kill_fact',
+        { metadata: { characterIds: characterIds.map(id => id.toString()), startDate, endDate, groupBy } },
+        error as Error
+      );
     }
   }
 }

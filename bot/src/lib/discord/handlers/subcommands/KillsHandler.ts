@@ -282,15 +282,7 @@ export class KillsHandler extends BaseChartHandler {
         error,
         'kills',
         chartData.datasets?.map(d => d.label || 'unknown'),
-        chartData.labels?.length,
-        {
-          correlationId,
-          operation: 'chart.render.kills',
-          metadata: {
-            renderingEngine: 'chart.js',
-            canvasSize: '3200x1280',
-          },
-        }
+        chartData.labels?.length
       );
     }
   }

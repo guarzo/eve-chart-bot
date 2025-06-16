@@ -79,7 +79,14 @@ export class ChartDisplayOptions {
     public readonly showNpcKills?: boolean,
     public readonly showIskValue?: boolean,
     public readonly showHighValueLosses?: boolean,
-    public readonly showKillLossCounts?: boolean
+    public readonly showKillLossCounts?: boolean,
+    // Extended options for new processors
+    public readonly limit?: number,
+    public readonly analysisType?: string,
+    public readonly distributionType?: string,
+    public readonly heatmapType?: string,
+    public readonly granularity?: string,
+    public readonly showEfficiency?: boolean
   ) {}
 
   public equals(other: ChartDisplayOptions): boolean {

@@ -1,4 +1,4 @@
-import { logger } from '../logger';
+import { logger } from '../../../lib/logger';
 
 /**
  * Circuit breaker implementation for handling failure detection and recovery

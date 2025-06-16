@@ -53,6 +53,7 @@ export class HeatmapHandler extends BaseChartHandler {
 
       if (groups.length === 0) {
         throw ChartError.noDataError(
+          'heatmap',
           'No character groups found',
           {
             correlationId,
@@ -75,15 +76,14 @@ export class HeatmapHandler extends BaseChartHandler {
           endDate,
           displayType: 'heatmap',
         }),
+        2, // maxRetries
+        1000, // baseDelay
         {
-          maxRetries: 2,
+          operation: 'heatmap_chart_generation',
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
           correlationId,
-          context: {
-            operation: 'heatmap_chart_generation',
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            metadata: { interactionId: interaction.id, timeRange: time },
-          },
+          metadata: { interactionId: interaction.id, timeRange: time },
         }
       );
 

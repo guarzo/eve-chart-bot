@@ -286,7 +286,11 @@ describe('KillFact', () => {
         points: 10,
       });
 
-      expect(() => killWithoutAttackers.attackerCount).toThrow('Attackers not loaded for this kill');
+      // New safe behavior: returns 0 when attackers not loaded
+      expect(killWithoutAttackers.attackerCount).toBe(0);
+      
+      // Use the required method if you need the old throwing behavior
+      expect(() => killWithoutAttackers.getAttackerCountRequired()).toThrow('Attackers not loaded for this kill');
     });
   });
 
@@ -390,15 +394,15 @@ describe('KillFact', () => {
   describe('fromModel', () => {
     it('should create KillFact from database model', () => {
       const model = {
-        killmail_id: 67890n,
-        character_id: 300n,
-        kill_time: new Date('2023-06-15T18:30:00Z'),
+        killmailId: 67890n,
+        characterId: 300n,
+        killTime: new Date('2023-06-15T18:30:00Z'),
         npc: true,
         solo: false,
         awox: false,
-        ship_type_id: 592,
-        system_id: 30000143,
-        total_value: 25000000n,
+        shipTypeId: 592,
+        systemId: 30000143,
+        totalValue: 25000000n,
         points: 15,
         labels: ['pvp', 'lowsec'],
       };
@@ -420,15 +424,15 @@ describe('KillFact', () => {
 
     it('should handle missing labels', () => {
       const model = {
-        killmail_id: 12345n,
-        character_id: 100n,
-        kill_time: new Date(),
+        killmailId: 12345n,
+        characterId: 100n,
+        killTime: new Date(),
         npc: false,
         solo: true,
         awox: false,
-        ship_type_id: 587,
-        system_id: 30000142,
-        total_value: 1000000n,
+        shipTypeId: 587,
+        systemId: 30000142,
+        totalValue: 1000000n,
         points: 5,
       };
 
@@ -438,41 +442,41 @@ describe('KillFact', () => {
 
     it('should load attackers and victim when provided', () => {
       const model = {
-        killmail_id: 12345n,
-        character_id: 200n,
-        kill_time: new Date(),
+        killmailId: 12345n,
+        characterId: 200n,
+        killTime: new Date(),
         npc: false,
         solo: false,
         awox: false,
-        ship_type_id: 590,
-        system_id: 30000142,
-        total_value: 1000000n,
+        shipTypeId: 590,
+        systemId: 30000142,
+        totalValue: 1000000n,
         points: 10,
       };
 
       const attackerModels = [
         {
           id: 1,
-          killmail_id: 12345n,
-          character_id: 200n,
-          corporation_id: 3000n,
-          alliance_id: 4000n,
-          damage_done: 3000,
-          final_blow: true,
-          security_status: -5.0,
-          ship_type_id: 590,
-          weapon_type_id: 2203,
+          killmailId: 12345n,
+          characterId: 200n,
+          corporationId: 3000n,
+          allianceId: 4000n,
+          damageDone: 3000,
+          finalBlow: true,
+          securityStatus: -5.0,
+          shipTypeId: 590,
+          weaponTypeId: 2203,
         }
       ];
 
       const victimModel = {
         id: 1,
-        killmail_id: 12345n,
-        character_id: 100n,
-        corporation_id: 1000n,
-        alliance_id: 2000n,
-        ship_type_id: 587,
-        damage_taken: 5000,
+        killmailId: 12345n,
+        characterId: 100n,
+        corporationId: 1000n,
+        allianceId: 2000n,
+        shipTypeId: 587,
+        damageTaken: 5000,
       };
 
       const result = KillFact.fromModel(model, attackerModels, victimModel);

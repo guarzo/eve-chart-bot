@@ -235,4 +235,5 @@ export interface LossDataPoint {
   characterId: bigint;
   totalValue: bigint;
   shipTypeId: number;
+  systemId: number;
 }

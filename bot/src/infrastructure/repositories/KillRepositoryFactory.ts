@@ -91,8 +91,7 @@ export class KillRepositoryFactory {
    */
   static getRecommendedImplementation(): KillRepositoryImplementation {
     // Check system characteristics to recommend implementation
-    const nodeVersion = process.version;
-    const memoryLimit = process.env.NODE_OPTIONS?.includes('--max-old-space-size');
+    // Check system characteristics to recommend implementation
     
     // For production environments with high throughput, recommend optimized
     if (process.env.NODE_ENV === 'production') {

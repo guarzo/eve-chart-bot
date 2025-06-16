@@ -55,6 +55,7 @@ export class CorpsHandler extends BaseChartHandler {
 
       if (groups.length === 0) {
         throw ChartError.noDataError(
+          'corps',
           'No character groups found',
           {
             correlationId,
@@ -80,15 +81,14 @@ export class CorpsHandler extends BaseChartHandler {
           endDate,
           displayType: displayType,
         }),
+        2, // maxRetries
+        1000, // baseDelay
         {
-          maxRetries: 2,
+          operation: 'corps_chart_generation',
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
           correlationId,
-          context: {
-            operation: 'corps_chart_generation',
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            metadata: { interactionId: interaction.id, timeRange: time, displayType },
-          },
+          metadata: { interactionId: interaction.id, timeRange: time, displayType },
         }
       );
 

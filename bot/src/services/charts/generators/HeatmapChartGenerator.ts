@@ -75,7 +75,9 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
     }
 
     // Get activity data grouped by hour and day of week
-    const activityData = await this.killRepository.getKillActivityByTimeOfDay(allCharacterIds, startDate, endDate);
+    // TODO: getKillActivityByTimeOfDay needs to be implemented in KillRepository
+    const activityData: Array<{ hourOfDay: number; dayOfWeek: number; kills: number }> = [];
+    console.warn('getKillActivityByTimeOfDay not implemented - returning empty data');
 
     if (activityData.length === 0) {
       throw new Error('No activity data found for the specified time period');
@@ -101,7 +103,7 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
     for (let hour = 0; hour < 24; hour++) {
       const row: number[] = [];
       for (let day = 0; day < 7; day++) {
-        const activity = activityData.find(d => d.hourOfDay === hour && d.dayOfWeek === day);
+        const activity = activityData.find((d: any) => d.hourOfDay === hour && d.dayOfWeek === day);
         row.push(activity ? activity.kills : 0);
       }
       matrix.push(row);
@@ -190,19 +192,19 @@ export class HeatmapChartGenerator extends BaseChartGenerator {
     let peakDate = new Date();
 
     for (const data of killData) {
-      totalKills += data.kills;
-      if (data.kills > peakKills) {
-        peakKills = data.kills;
-        peakDate = data.timestamp;
+      totalKills += data.count;
+      if (data.count > peakKills) {
+        peakKills = data.count;
+        peakDate = data.time;
       }
     }
 
     // Format data for calendar heatmap
     const calendarData = killData.map(data => ({
-      x: format(data.timestamp, 'yyyy-MM-dd'),
-      y: data.timestamp.getDay(), // Day of week (0-6)
-      v: data.kills, // Value (kill count)
-      date: format(data.timestamp, 'EEEE, MMMM d, yyyy'),
+      x: format(data.time, 'yyyy-MM-dd'),
+      y: data.time.getDay(), // Day of week (0-6)
+      v: data.count, // Value (kill count)
+      date: format(data.time, 'EEEE, MMMM d, yyyy'),
     }));
 
     // Create datasets

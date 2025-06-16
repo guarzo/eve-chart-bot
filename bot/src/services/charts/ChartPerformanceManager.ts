@@ -58,7 +58,7 @@ export class ChartPerformanceManager {
       process.exit(1);
     });
 
-    process.on('unhandledRejection', async (reason, promise) => {
+    process.on('unhandledRejection', async (reason, _promise) => {
       logger.error('Unhandled rejection in chart performance manager:', reason);
       await this.cleanup();
       process.exit(1);

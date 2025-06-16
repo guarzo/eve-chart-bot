@@ -93,7 +93,7 @@ export class CanvasChartRenderer implements IChartRenderer {
     const chartType = this.mapChartType(config.type);
     
     return {
-      type: chartType,
+      type: chartType as any,
       data: {
         labels: data.labels,
         datasets: data.datasets.map(dataset => ({

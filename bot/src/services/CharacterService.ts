@@ -4,7 +4,7 @@ import { CharacterRepository } from '../infrastructure/repositories/CharacterRep
 import { logger } from '../lib/logger';
 import { ESIService } from './ESIService';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../shared/errors';
+import { errorHandler, ValidationError, ExternalServiceError } from '../shared/errors';
 
 /**
  * Service for handling character-related business logic
@@ -64,14 +64,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'character',
-        'get',
         {
           correlationId,
           operation: 'getCharacter',
-          metadata: { characterId },
+          metadata: { characterId, entityType: 'character' },
         }
       );
     }
@@ -107,10 +105,8 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'character',
-        'getAll',
         {
           correlationId,
           operation: 'getAllCharacters',
@@ -163,14 +159,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'character',
-        'getByGroup',
         {
           correlationId,
           operation: 'getCharactersByGroup',
-          metadata: { groupId },
+          metadata: { groupId, entityType: 'character' },
         }
       );
     }
@@ -221,14 +215,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'characterGroup',
-        'get',
         {
           correlationId,
           operation: 'getCharacterGroup',
-          metadata: { groupId },
+          metadata: { groupId, entityType: 'characterGroup' },
         }
       );
     }
@@ -264,13 +256,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'characterGroup',
-        'getAll',
         {
           correlationId,
           operation: 'getAllCharacterGroups',
+          metadata: { entityType: 'characterGroup' },
         }
       );
     }
@@ -339,14 +330,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'character',
-        'upsert',
         {
           correlationId,
           operation: 'saveCharacter',
-          metadata: { characterId: character?.eveId },
+          metadata: { characterId: character?.eveId, entityType: 'character' },
         }
       );
     }
@@ -389,7 +378,7 @@ export class CharacterService {
       const result = await errorHandler.withRetry(
         async () => {
           return await this.characterRepository.createCharacterGroup({
-            map_name: group.map_name,
+            mapName: group.map_name,
             mainCharacterId: group.mainCharacterId ? BigInt(group.mainCharacterId) : null,
           });
         },
@@ -413,14 +402,12 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'characterGroup',
-        'create',
         {
           correlationId,
           operation: 'saveCharacterGroup',
-          metadata: { mapName: group?.map_name },
+          metadata: { mapName: group?.map_name, entityType: 'characterGroup' },
         }
       );
     }
@@ -467,14 +454,12 @@ export class CharacterService {
         characterId,
       });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
+      throw errorHandler.handleError(
         error,
-        'character',
-        'delete',
         {
           correlationId,
           operation: 'deleteCharacter',
-          metadata: { characterId },
+          metadata: { characterId, entityType: 'character' },
         }
       );
     }
@@ -652,6 +637,8 @@ export class CharacterService {
             throw new ExternalServiceError(
               'ESI',
               `No ESI data found for character ${characterId}`,
+              undefined,
+              undefined,
               {
                 correlationId,
                 operation: 'syncCharacters.getCharacter',

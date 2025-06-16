@@ -1,6 +1,6 @@
 import { ChartData, ChartOptions, ChartService } from './ChartService';
 import { SimplifiedChartService } from './SimplifiedChartService';
-import { ChartPipelineFactory } from './factories/ChartPipelineFactory';
+// import { ChartPipelineFactory } from './factories/ChartPipelineFactory'; // unused
 import { flags } from '../../shared/utilities/feature-flags';
 import { logger } from '../../lib/logger';
 
@@ -15,12 +15,10 @@ export class ChartServiceBridge {
 
   constructor() {
     // Create simplified service with feature flag migration
-    this.simplifiedService = new SimplifiedChartService(
-      ChartPipelineFactory.createWithFeatureFlags(
-        flags.newChartRendering,
-        flags.newChartRendering // Use same flag for both rendering and data
-      )
-    );
+    this.simplifiedService = new SimplifiedChartService({
+      renderingMode: flags.newChartRendering ? 'advanced' : 'basic',
+      dataMode: flags.newChartRendering ? 'real' : 'mock'
+    });
 
     // Keep legacy service for comparison/fallback
     this.legacyService = new ChartService();

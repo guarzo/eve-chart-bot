@@ -6,7 +6,7 @@ import { KillRepository } from '../../../infrastructure/repositories/KillReposit
 import { format } from 'date-fns';
 import { logger } from '../../../lib/logger';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
-import { errorHandler, ChartError, ValidationError } from '../../../lib/errors';
+import { errorHandler, ChartError, ValidationError, ValidationIssue } from '../../../shared/errors';
 
 /**
  * Generator for trend charts showing kills over time
@@ -72,10 +72,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
         throw error;
       }
 
-      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate trend chart', {
-        cause: error,
-        context: { correlationId, operation: 'generateTrendChart' }
-      });
+      throw ChartError.generationError('trend', 'Failed to generate trend chart', {
+        correlationId, operation: 'generateTrendChart'
+      }, error as Error);
     }
   }
 
@@ -123,10 +122,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
       // Get kill data grouped by time with retry logic
       const killData = await errorHandler.withRetry(
         () => this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy),
-        {
-          retries: 3,
-          context: { operation: 'fetchKillData', groupBy, correlationId }
-        }
+        3,
+        1000,
+        { operation: 'fetchKillData', correlationId, metadata: { groupBy } }
       );
 
       // Skip if no data
@@ -158,13 +156,13 @@ export class TrendChartGenerator extends BaseChartGenerator {
       let groupTotalKills = 0;
 
       for (const point of killData) {
-        const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
+        const formattedTime = format(point.time, this.getDateFormat(groupBy));
         timePoints.push(formattedTime);
         timeLabels.add(formattedTime);
 
-        dataPoints.push(point.kills);
-        groupTotalKills += point.kills;
-        allDataPoints.push(point.kills); // For trend calculation
+        dataPoints.push(point.count);
+        groupTotalKills += point.count;
+        allDataPoints.push(point.count); // For trend calculation
       }
 
       // Update overall statistics
@@ -251,10 +249,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
       // Get kill data grouped by time with retry logic
       const killData = await errorHandler.withRetry(
         () => this.killRepository.getKillsGroupedByTime(characterIds, startDate, endDate, groupBy),
-        {
-          retries: 3,
-          context: { operation: 'fetchKillData', groupBy, correlationId }
-        }
+        3,
+        1000,
+        { operation: 'fetchKillData', correlationId, metadata: { groupBy } }
       );
 
       // Skip if no data
@@ -287,14 +284,14 @@ export class TrendChartGenerator extends BaseChartGenerator {
       let groupTotalKills = 0;
 
       for (const point of killData) {
-        const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
+        const formattedTime = format(point.time, this.getDateFormat(groupBy));
         timePoints.push(formattedTime);
         timeLabels.add(formattedTime);
 
-        cumulativeKills += point.kills;
+        cumulativeKills += point.count;
         dataPoints.push(cumulativeKills);
-        groupTotalKills += point.kills;
-        allDataPoints.push(point.kills); // For trend calculation
+        groupTotalKills += point.count;
+        allDataPoints.push(point.count); // For trend calculation
       }
 
       // Update overall statistics
@@ -362,8 +359,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }
 
     if (allCharacterIds.length === 0) {
-      throw new ChartError('NO_DATA_AVAILABLE', 'No characters found in the provided groups', {
-        context: { correlationId, operation: 'generateDualAxisChart' }
+      throw ChartError.noDataError('dual-axis', 'No characters found in the provided groups', {
+        correlationId, operation: 'generateDualAxisChart'
       });
     }
 
@@ -381,15 +378,14 @@ export class TrendChartGenerator extends BaseChartGenerator {
     // Get kill data grouped by time with retry logic
     const killData = await errorHandler.withRetry(
       () => this.killRepository.getKillsGroupedByTime(allCharacterIds, startDate, endDate, groupBy),
-      {
-        retries: 3,
-        context: { operation: 'fetchDualAxisKillData', groupBy, correlationId }
-      }
+      3,
+      1000,
+      { operation: 'fetchDualAxisKillData', correlationId, metadata: { groupBy } }
     );
 
     if (killData.length === 0) {
-      throw new ChartError('NO_DATA_AVAILABLE', 'No kill data found for the specified time period', {
-        context: { startDate, endDate, characterCount: allCharacterIds.length, correlationId }
+      throw ChartError.noDataError('dual-axis', 'No kill data found for the specified time period', {
+        correlationId, metadata: { startDate, endDate, characterCount: allCharacterIds.length }
       });
     }
 
@@ -403,15 +399,15 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     // Process the kill data
     for (const point of killData) {
-      const formattedTime = format(point.timestamp, this.getDateFormat(groupBy));
+      const formattedTime = format(point.time, this.getDateFormat(groupBy));
       timeLabels.push(formattedTime);
 
-      killsData.push(point.kills);
-      allKillsData.push(point.kills);
-      totalKills += point.kills;
+      killsData.push(point.count);
+      allKillsData.push(point.count);
+      totalKills += point.count;
 
       // Convert bigint to number, handling potential overflow
-      const valueInISK = Number(point.value) > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : Number(point.value);
+      const valueInISK = 0; // TODO: Get value data separately if needed
       valueData.push(valueInISK);
     }
 
@@ -543,51 +539,55 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }, correlationId: string): void {
-    const issues: Array<{ field: string; message: string }> = [];
+    const issues: ValidationIssue[] = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', message: 'Invalid start date' });
+      issues.push({ field: 'startDate', value: options.startDate, constraint: 'format', message: 'Invalid start date' });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
-      issues.push({ field: 'endDate', message: 'Invalid end date' });
+      issues.push({ field: 'endDate', value: options.endDate, constraint: 'format', message: 'Invalid end date' });
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'dateOrder', message: 'Start date must be before end date' });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'type', message: 'Character groups must be an array' });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'type', message: 'Characters must be an array' });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                value: char.eveId,
+                constraint: 'required',
                 message: 'Character eveId is required' 
               });
             }
             if (!char.name || typeof char.name !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                value: char.name,
+                constraint: 'required',
                 message: 'Character name is required' 
               });
             }
@@ -598,7 +598,7 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     if (issues.length > 0) {
       throw new ValidationError('Invalid chart generation options', issues, { 
-        context: { correlationId, operation: 'validateTrendChartOptions' }
+        correlationId, operation: 'validateTrendChartOptions'
       });
     }
   }

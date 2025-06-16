@@ -1,5 +1,5 @@
 import { ESIService } from '../ESIService';
-import { retryOperation } from '../../shared/performance/retry';
+// import { retryOperation } from '../../shared/performance/retry';
 import { logger } from '../../lib/logger';
 import { Character } from '../../domain/character/Character';
 import { CharacterRepository } from '../../infrastructure/repositories/CharacterRepository';
@@ -7,7 +7,7 @@ import { MapClient } from '../../infrastructure/http/MapClient';
 import { PrismaClient } from '@prisma/client';
 import prisma from '../../infrastructure/persistence/client';
 import { ValidatedConfiguration as Configuration } from '../../config/validated';
-import { errorHandler, ExternalServiceError, ValidationError, DatabaseError } from '../../shared/errors';
+import { errorHandler, ExternalServiceError, ValidationError } from '../../shared/errors';
 
 export class CharacterSyncService {
   private readonly characterRepository: CharacterRepository;
@@ -69,8 +69,10 @@ export class CharacterSyncService {
           const result = await this.map.getUserCharacters(mapName);
           if (!result) {
             throw new ExternalServiceError(
-              'Map API',
+              'MAP_API',
               'No data returned from Map API',
+              '/characters',
+              undefined,
               {
                 correlationId,
                 operation: 'getUserCharacters',
@@ -340,7 +342,7 @@ export class CharacterSyncService {
     try {
       // Validate inputs
       if (!eveId || typeof eveId !== 'string') {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'eveId',
           {
             correlationId,
@@ -350,7 +352,7 @@ export class CharacterSyncService {
       }
 
       if (!mapCharacterData) {
-        throw ValidationError.missingRequiredField(
+        throw ValidationError.fieldRequired(
           'mapCharacterData',
           {
             correlationId,

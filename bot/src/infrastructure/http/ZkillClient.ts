@@ -6,6 +6,7 @@ import { rateLimiterManager } from '../../shared/performance/RateLimiterManager'
 import { ValidatedConfiguration } from '../../config/validated';
 import { ExternalServiceError, ValidationError } from '../../shared/errors';
 import * as crypto from 'crypto';
+import { z } from 'zod';
 
 export class ZkillClient {
   private readonly client: TypeSafeHttpClient;
@@ -184,9 +185,12 @@ export class ZkillClient {
       // Apply rate limiting with retry
       await this.rateLimiter.wait(signal);
 
-      const response = await this.client.fetch<Record<string, any>>(`/characterID/${characterId}/page/${page}/`, {
-        signal,
-      });
+      const response = await this.client.get(
+        `/characterID/${characterId}/page/${page}/`,
+        z.record(z.any()),
+        undefined,
+        { signal }
+      );
 
       logger.debug('Raw zKill character kills response received', {
         correlationId,
@@ -207,7 +211,7 @@ export class ZkillClient {
       }
 
       // Convert object response to array and validate
-      const kills = Object.values(response).filter(kill => {
+      const kills = Object.values(response).filter((kill: any) => {
         const isValid = kill && typeof kill === 'object' && kill.killmail_id && kill.zkb?.hash;
 
         if (!isValid) {
@@ -291,8 +295,10 @@ export class ZkillClient {
       // Apply rate limiting with retry
       await this.rateLimiter.wait(signal);
 
-      const response = await this.client.fetch<Record<string, any>>(
+      const response = await this.client.get(
         `/losses/characterID/${characterId}/page/${page}/`,
+        z.record(z.any()),
+        undefined,
         { signal }
       );
 
@@ -315,7 +321,7 @@ export class ZkillClient {
       }
 
       // Convert object response to array and validate
-      const losses = Object.values(response).filter(kill => {
+      const losses = Object.values(response).filter((kill: any) => {
         const isValid = kill && typeof kill === 'object' && kill.killmail_id && kill.zkb?.hash;
 
         if (!isValid) {

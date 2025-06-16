@@ -6,6 +6,7 @@
 import { ChartData, ChartDataset, ChartMetadata } from '../../value-objects/ChartData';
 import { ChartConfiguration } from '../../value-objects/ChartConfiguration';
 import { ChartType } from '../../../../../shared/types/common';
+import { IChartDataProcessor } from '../IChartDataProcessor';
 
 export interface LossDataPoint {
   killTime: Date;
@@ -26,8 +27,39 @@ export interface LossAggregation {
   mostLostShipType?: number;
 }
 
-export class LossDataProcessor {
+export class LossDataProcessor implements IChartDataProcessor {
   private readonly HIGH_VALUE_THRESHOLD = BigInt(100_000_000); // 100M ISK
+
+  /**
+   * Process raw data based on configuration
+   */
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
+    const lossData = this.convertRawToLossData(rawData);
+    const groupLabels = ['Default Group']; // Default grouping
+    return this.processLossData(config, lossData, groupLabels);
+  }
+
+  /**
+   * Validate configuration for loss processor
+   */
+  validateConfiguration(config: ChartConfiguration): boolean {
+    return config.startDate && config.endDate && config.endDate > config.startDate;
+  }
+
+  /**
+   * Convert raw data to loss data points
+   */
+  private convertRawToLossData(rawData: any[]): LossDataPoint[] {
+    return rawData.map(item => ({
+      killTime: new Date(item.killTime),
+      killmailId: BigInt(item.killmailId),
+      characterId: BigInt(item.characterId),
+      groupId: item.groupId,
+      totalValue: BigInt(item.totalValue || 0),
+      shipTypeId: Number(item.shipTypeId),
+      systemId: Number(item.systemId)
+    }));
+  }
 
   /**
    * Process loss data points into chart-ready format
@@ -64,7 +96,7 @@ export class LossDataProcessor {
   private aggregateLosses(
     lossData: LossDataPoint[],
     groupLabels: string[],
-    config: ChartConfiguration
+    _config: ChartConfiguration
   ): LossAggregation[] {
     const aggregations: Map<string, LossAggregation> = new Map();
     

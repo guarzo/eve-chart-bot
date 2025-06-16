@@ -60,6 +60,7 @@ export class DistributionHandler extends BaseChartHandler {
 
       if (characterGroups.length === 0) {
         throw ChartError.noDataError(
+          'distribution',
           'No character groups found',
           {
             correlationId,
@@ -93,15 +94,14 @@ export class DistributionHandler extends BaseChartHandler {
           characterGroups: transformedGroups,
           displayType: displayOption,
         }),
+        2, // maxRetries
+        1000, // baseDelay
         {
-          maxRetries: 2,
+          operation: 'distribution_chart_generation',
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
           correlationId,
-          context: {
-            operation: 'distribution_chart_generation',
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            metadata: { interactionId: interaction.id, timeRange: time, displayType: displayOption },
-          },
+          metadata: { interactionId: interaction.id, timeRange: time, displayType: displayOption },
         }
       );
 

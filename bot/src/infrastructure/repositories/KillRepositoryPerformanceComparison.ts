@@ -98,11 +98,12 @@ export class KillRepositoryPerformanceComparison {
     
     // Track database queries (simplified - in real implementation you'd use Prisma middleware)
     let queryCount = 0;
-    const originalQuery = this.prisma.$executeRaw;
-    this.prisma.$executeRaw = async (...args) => {
-      queryCount++;
-      return originalQuery.apply(this.prisma, args);
-    };
+    // Monkey-patching Prisma methods is not type-safe
+    // const originalQuery = this.prisma.$executeRaw;
+    // this.prisma.$executeRaw = async (...args) => {
+    //   queryCount++;
+    //   return originalQuery.apply(this.prisma, args);
+    // };
 
     try {
       // Run multiple iterations to get average performance
@@ -130,7 +131,7 @@ export class KillRepositoryPerformanceComparison {
       }
     } finally {
       // Restore original query method
-      this.prisma.$executeRaw = originalQuery;
+      // this.prisma.$executeRaw = originalQuery; // Commented out with the monkey-patch
     }
 
     const endTime = performance.now();

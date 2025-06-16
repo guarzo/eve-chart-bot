@@ -1,6 +1,6 @@
 import { ChatInputCommandInteraction } from 'discord.js';
 import { errorHandler, DiscordError, createDiscordErrorResponse } from '../index';
-import { logger } from '../../logger';
+import { logger } from '../../../lib/logger';
 
 /**
  * Example: Enhanced Discord command handler with standardized error handling
@@ -25,7 +25,7 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
         'kills',
         'No character IDs provided',
         {
-          correlationId,
+          // correlationId removed
           userId: interaction.user.id,
           guildId: interaction.guildId || undefined,
           operation: 'kills_command',
@@ -39,7 +39,7 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
         'kills',
         'Too many characters specified (max: 10)',
         {
-          correlationId,
+          // correlationId removed
           userId: interaction.user.id,
           guildId: interaction.guildId || undefined,
           operation: 'kills_command',
@@ -60,7 +60,7 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
       3, // max attempts
       1000, // base delay
       {
-        correlationId,
+        // correlationId removed
         operation: 'generate_kills_chart',
         userId: interaction.user.id,
         guildId: interaction.guildId || undefined,
@@ -109,7 +109,7 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
     } catch (replyError) {
       // If we can't even send the error message, log it
       logger.error('Failed to send error response to Discord', {
-        correlationId,
+        // correlationId removed
         originalError: standardizedError.toJSON(),
         replyError: replyError instanceof Error ? replyError.message : String(replyError),
       });
@@ -122,10 +122,10 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
  */
 async function generateKillsChart(
   characterIds: string[],
-  period: string,
+  _period: string,
   chartType: string
 ): Promise<{ buffer: Buffer }> {
-  const correlationId = errorHandler.createCorrelationId();
+  // const _correlationId = errorHandler.createCorrelationId();
 
   try {
     // This would call your actual chart service
@@ -140,7 +140,7 @@ async function generateKillsChart(
       characterIds,
       undefined, // dataSize would be known here
       {
-        correlationId,
+        // correlationId removed
         includeStackTrace: process.env.NODE_ENV === 'development',
       }
     );

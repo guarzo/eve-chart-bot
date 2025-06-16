@@ -120,7 +120,7 @@ export class TrendHandler extends BaseChartHandler {
 
       // Render chart to buffer with error handling
       logger.info(`Rendering trend chart with ${displayType} view`, { correlationId });
-      const buffer = await this.renderChart(chartData, correlationId);
+      const buffer = await this.renderChart(chartData);
 
       // Send the chart with summary
       await interaction.editReply({

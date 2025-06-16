@@ -117,7 +117,7 @@ export class ConsolidatedChartFactory {
     
     // Return a proxy that adapts the new interface to the old one
     return new Proxy({}, {
-      get: (target, prop) => {
+      get: (_target, prop) => {
         // Map old method names to new service
         const methodMap: Record<string, Function> = {
           generateKillsChart: async (options: any) => {

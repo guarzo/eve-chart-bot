@@ -20,8 +20,8 @@ class ExtendedRedisClient {
     return this.client.get(key);
   }
 
-  set(key: string, value: string | Buffer): Promise<'OK'> {
-    return this.client.set(key, value);
+  set(key: string, value: string | Buffer, ...args: any[]): Promise<'OK'> {
+    return this.client.set(key, value, ...args);
   }
 
   setex(key: string, seconds: number, value: string | Buffer): Promise<'OK'> {
@@ -65,6 +65,35 @@ class ExtendedRedisClient {
 
   ping(): Promise<string> {
     return this.client.ping();
+  }
+
+  // Sorted set operations
+  zadd(key: string, ...args: (string | number)[]): Promise<string | number> {
+    return this.client.zadd(key, ...args);
+  }
+
+  zrange(key: string, start: number, stop: number): Promise<string[]> {
+    return this.client.zrange(key, start, stop);
+  }
+
+  zrevrange(key: string, start: number, stop: number): Promise<string[]> {
+    return this.client.zrevrange(key, start, stop);
+  }
+
+  zrem(key: string, ...members: (string | Buffer)[]): Promise<number> {
+    return this.client.zrem(key, ...members);
+  }
+
+  zrangebyscore(key: string, min: number | string, max: number | string, ...args: any[]): Promise<string[]> {
+    return this.client.zrangebyscore(key, min, max, ...args);
+  }
+
+  zcount(key: string, min: number | string, max: number | string): Promise<number> {
+    return this.client.zcount(key, min, max);
+  }
+
+  incr(key: string): Promise<number> {
+    return this.client.incr(key);
   }
 
   // For accessing the underlying client if needed

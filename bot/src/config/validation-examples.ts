@@ -3,11 +3,12 @@
  * This file demonstrates compile-time validation using satisfies operator
  */
 
-import { ApplicationConfig, LegacyConfig } from './types';
+import { ApplicationConfig } from './types';
 import { Environment, LogLevel } from '../shared/enums';
 
 // ✅ Valid configuration - compiles successfully
-const validConfig = {
+// Example of valid config - unused variable
+const _validConfig = {
   server: {
     port: 3000,
     nodeEnv: Environment.PRODUCTION,
@@ -86,6 +87,9 @@ const validConfig = {
     maxMs: 1000,
   },
 } as const satisfies ApplicationConfig;
+
+// Suppress unused variable warning
+void _validConfig;
 
 // ❌ Invalid configurations - would fail at compile time
 // Uncomment these to see TypeScript errors

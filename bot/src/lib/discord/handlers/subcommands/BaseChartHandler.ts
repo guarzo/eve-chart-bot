@@ -106,10 +106,7 @@ export abstract class BaseChartHandler {
         'read',
         'character_group',
         undefined,
-        {
-          correlationId,
-          operation: 'getAllCharacterGroups',
-        }
+        {}
       );
 
       logger.warn('Error fetching character groups, returning empty array', dbError.toLogFormat());

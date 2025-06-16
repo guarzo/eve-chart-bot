@@ -26,7 +26,7 @@ export class MonitoringIntegration {
     enableServer?: boolean;
     serverPort?: number;
     enableMetrics?: boolean;
-    enableTracing?: boolean;
+    enableTracing?: boolean; // Currently not used
   } = {}): Promise<void> {
     if (this.isInitialized) {
       return;
@@ -36,7 +36,7 @@ export class MonitoringIntegration {
       enableServer = true,
       serverPort = 3001,
       enableMetrics = true,
-      enableTracing = true,
+      enableTracing: _enableTracing = true,
     } = options;
 
     try {
@@ -152,18 +152,16 @@ export class MonitoringIntegration {
 
     // Collect garbage collection metrics if available
     if (process.env.NODE_ENV === 'development' && global.gc) {
-      let lastGcTime = 0;
       const originalGc = global.gc;
       
-      global.gc = (...args: any[]) => {
+      (global as any).gc = async (options?: any) => {
         const start = Date.now();
-        const result = originalGc.apply(global, args);
+        const result = await originalGc.call(global, options);
         const duration = Date.now() - start;
         
         metricsCollector.incrementCounter('gc_runs');
         metricsCollector.recordTiming('gc_duration', duration);
         
-        lastGcTime = start;
         return result;
       };
     }
@@ -222,7 +220,7 @@ export class MonitoringIntegration {
     return this.healthCheckService.getHealthStatus();
   }
 
-  recordDiscordCommand(commandName: string, userId: string, guildId: string, duration: number, success: boolean): void {
+  recordDiscordCommand(commandName: string, _userId: string, _guildId: string, duration: number, success: boolean): void {
     metricsCollector.incrementCounter('discord_commands_processed', 1, {
       command: commandName,
       status: success ? 'success' : 'error',

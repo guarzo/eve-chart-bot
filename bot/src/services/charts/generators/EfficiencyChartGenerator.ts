@@ -1,10 +1,10 @@
 import { BaseChartGenerator } from '../BaseChartGenerator';
-import { ChartData, ChartDisplayType } from '../../../types/chart';
+import { ChartData } from '../../../types/chart';
 import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
 import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
 import { logger } from '../../../lib/logger';
 import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
-import { errorHandler, ChartError, ValidationError } from '../../../shared/errors';
+import { errorHandler, ChartError, ValidationError, ValidationIssue } from '../../../shared/errors';
 import { BigIntTransformer } from '../../../shared/utilities/BigIntTransformer';
 
 /**
@@ -61,17 +61,15 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
             startDate,
             endDate
           ),
-          {
-            retries: 3,
-            context: { operation: 'fetchKillsForEfficiency', characterCount: characterIds.length, correlationId }
-          }
+          3,
+          1000,
+          { operation: 'fetchKillsForEfficiency', correlationId, metadata: { characterCount: characterIds.length } }
         ),
         errorHandler.withRetry(
           () => this.lossRepository.getLossesByTimeRange(startDate, endDate),
-          {
-            retries: 3,
-            context: { operation: 'fetchLossesForEfficiency', correlationId }
-          }
+          3,
+          1000,
+          { operation: 'fetchLossesForEfficiency', correlationId }
         ),
       ]);
 
@@ -101,8 +99,8 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
       const totalActivity = groupData.reduce((sum, data) => sum + data.totalKills + data.totalLosses, 0);
       if (totalActivity === 0) {
         logger.warn('No kills or losses found for efficiency calculation', { correlationId });
-        throw new ChartError('NO_DATA_AVAILABLE', 'No kills or losses found in the specified time period', {
-          context: { startDate, endDate, characterCount: characterIds.length, correlationId }
+        throw ChartError.noDataError('efficiency', 'No kills or losses found in the specified time period', {
+          correlationId, metadata: { startDate, endDate, characterCount: characterIds.length }
         });
       }
 
@@ -148,10 +146,9 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
         throw error;
       }
 
-      throw new ChartError('CHART_GENERATION_FAILED', 'Failed to generate efficiency chart', {
-        cause: error,
-        context: { correlationId, operation: 'generateEfficiencyChart' }
-      });
+      throw ChartError.generationError('efficiency', 'Failed to generate efficiency chart', {
+        correlationId, operation: 'generateEfficiencyChart'
+      }, error as Error);
     }
   }
 
@@ -169,51 +166,55 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }, correlationId: string): void {
-    const issues: Array<{ field: string; message: string }> = [];
+    const issues: ValidationIssue[] = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', message: 'Invalid start date' });
+      issues.push({ field: 'startDate', value: options.startDate, constraint: 'format', message: 'Invalid start date' });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
-      issues.push({ field: 'endDate', message: 'Invalid end date' });
+      issues.push({ field: 'endDate', value: options.endDate, constraint: 'format', message: 'Invalid end date' });
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', message: 'Start date must be before end date' });
+      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'dateOrder', message: 'Start date must be before end date' });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', message: 'Character groups must be an array' });
+      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'type', message: 'Character groups must be an array' });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', message: 'At least one character group is required' });
+        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required' });
+          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required' });
+          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array' });
+          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'type', message: 'Characters must be an array' });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+                value: char.eveId,
+                constraint: 'required',
                 message: 'Character eveId is required' 
               });
             }
             if (!char.name || typeof char.name !== 'string') {
               issues.push({ 
                 field: `characterGroups[${index}].characters[${charIndex}].name`, 
+                value: char.name,
+                constraint: 'required',
                 message: 'Character name is required' 
               });
             }
@@ -224,7 +225,7 @@ export class EfficiencyChartGenerator extends BaseChartGenerator {
 
     if (issues.length > 0) {
       throw new ValidationError('Invalid chart generation options', issues, { 
-        context: { correlationId, operation: 'validateEfficiencyChartOptions' }
+        correlationId, operation: 'validateEfficiencyChartOptions'
       });
     }
   }

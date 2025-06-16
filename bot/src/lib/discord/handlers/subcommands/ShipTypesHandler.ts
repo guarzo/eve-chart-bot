@@ -99,7 +99,7 @@ export class ShipTypesHandler extends BaseChartHandler {
 
       // Render chart to buffer with error handling
       logger.info('Rendering ship types chart', { correlationId });
-      const buffer = await this.renderChart(chartData, correlationId);
+      const buffer = await this.renderChart(chartData);
 
       // Send the chart with summary
       await interaction.editReply({

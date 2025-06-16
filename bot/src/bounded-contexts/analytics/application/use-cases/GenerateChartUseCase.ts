@@ -7,6 +7,7 @@ import { ChartConfiguration } from '../../domain/value-objects/ChartConfiguratio
 import { ChartData } from '../../domain/value-objects/ChartData';
 import { ChartDataProcessor } from '../../domain/services/ChartDataProcessor';
 import type { KillDataPoint, LossDataPoint } from '../../domain/services/ChartDataProcessor';
+export type { KillDataPoint, LossDataPoint };
 import { OperationResult, ChartType } from '../../../../shared/types/common';
 
 // Repository interfaces (will be implemented in infrastructure layer)
@@ -46,7 +47,6 @@ export class GenerateChartUseCase {
   ) {}
 
   async execute(config: ChartConfiguration): Promise<OperationResult<Buffer>> {
-    const startTime = Date.now();
     const correlationId = this.generateCorrelationId();
 
     try {

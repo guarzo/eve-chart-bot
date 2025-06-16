@@ -6,6 +6,7 @@
 import { ChartData, ChartDataset, ChartMetadata } from '../../value-objects/ChartData';
 import { ChartConfiguration } from '../../value-objects/ChartConfiguration';
 import { ChartType } from '../../../../../shared/types/common';
+import { IChartDataProcessor } from '../IChartDataProcessor';
 
 export interface KillDataPoint {
   killTime: Date;
@@ -24,7 +25,37 @@ export interface KillAggregation {
   averagePerDay: number;
 }
 
-export class KillsDataProcessor {
+export class KillsDataProcessor implements IChartDataProcessor {
+  /**
+   * Process raw data based on configuration
+   */
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
+    const killData = this.convertRawToKillData(rawData);
+    const groupLabels = ['Default Group']; // Default grouping
+    return this.processKillData(config, killData, groupLabels);
+  }
+
+  /**
+   * Validate configuration for kills processor
+   */
+  validateConfiguration(config: ChartConfiguration): boolean {
+    return config.startDate && config.endDate && config.endDate > config.startDate;
+  }
+
+  /**
+   * Convert raw data to kill data points
+   */
+  private convertRawToKillData(rawData: any[]): KillDataPoint[] {
+    return rawData.map(item => ({
+      killTime: new Date(item.killTime),
+      killmailId: BigInt(item.killmailId),
+      characterId: BigInt(item.characterId),
+      groupId: item.groupId,
+      solo: Boolean(item.solo),
+      npc: Boolean(item.npc)
+    }));
+  }
+
   /**
    * Process kill data points into chart-ready format
    */

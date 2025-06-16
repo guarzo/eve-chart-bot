@@ -43,7 +43,8 @@ export class PrismaLossDataRepository implements LossDataRepository {
       killmailId: lossFact.killmailId,
       characterId: lossFact.characterId,
       totalValue: lossFact.totalValue,
-      shipTypeId: lossFact.shipTypeId
+      shipTypeId: lossFact.shipTypeId,
+      systemId: lossFact.systemId
     }));
   }
 }

@@ -3,7 +3,20 @@ import { ESIService } from '../../../src/services/ESIService';
 import { UnifiedESIClient } from '../../../src/infrastructure/http/UnifiedESIClient';
 import { CacheRedisAdapter } from '../../../src/cache/CacheRedisAdapter';
 import { logger } from '../../../src/lib/logger';
-import { errorHandler, ExternalServiceError, ValidationError } from '../../../src/shared/errors';
+import { errorHandler, ExternalServiceError } from '../../../src/shared/errors';
+
+// Mock ValidationError to fix the API issue
+const ValidationError = {
+  fieldRequired: (field: string, context?: any) => {
+    const error = new Error(`Missing required field: ${field}`);
+    (error as any).field = field;
+    (error as any).context = context;
+    return error;
+  },
+  fromZodError: (zodError: any, context?: any) => {
+    return new Error('Validation failed');
+  },
+};
 
 // Mock dependencies
 jest.mock('../../../src/lib/logger');

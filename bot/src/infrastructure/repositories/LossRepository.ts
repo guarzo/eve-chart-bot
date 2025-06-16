@@ -277,14 +277,14 @@ export class LossRepository extends BaseRepository {
 
         const losses = await this.prisma.lossFact.findMany({
           where: {
-            character_id: characterId,
-            kill_time: {
+            characterId: characterId,
+            killTime: {
               gte: startDate,
               lte: endDate,
             },
           },
           orderBy: {
-            kill_time: 'desc',
+            killTime: 'desc',
           },
         });
 
@@ -334,25 +334,25 @@ export class LossRepository extends BaseRepository {
 
         const data = loss.toObject();
         await this.prisma.lossFact.upsert({
-          where: { killmail_id: loss.killmailId },
+          where: { killmailId: loss.killmailId },
           update: {
-            kill_time: data.killTime,
-            system_id: data.systemId,
-            total_value: data.totalValue,
-            attacker_count: data.attackerCount,
+            killTime: data.killTime,
+            systemId: data.systemId,
+            totalValue: data.totalValue,
+            attackerCount: data.attackerCount,
             labels: data.labels,
-            character_id: data.characterId,
-            ship_type_id: data.shipTypeId,
+            characterId: data.characterId,
+            shipTypeId: data.shipTypeId,
           },
           create: {
-            killmail_id: data.killmailId,
-            kill_time: data.killTime,
-            system_id: data.systemId,
-            total_value: data.totalValue,
-            attacker_count: data.attackerCount,
+            killmailId: data.killmailId,
+            killTime: data.killTime,
+            systemId: data.systemId,
+            totalValue: data.totalValue,
+            attackerCount: data.attackerCount,
             labels: data.labels,
-            character_id: data.characterId,
-            ship_type_id: data.shipTypeId,
+            characterId: data.characterId,
+            shipTypeId: data.shipTypeId,
           },
         });
 
@@ -407,13 +407,13 @@ export class LossRepository extends BaseRepository {
 
         const losses = await this.prisma.lossFact.findMany({
           where: {
-            kill_time: {
+            killTime: {
               gte: startDate,
               lte: endDate,
             },
           },
           orderBy: {
-            kill_time: 'desc',
+            killTime: 'desc',
           },
         });
 
@@ -480,23 +480,23 @@ export class LossRepository extends BaseRepository {
         // Find all losses for these characters in the date range
         const losses = await this.prisma.lossFact.findMany({
           where: {
-            character_id: {
+            characterId: {
               in: characterIds.map(id => BigInt(id)),
             },
-            kill_time: {
+            killTime: {
               gte: startDate,
               lte: endDate,
             },
           },
           select: {
-            ship_type_id: true,
+            shipTypeId: true,
           },
         });
         
         // Count occurrences of each ship type
         const shipTypeCounts = new Map<string, number>();
         for (const loss of losses) {
-          const shipTypeId = loss.ship_type_id.toString();
+          const shipTypeId = loss.shipTypeId.toString();
           shipTypeCounts.set(shipTypeId, (shipTypeCounts.get(shipTypeId) ?? 0) + 1);
         }
         

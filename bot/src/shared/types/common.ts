@@ -82,8 +82,17 @@ export enum ChartType {
   LOSSES = 'losses', 
   EFFICIENCY = 'efficiency',
   HEATMAP = 'heatmap',
+  TIME_OF_DAY_HEATMAP = 'time-of-day-heatmap',
+  CALENDAR_HEATMAP = 'calendar-heatmap',
   DISTRIBUTION = 'distribution',
-  TREND = 'trend'
+  TREND = 'trend',
+  SHIP_TYPES = 'ship-types',
+  RATIO = 'ratio',
+  CORPS_ACTIVITY = 'corps-activity',
+  CORPS_KILLS = 'corps-kills',
+  CORPS_LOSSES = 'corps-losses',
+  CORPS_EFFICIENCY = 'corps-efficiency',
+  ENEMY_CORPS = 'enemy-corps'
 }
 
 export enum TimePeriod {

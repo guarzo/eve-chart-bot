@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { RequestHandler } from 'express';
 import { Server } from 'http';
 import { HealthCheckService } from './HealthCheckService';
 import { metricsCollector } from './MetricsCollector';
@@ -27,7 +27,7 @@ export class MonitoringServer {
     this.app.use(express.json());
     
     // CORS for monitoring tools
-    this.app.use((req, res, next) => {
+    this.app.use((_req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
       res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
       next();
@@ -52,7 +52,7 @@ export class MonitoringServer {
 
   private setupRoutes(): void {
     // Health check endpoints
-    this.app.get('/health', async (req, res) => {
+    this.app.get('/health', async (_req, res) => {
       try {
         const health = await this.healthCheckService.getHealthStatus();
         const statusCode = health.status === 'healthy' ? 200 : 
@@ -70,7 +70,7 @@ export class MonitoringServer {
     });
 
     // Readiness probe (for Kubernetes)
-    this.app.get('/ready', async (req, res) => {
+    this.app.get('/ready', async (_req, res) => {
       try {
         const readiness = await this.healthCheckService.getReadinessStatus();
         const statusCode = readiness.ready ? 200 : 503;
@@ -86,7 +86,7 @@ export class MonitoringServer {
     });
 
     // Liveness probe (for Kubernetes)
-    this.app.get('/live', async (req, res) => {
+    this.app.get('/live', async (_req, res) => {
       try {
         const liveness = await this.healthCheckService.getLivenessStatus();
         res.json(liveness);
@@ -100,7 +100,7 @@ export class MonitoringServer {
     });
 
     // Metrics endpoint (Prometheus format)
-    this.app.get('/metrics', async (req, res) => {
+    this.app.get('/metrics', async (_req, res) => {
       try {
         const prometheusMetrics = metricsCollector.getPrometheusMetrics();
         res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
@@ -114,7 +114,7 @@ export class MonitoringServer {
     });
 
     // Detailed metrics endpoint (JSON format)
-    this.app.get('/metrics/json', async (req, res) => {
+    this.app.get('/metrics/json', async (_req, res) => {
       try {
         const snapshot = await metricsCollector.getMetricsSnapshot();
         res.json(snapshot);
@@ -144,7 +144,7 @@ export class MonitoringServer {
       }
     });
 
-    this.app.get('/traces/stats', (req, res) => {
+    this.app.get('/traces/stats', (_req, res) => {
       try {
         const stats = tracingService.getTraceStats();
         res.json(stats);
@@ -157,7 +157,7 @@ export class MonitoringServer {
     });
 
     // Cache stats endpoint
-    this.app.get('/cache/stats', async (req, res) => {
+    this.app.get('/cache/stats', async (_req, res) => {
       try {
         const stats = await chartCacheService.getCacheStats();
         res.json(stats);
@@ -170,27 +170,30 @@ export class MonitoringServer {
     });
 
     // Cache invalidation endpoint
-    this.app.post('/cache/invalidate', async (req, res) => {
+    const cacheInvalidateHandler: RequestHandler = async (req, res) => {
       try {
         const { type, characterIds, startDate, endDate } = req.body;
         
         switch (type) {
           case 'character':
             if (!characterIds) {
-              return res.status(400).json({ error: 'characterIds required for character invalidation' });
+              res.status(400).json({ error: 'characterIds required for character invalidation' });
+              return;
             }
             await chartCacheService.invalidateCharacterCache(characterIds);
             break;
           
           case 'timeRange':
             if (!startDate) {
-              return res.status(400).json({ error: 'startDate required for timeRange invalidation' });
+              res.status(400).json({ error: 'startDate required for timeRange invalidation' });
+              return;
             }
             await chartCacheService.invalidateTimeRangeCache(new Date(startDate), endDate ? new Date(endDate) : undefined);
             break;
           
           default:
-            return res.status(400).json({ error: 'Invalid invalidation type. Use "character" or "timeRange"' });
+            res.status(400).json({ error: 'Invalid invalidation type. Use "character" or "timeRange"' });
+            return;
         }
         
         res.json({ success: true, type, invalidatedAt: new Date().toISOString() });
@@ -200,11 +203,13 @@ export class MonitoringServer {
           error: 'Cache invalidation failed',
         });
       }
-    });
+    };
+
+    this.app.post('/cache/invalidate', cacheInvalidateHandler);
 
     // Debug endpoints (only in development)
     if (process.env.NODE_ENV === 'development') {
-      this.app.get('/debug/memory', (req, res) => {
+      this.app.get('/debug/memory', (_req, res) => {
         const memoryUsage = process.memoryUsage();
         const formattedMemory = {
           rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
@@ -222,7 +227,7 @@ export class MonitoringServer {
         });
       });
 
-      this.app.get('/debug/gc', (req, res) => {
+      this.app.get('/debug/gc', (_req, res) => {
         if (global.gc) {
           const beforeMemory = process.memoryUsage();
           global.gc();
@@ -246,7 +251,7 @@ export class MonitoringServer {
     }
 
     // Default route
-    this.app.get('/', (req, res) => {
+    this.app.get('/', (_req, res) => {
       res.json({
         service: 'EVE Online Discord Bot - Monitoring',
         version: process.env.npm_package_version || '1.0.0',
@@ -267,7 +272,7 @@ export class MonitoringServer {
     });
 
     // Error handling
-    this.app.use((error: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    this.app.use((error: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
       logger.error('Monitoring server error:', {
         error: error.message,
         stack: error.stack,

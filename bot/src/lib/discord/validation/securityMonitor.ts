@@ -134,7 +134,7 @@ export class SecurityMonitor {
     try {
       const recentActivity = await redis.zrangebyscore(key, Date.now() - this.MONITOR_WINDOW, Date.now());
 
-      recentActivity.forEach(entry => {
+      recentActivity.forEach((entry: string) => {
         try {
           const data = JSON.parse(entry);
           if (data.guildId) guilds.add(data.guildId);

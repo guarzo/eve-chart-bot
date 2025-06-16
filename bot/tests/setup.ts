@@ -38,6 +38,66 @@ jest.mock("../src/infrastructure/persistence/client", () => ({
   prisma: prismaMock,
 }));
 
+// Mock monitoring services to prevent timer issues in tests
+jest.mock("../src/infrastructure/monitoring/MetricsCollector", () => ({
+  MetricsCollector: class MockMetricsCollector {
+    getInstance() { return this; }
+    incrementCounter() {}
+    setGauge() {}
+    recordTiming() {}
+    recordHistogram() {}
+    getMetrics() { return {}; }
+    clearMetrics() {}
+  },
+}));
+
+jest.mock("../src/infrastructure/monitoring/TracingService", () => ({
+  TracingService: class MockTracingService {
+    static getInstance() { return new this(); }
+    startSpan() { return { end: jest.fn(), setError: jest.fn() }; }
+    getActiveSpan() { return null; }
+    withSpan() { return Promise.resolve(); }
+    createSpan() { return { end: jest.fn(), setError: jest.fn() }; }
+  },
+}));
+
+
+// Mock the entire shared/errors module to fix import issues
+jest.mock("../src/shared/errors", () => {
+  class MockValidationError extends Error {
+    static fieldRequired(field, context) {
+      const error = new this(`Missing required field: ${field}`);
+      error.field = field;
+      error.context = context;
+      return error;
+    }
+    
+    static fromZodError(zodError, context) {
+      return new this('Validation failed');
+    }
+    
+    constructor(message) {
+      super(message);
+      this.name = 'ValidationError';
+      this.issues = [];
+    }
+  }
+
+  return {
+    ValidationError: MockValidationError,
+    errorHandler: {
+      handleError: jest.fn(),
+      handleValidationError: jest.fn(),
+      handleDatabaseError: jest.fn(),
+      handleExternalServiceError: jest.fn(),
+    },
+    BaseError: class MockBaseError extends Error {},
+    DatabaseError: class MockDatabaseError extends Error {},
+    ChartError: class MockChartError extends Error {},
+    ExternalServiceError: class MockExternalServiceError extends Error {},
+  };
+});
+
 // Reset all mocks before each test
 beforeEach(() => {
   mockReset(prismaMock);
