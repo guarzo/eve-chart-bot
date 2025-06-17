@@ -30,16 +30,16 @@ export class CanvasChartRenderer implements IChartRenderer {
     try {
       // Create canvas
       const canvas = this.createCanvas(config);
-      
+
       // Build Chart.js configuration
       const chartJsConfig = this.buildChartJsConfig(data, config);
-      
+
       // Render the chart
       const chart = new Chart(canvas.getContext('2d') as any, chartJsConfig);
-      
+
       // Convert to buffer
       const buffer = canvas.toBuffer('image/png');
-      
+
       // Clean up
       chart.destroy();
 
@@ -47,15 +47,14 @@ export class CanvasChartRenderer implements IChartRenderer {
       logger.debug('Chart rendered', {
         type: config.type,
         renderTimeMs: renderTime,
-        size: buffer.length
+        size: buffer.length,
       });
 
       return buffer;
-
     } catch (error) {
       logger.error('Chart rendering failed', {
         error,
-        type: config.type
+        type: config.type,
       });
       throw new Error('Failed to render chart');
     }
@@ -82,7 +81,7 @@ export class CanvasChartRenderer implements IChartRenderer {
   private createCanvas(config: ChartConfiguration): Canvas {
     const width = config.displayOptions.width || this.defaultWidth;
     const height = config.displayOptions.height || this.defaultHeight;
-    
+
     return createCanvas(width, height);
   }
 
@@ -91,7 +90,7 @@ export class CanvasChartRenderer implements IChartRenderer {
    */
   private buildChartJsConfig(data: ChartData, config: ChartConfiguration): ChartJsConfig {
     const chartType = this.mapChartType(config.type);
-    
+
     return {
       type: chartType as any,
       data: {
@@ -102,8 +101,8 @@ export class CanvasChartRenderer implements IChartRenderer {
           backgroundColor: dataset.backgroundColor,
           borderColor: dataset.borderColor,
           borderWidth: dataset.borderWidth,
-          fill: dataset.fill
-        }))
+          fill: dataset.fill,
+        })),
       },
       options: {
         responsive: false,
@@ -111,15 +110,15 @@ export class CanvasChartRenderer implements IChartRenderer {
         plugins: {
           legend: {
             display: config.displayOptions.showLegend,
-            position: 'top'
+            position: 'top',
           },
           title: {
             display: true,
-            text: this.getChartTitle(config)
-          }
+            text: this.getChartTitle(config),
+          },
         },
-        scales: this.buildScales(config)
-      }
+        scales: this.buildScales(config),
+      },
     };
   }
 
@@ -153,23 +152,23 @@ export class CanvasChartRenderer implements IChartRenderer {
         display: config.displayOptions.showGrid,
         grid: {
           display: config.displayOptions.showGrid,
-          color: 'rgba(255, 255, 255, 0.1)'
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
-          color: '#ffffff'
-        }
+          color: '#ffffff',
+        },
       },
       y: {
         display: config.displayOptions.showGrid,
         grid: {
           display: config.displayOptions.showGrid,
-          color: 'rgba(255, 255, 255, 0.1)'
+          color: 'rgba(255, 255, 255, 0.1)',
         },
         ticks: {
-          color: '#ffffff'
+          color: '#ffffff',
         },
-        beginAtZero: true
-      }
+        beginAtZero: true,
+      },
     };
 
     // Customize scales based on chart type
@@ -186,7 +185,7 @@ export class CanvasChartRenderer implements IChartRenderer {
   private getChartTitle(config: ChartConfiguration): string {
     const startStr = config.startDate.toLocaleDateString();
     const endStr = config.endDate.toLocaleDateString();
-    
+
     switch (config.type) {
       case ChartType.KILLS:
         return `Kills Report (${startStr} - ${endStr})`;

@@ -6,17 +6,25 @@ import { errorHandler } from '../shared/errors';
 
 // Simple validation error class for testing compatibility
 class ValidationError extends Error {
-  constructor(message: string, public field?: string, public context?: any) {
+  constructor(
+    message: string,
+    public field?: string,
+    public context?: any
+  ) {
     super(message);
     this.name = 'ValidationError';
   }
-  
+
   static fieldRequired(field: string, context?: any): ValidationError {
     return new ValidationError(`Missing required field: ${field}`, field, context);
   }
-  
+
   static invalidFormat(field: string, expectedFormat: string, actualValue: string, context?: any): ValidationError {
-    return new ValidationError(`Invalid format for ${field}: expected ${expectedFormat}, got ${actualValue}`, field, context);
+    return new ValidationError(
+      `Invalid format for ${field}: expected ${expectedFormat}, got ${actualValue}`,
+      field,
+      context
+    );
   }
 }
 
@@ -42,31 +50,23 @@ export class ESIService {
    */
   async getKillmail(killmailId: number, hash: string): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!killmailId || killmailId <= 0) {
-        throw ValidationError.invalidFormat(
-          'killmailId',
-          'positive integer',
-          killmailId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getKillmail',
-            metadata: { hash },
-          }
-        );
+        throw ValidationError.invalidFormat('killmailId', 'positive integer', killmailId?.toString(), {
+          correlationId,
+          operation: 'esi.getKillmail',
+          metadata: { hash },
+        });
       }
-      
+
       if (!hash || typeof hash !== 'string') {
-        throw ValidationError.fieldRequired(
-          'hash',
-          {
-            correlationId,
-            operation: 'esi.getKillmail',
-            metadata: { killmailId },
-          }
-        );
+        throw ValidationError.fieldRequired('hash', {
+          correlationId,
+          operation: 'esi.getKillmail',
+          metadata: { killmailId },
+        });
       }
 
       logger.debug('Fetching killmail from ESI', {
@@ -96,14 +96,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getKillmail',
-          metadata: { killmailId, hash },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getKillmail',
+        metadata: { killmailId, hash },
+      });
     }
   }
 
@@ -112,19 +109,14 @@ export class ESIService {
    */
   async getCharacter(characterId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!characterId || characterId <= 0) {
-        throw ValidationError.invalidFormat(
-          'characterId',
-          'positive integer',
-          characterId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getCharacter',
-          }
-        );
+        throw ValidationError.invalidFormat('characterId', 'positive integer', characterId?.toString(), {
+          correlationId,
+          operation: 'esi.getCharacter',
+        });
       }
 
       logger.debug('Fetching character from ESI', {
@@ -153,14 +145,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCharacter',
-          metadata: { characterId },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCharacter',
+        metadata: { characterId },
+      });
     }
   }
 
@@ -169,19 +158,14 @@ export class ESIService {
    */
   async getCorporation(corporationId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!corporationId || corporationId <= 0) {
-        throw ValidationError.invalidFormat(
-          'corporationId',
-          'positive integer',
-          corporationId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getCorporation',
-          }
-        );
+        throw ValidationError.invalidFormat('corporationId', 'positive integer', corporationId?.toString(), {
+          correlationId,
+          operation: 'esi.getCorporation',
+        });
       }
 
       logger.debug('Fetching corporation from ESI', {
@@ -210,14 +194,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCorporation',
-          metadata: { corporationId },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCorporation',
+        metadata: { corporationId },
+      });
     }
   }
 
@@ -226,19 +207,14 @@ export class ESIService {
    */
   async getAlliance(allianceId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!allianceId || allianceId <= 0) {
-        throw ValidationError.invalidFormat(
-          'allianceId',
-          'positive integer',
-          allianceId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getAlliance',
-          }
-        );
+        throw ValidationError.invalidFormat('allianceId', 'positive integer', allianceId?.toString(), {
+          correlationId,
+          operation: 'esi.getAlliance',
+        });
       }
 
       logger.debug('Fetching alliance from ESI', {
@@ -267,14 +243,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getAlliance',
-          metadata: { allianceId },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getAlliance',
+        metadata: { allianceId },
+      });
     }
   }
 
@@ -283,19 +256,14 @@ export class ESIService {
    */
   async getShipType(typeId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!typeId || typeId <= 0) {
-        throw ValidationError.invalidFormat(
-          'typeId',
-          'positive integer',
-          typeId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getShipType',
-          }
-        );
+        throw ValidationError.invalidFormat('typeId', 'positive integer', typeId?.toString(), {
+          correlationId,
+          operation: 'esi.getShipType',
+        });
       }
 
       logger.debug('Fetching ship type from ESI', {
@@ -324,14 +292,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getShipType',
-          metadata: { typeId },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getShipType',
+        metadata: { typeId },
+      });
     }
   }
 
@@ -340,19 +305,14 @@ export class ESIService {
    */
   async getSolarSystem(systemId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!systemId || systemId <= 0) {
-        throw ValidationError.invalidFormat(
-          'systemId',
-          'positive integer',
-          systemId?.toString(),
-          {
-            correlationId,
-            operation: 'esi.getSolarSystem',
-          }
-        );
+        throw ValidationError.invalidFormat('systemId', 'positive integer', systemId?.toString(), {
+          correlationId,
+          operation: 'esi.getSolarSystem',
+        });
       }
 
       logger.debug('Fetching solar system from ESI', {
@@ -381,14 +341,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getSolarSystem',
-          metadata: { systemId },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getSolarSystem',
+        metadata: { systemId },
+      });
     }
   }
 
@@ -398,17 +355,14 @@ export class ESIService {
    */
   async getShipTypeNames(typeIds: number[]): Promise<Record<number, string>> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!typeIds || !Array.isArray(typeIds)) {
-        throw ValidationError.fieldRequired(
-          'typeIds',
-          {
-            correlationId,
-            operation: 'esi.getShipTypeNames',
-          }
-        );
+        throw ValidationError.fieldRequired('typeIds', {
+          correlationId,
+          operation: 'esi.getShipTypeNames',
+        });
       }
 
       if (typeIds.length === 0) {
@@ -447,10 +401,13 @@ export class ESIService {
       for (let i = 0; i < uniqueTypeIds.length; i += batchSize) {
         const batch = uniqueTypeIds.slice(i, i + batchSize);
 
-        logger.debug(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueTypeIds.length / batchSize)}`, {
-          correlationId,
-          batchSize: batch.length,
-        });
+        logger.debug(
+          `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueTypeIds.length / batchSize)}`,
+          {
+            correlationId,
+            batchSize: batch.length,
+          }
+        );
 
         // Fetch each type in parallel
         const promises = batch.map(typeId => this.getShipType(typeId));
@@ -474,14 +431,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getShipTypeNames',
-          metadata: { typeCount: typeIds?.length },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getShipTypeNames',
+        metadata: { typeCount: typeIds?.length },
+      });
     }
   }
 
@@ -490,17 +444,14 @@ export class ESIService {
    */
   async getCorporationDetails(corpIds: number[]): Promise<Record<number, { name: string; ticker: string }>> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!corpIds || !Array.isArray(corpIds)) {
-        throw ValidationError.fieldRequired(
-          'corpIds',
-          {
-            correlationId,
-            operation: 'esi.getCorporationDetails',
-          }
-        );
+        throw ValidationError.fieldRequired('corpIds', {
+          correlationId,
+          operation: 'esi.getCorporationDetails',
+        });
       }
 
       if (corpIds.length === 0) {
@@ -539,10 +490,13 @@ export class ESIService {
       for (let i = 0; i < uniqueCorpIds.length; i += batchSize) {
         const batch = uniqueCorpIds.slice(i, i + batchSize);
 
-        logger.debug(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueCorpIds.length / batchSize)}`, {
-          correlationId,
-          batchSize: batch.length,
-        });
+        logger.debug(
+          `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueCorpIds.length / batchSize)}`,
+          {
+            correlationId,
+            batchSize: batch.length,
+          }
+        );
 
         // Fetch each corporation in parallel
         const promises = batch.map(corpId => this.getCorporation(corpId));
@@ -569,14 +523,11 @@ export class ESIService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCorporationDetails',
-          metadata: { corpCount: corpIds?.length },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCorporationDetails',
+        metadata: { corpCount: corpIds?.length },
+      });
     }
   }
 }

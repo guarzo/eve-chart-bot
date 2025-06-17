@@ -24,7 +24,7 @@ export class TypeSafeHttpClient {
       timeout: config.timeout,
       headers: {
         'User-Agent': 'EVE-Chart-Bot/1.0',
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
         ...config.headers,
       },
@@ -32,7 +32,7 @@ export class TypeSafeHttpClient {
 
     // Add request interceptor for API key if provided
     if (config.apiKey) {
-      this.client.interceptors.request.use((request) => {
+      this.client.interceptors.request.use(request => {
         if (request.headers) {
           request.headers['Authorization'] = `Bearer ${config.apiKey}`;
         }
@@ -42,8 +42,8 @@ export class TypeSafeHttpClient {
 
     // Add response interceptor for error handling
     this.client.interceptors.response.use(
-      (response) => response,
-      (error) => {
+      response => response,
+      error => {
         const correlationId = crypto.randomUUID();
         logger.error('HTTP request failed', {
           correlationId,
@@ -71,35 +71,21 @@ export class TypeSafeHttpClient {
   /**
    * Make a POST request with type validation
    */
-  async post<T>(
-    endpoint: string,
-    schema: z.ZodSchema<T>,
-    data?: unknown,
-    options?: AxiosRequestConfig
-  ): Promise<T> {
+  async post<T>(endpoint: string, schema: z.ZodSchema<T>, data?: unknown, options?: AxiosRequestConfig): Promise<T> {
     return this.request('POST', endpoint, schema, { data, ...options });
   }
 
   /**
    * Make a PUT request with type validation
    */
-  async put<T>(
-    endpoint: string,
-    schema: z.ZodSchema<T>,
-    data?: unknown,
-    options?: AxiosRequestConfig
-  ): Promise<T> {
+  async put<T>(endpoint: string, schema: z.ZodSchema<T>, data?: unknown, options?: AxiosRequestConfig): Promise<T> {
     return this.request('PUT', endpoint, schema, { data, ...options });
   }
 
   /**
    * Make a DELETE request with type validation
    */
-  async delete<T>(
-    endpoint: string,
-    schema: z.ZodSchema<T>,
-    options?: AxiosRequestConfig
-  ): Promise<T> {
+  async delete<T>(endpoint: string, schema: z.ZodSchema<T>, options?: AxiosRequestConfig): Promise<T> {
     return this.request('DELETE', endpoint, schema, options);
   }
 
@@ -123,7 +109,7 @@ export class TypeSafeHttpClient {
     });
 
     let lastError: Error | undefined;
-    
+
     for (let attempt = 0; attempt <= this.config.retries; attempt++) {
       try {
         const response = await this.client.request({
@@ -135,7 +121,7 @@ export class TypeSafeHttpClient {
         return this.validateResponse(response, schema, correlationId);
       } catch (error) {
         lastError = error as Error;
-        
+
         if (attempt === this.config.retries) {
           break; // Don't retry on last attempt
         }
@@ -149,7 +135,7 @@ export class TypeSafeHttpClient {
             delay,
             error: error instanceof Error ? error.message : String(error),
           });
-          
+
           await this.sleep(delay);
         } else {
           break; // Don't retry for non-retryable errors
@@ -163,14 +149,10 @@ export class TypeSafeHttpClient {
   /**
    * Validate response data with Zod schema
    */
-  private validateResponse<T>(
-    response: AxiosResponse,
-    schema: z.ZodSchema<T>,
-    correlationId: string
-  ): T {
+  private validateResponse<T>(response: AxiosResponse, schema: z.ZodSchema<T>, correlationId: string): T {
     try {
       const validatedData = schema.parse(response.data);
-      
+
       logger.debug('Response validated successfully', {
         correlationId,
         status: response.status,
@@ -186,16 +168,13 @@ export class TypeSafeHttpClient {
         responseData: typeof response.data === 'object' ? JSON.stringify(response.data).slice(0, 500) : response.data,
       });
 
-      throw ValidationError.fromZodError(
-        error as z.ZodError,
-        {
-          operation: 'response_validation',
-          metadata: {
-            url: response.config.url,
-            message: `Invalid response format from ${response.config.url}`
-          }
-        }
-      );
+      throw ValidationError.fromZodError(error as z.ZodError, {
+        operation: 'response_validation',
+        metadata: {
+          url: response.config.url,
+          message: `Invalid response format from ${response.config.url}`,
+        },
+      });
     }
   }
 
@@ -208,11 +187,11 @@ export class TypeSafeHttpClient {
       if (!error.response) {
         return true; // Network error
       }
-      
+
       const status = error.response.status;
       return status >= 500 || status === 429; // Server errors or rate limiting
     }
-    
+
     return false; // Don't retry validation or other errors
   }
 
@@ -223,7 +202,7 @@ export class TypeSafeHttpClient {
     const baseDelay = 1000; // 1 second
     const maxDelay = 30000; // 30 seconds
     const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-    
+
     // Add jitter to prevent thundering herd
     const jitter = Math.random() * 0.1 * delay;
     return Math.floor(delay + jitter);
@@ -239,23 +218,15 @@ export class TypeSafeHttpClient {
   /**
    * Handle request errors and convert to appropriate error types
    */
-  private handleRequestError(
-    error: Error,
-    correlationId: string,
-    method: string,
-    url: string
-  ): Error {
+  private handleRequestError(error: Error, correlationId: string, method: string, url: string): Error {
     if (axios.isAxiosError(error)) {
       const status = error.response?.status ?? 0;
       const message = error.response?.data?.message ?? error.message;
-      
-      return new ExternalServiceError(
-        'EXTERNAL_API',
-        `API Error: ${message}`,
-        url,
-        status,
-        { correlationId, metadata: { method, url } }
-      );
+
+      return new ExternalServiceError('EXTERNAL_API', `API Error: ${message}`, url, status, {
+        correlationId,
+        metadata: { method, url },
+      });
     }
 
     return new ExternalServiceError(
@@ -271,15 +242,12 @@ export class TypeSafeHttpClient {
   /**
    * Get raw response without validation (use sparingly)
    */
-  async getRaw(
-    endpoint: string,
-    options?: AxiosRequestConfig
-  ): Promise<unknown> {
+  async getRaw(endpoint: string, options?: AxiosRequestConfig): Promise<unknown> {
     const correlationId = crypto.randomUUID();
-    
+
     try {
       const response = await this.client.get(endpoint, options);
-      
+
       logger.debug('Raw response retrieved', {
         correlationId,
         endpoint,
@@ -288,12 +256,7 @@ export class TypeSafeHttpClient {
 
       return response.data;
     } catch (error) {
-      throw this.handleRequestError(
-        error as Error,
-        correlationId,
-        'GET',
-        endpoint
-      );
+      throw this.handleRequestError(error as Error, correlationId, 'GET', endpoint);
     }
   }
 }

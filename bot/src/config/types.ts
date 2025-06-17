@@ -240,10 +240,7 @@ export const ConfigurationConstraints = {
 /**
  * Type guard to check if a value is within numeric constraints
  */
-export function isWithinConstraints(
-  value: number,
-  constraints: { min: number; max: number }
-): boolean {
+export function isWithinConstraints(value: number, constraints: { min: number; max: number }): boolean {
   return value >= constraints.min && value <= constraints.max;
 }
 
@@ -289,7 +286,7 @@ export function validateConfiguration(config: unknown): config is ApplicationCon
   if (!apis.map || typeof apis.map !== 'object') {
     return false;
   }
-  
+
   const mapApi = apis.map as Record<string, unknown>;
   if (typeof mapApi.url !== 'string') {
     return false;

@@ -21,29 +21,23 @@ export class RatioHandler extends BaseChartHandler {
     if (!interaction.isChatInputCommand()) return;
 
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
-      
+
       // Validate time parameter
       const timeValue = parseInt(time, 10);
       if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
-        throw ValidationError.outOfRange(
-          'time',
-          1,
-          365,
-          time,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'ratio_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.outOfRange('time', 1, 365, time, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'ratio_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       const { startDate, endDate } = this.getTimeRange(time);
@@ -59,16 +53,12 @@ export class RatioHandler extends BaseChartHandler {
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        throw ChartError.noDataError(
-          'ratio',
-          'No character groups found. Please add characters to groups first.',
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'ratio_chart_generation',
-          }
-        );
+        throw ChartError.noDataError('ratio', 'No character groups found. Please add characters to groups first.', {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'ratio_chart_generation',
+        });
       }
 
       // Get the chart generator from the factory
@@ -111,7 +101,6 @@ export class RatioHandler extends BaseChartHandler {
         correlationId,
         bufferSize: buffer.length,
       });
-
     } catch (error) {
       // Enhanced error handling with correlation ID context
       const enhancedError = errorHandler.handleError(error, {

@@ -47,30 +47,30 @@ export class UnifiedChartService implements IChartService {
       logger.info('Generating chart', {
         type: config.type,
         characterCount: config.characterIds.length,
-        correlationId
+        correlationId,
       });
 
       // 1. Check cache for rendered chart
       const cacheKey = config.getCacheKey();
       const cachedChart = await this.getCachedChart(cacheKey);
-      
+
       if (cachedChart) {
         logger.info('Chart cache hit', { correlationId, cacheKey });
         return {
           success: true,
           data: cachedChart,
-          correlationId
+          correlationId,
         };
       }
 
       // 2. Generate chart data
       const dataResult = await this.generateChartData(config);
-      
+
       if (!dataResult.success || !dataResult.data) {
         return {
           success: false,
           error: dataResult.error || 'Failed to generate chart data',
-          correlationId
+          correlationId,
         };
       }
 
@@ -78,36 +78,31 @@ export class UnifiedChartService implements IChartService {
       const renderedChart = await this.chartRenderer.render(dataResult.data, config);
 
       // 4. Cache the rendered chart
-      await this.cacheRepository.set(
-        cacheKey,
-        dataResult.data,
-        this.getCacheTTL(config.type)
-      );
+      await this.cacheRepository.set(cacheKey, dataResult.data, this.getCacheTTL(config.type));
 
       const processingTime = Date.now() - startTime;
       logger.info('Chart generated successfully', {
         type: config.type,
         processingTimeMs: processingTime,
-        correlationId
+        correlationId,
       });
 
       return {
         success: true,
         data: renderedChart,
-        correlationId
+        correlationId,
       };
-
     } catch (error) {
       logger.error('Chart generation failed', {
         error,
         type: config.type,
-        correlationId
+        correlationId,
       });
 
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        correlationId
+        correlationId,
       };
     }
   }
@@ -120,11 +115,11 @@ export class UnifiedChartService implements IChartService {
 
     try {
       // Validate configuration
-      if (!await this.validateConfiguration(config)) {
+      if (!(await this.validateConfiguration(config))) {
         return {
           success: false,
           error: 'Invalid chart configuration',
-          correlationId
+          correlationId,
         };
       }
 
@@ -151,27 +146,26 @@ export class UnifiedChartService implements IChartService {
           return {
             success: false,
             error: `Unsupported chart type: ${config.type}`,
-            correlationId
+            correlationId,
           };
       }
 
       return {
         success: true,
         data: chartData,
-        correlationId
+        correlationId,
       };
-
     } catch (error) {
       logger.error('Chart data generation failed', {
         error,
         type: config.type,
-        correlationId
+        correlationId,
       });
 
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        correlationId
+        correlationId,
       };
     }
   }
@@ -223,60 +217,30 @@ export class UnifiedChartService implements IChartService {
 
   // Private helper methods
 
-  private async generateKillChartData(
-    config: ChartConfiguration,
-    groupLabels: string[]
-  ): Promise<ChartData> {
-    const killData = await this.dataRepository.getKillData(
-      config.characterIds,
-      config.startDate,
-      config.endDate
-    );
+  private async generateKillChartData(config: ChartConfiguration, groupLabels: string[]): Promise<ChartData> {
+    const killData = await this.dataRepository.getKillData(config.characterIds, config.startDate, config.endDate);
 
     return this.killsProcessor.processKillData(config, killData, groupLabels);
   }
 
-  private async generateLossChartData(
-    config: ChartConfiguration,
-    groupLabels: string[]
-  ): Promise<ChartData> {
-    const lossData = await this.dataRepository.getLossData(
-      config.characterIds,
-      config.startDate,
-      config.endDate
-    );
+  private async generateLossChartData(config: ChartConfiguration, groupLabels: string[]): Promise<ChartData> {
+    const lossData = await this.dataRepository.getLossData(config.characterIds, config.startDate, config.endDate);
 
     return this.lossProcessor.processLossData(config, lossData, groupLabels);
   }
 
-  private async generateEfficiencyChartData(
-    config: ChartConfiguration,
-    groupLabels: string[]
-  ): Promise<ChartData> {
+  private async generateEfficiencyChartData(config: ChartConfiguration, groupLabels: string[]): Promise<ChartData> {
     const [killData, lossData] = await Promise.all([
-      this.dataRepository.getKillData(
-        config.characterIds,
-        config.startDate,
-        config.endDate
-      ),
-      this.dataRepository.getLossData(
-        config.characterIds,
-        config.startDate,
-        config.endDate
-      )
+      this.dataRepository.getKillData(config.characterIds, config.startDate, config.endDate),
+      this.dataRepository.getLossData(config.characterIds, config.startDate, config.endDate),
     ]);
 
-    return this.efficiencyProcessor.processEfficiencyData(
-      config,
-      killData,
-      lossData,
-      groupLabels
-    );
+    return this.efficiencyProcessor.processEfficiencyData(config, killData, lossData, groupLabels);
   }
 
   private async getGroupLabels(characterIds: bigint[]): Promise<string[]> {
     const labelMap = await this.dataRepository.getGroupLabels(characterIds);
-    
+
     // Convert map to array of labels
     return characterIds.map(id => labelMap.get(id) || 'Unknown');
   }

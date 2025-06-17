@@ -14,17 +14,17 @@ export class StartupProfiler {
   checkpoint(name: string): void {
     const memory = process.memoryUsage();
     const timestamp = Date.now();
-    
+
     this.checkpoints.push({ name, memory, timestamp });
-    
+
     const heapDelta = memory.heapUsed - this.startMemory.heapUsed;
     const timeDelta = timestamp - this.startTime;
-    
+
     logger.info(`Startup checkpoint: ${name}`, {
       heapUsed: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
       heapDelta: `+${Math.round(heapDelta / 1024 / 1024)}MB`,
       heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)}%`,
-      time: `${timeDelta}ms`
+      time: `${timeDelta}ms`,
     });
   }
 
@@ -35,15 +35,15 @@ export class StartupProfiler {
       checkpoints: this.checkpoints.map((cp, i) => {
         const heapDelta = i === 0 ? 0 : cp.memory.heapUsed - this.checkpoints[i - 1].memory.heapUsed;
         const timeDelta = i === 0 ? 0 : cp.timestamp - this.checkpoints[i - 1].timestamp;
-        
+
         return {
           name: cp.name,
           heapUsed: Math.round(cp.memory.heapUsed / 1024 / 1024),
           heapDelta: Math.round(heapDelta / 1024 / 1024),
           timeDelta,
-          heapPercent: ((cp.memory.heapUsed / cp.memory.heapTotal) * 100).toFixed(1)
+          heapPercent: ((cp.memory.heapUsed / cp.memory.heapTotal) * 100).toFixed(1),
         };
-      })
+      }),
     };
 
     logger.info('Startup profiling report', report);

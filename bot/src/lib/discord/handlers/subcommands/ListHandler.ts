@@ -17,7 +17,7 @@ export class ListHandler extends BaseChartHandler {
    */
   async handle(interaction: CommandInteraction): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.info('Handling list subcommand', { correlationId });
 
@@ -97,12 +97,12 @@ export class ListHandler extends BaseChartHandler {
       await interaction.reply({ embeds: [embed] });
       logger.info('Successfully sent list of chart types', { correlationId });
     } catch (error) {
-      logger.error('Error in list command handler', { 
-        error, 
-        correlationId, 
+      logger.error('Error in list command handler', {
+        error,
+        correlationId,
         userId: interaction.user.id,
         guildId: interaction.guildId || undefined,
-        metadata: { interactionId: interaction.id }
+        metadata: { interactionId: interaction.id },
       });
       await this.handleError(interaction, error);
     }

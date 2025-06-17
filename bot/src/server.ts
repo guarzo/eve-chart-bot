@@ -13,7 +13,12 @@ import { DiscordClient } from './lib/discord/client';
 import { commands } from './lib/discord/commands';
 import { ChartServiceFactory, destroyChartWorkerManager } from './services/charts';
 import { ChartRenderer } from './services/ChartRenderer';
-import { ChartConfigInput, ChartSourceType as ChartSourceTypeType, ChartPeriod as ChartPeriodType, ChartGroupBy as ChartGroupByType } from './types/chart';
+import {
+  ChartConfigInput,
+  ChartSourceType as ChartSourceTypeType,
+  ChartPeriod as ChartPeriodType,
+  ChartGroupBy as ChartGroupByType,
+} from './types/chart';
 import { z } from 'zod';
 import { initSentry } from './lib/sentry';
 import { MapActivityService } from './services/ingestion/MapActivityService';
@@ -134,7 +139,7 @@ app.get('/health', (_req, res) => {
 app.get('/memory', (_req, res) => {
   const metrics = memoryMonitor.getMetrics();
   const memory = metrics.current;
-  
+
   res.json({
     current: {
       heapUsed: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
@@ -142,11 +147,11 @@ app.get('/memory', (_req, res) => {
       rss: `${Math.round(memory.rss / 1024 / 1024)}MB`,
       external: `${Math.round(memory.external / 1024 / 1024)}MB`,
       arrayBuffers: `${Math.round(memory.arrayBuffers / 1024 / 1024)}MB`,
-      heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)  }%`
+      heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)}%`,
     },
     growthRate: `${metrics.heapGrowthRate.toFixed(2)}MB/min`,
     sampleCount: metrics.samples.length,
-    uptime: process.uptime()
+    uptime: process.uptime(),
   });
 });
 
@@ -202,7 +207,12 @@ app.get('/v1/charts/types', (_req, res) => {
         id: ChartSourceType.KILLS,
         name: 'Kill Chart',
         description: 'Generate a chart showing kill activity',
-        periods: [ChartPeriod.TWENTY_FOUR_HOURS, ChartPeriod.SEVEN_DAYS, ChartPeriod.THIRTY_DAYS, ChartPeriod.NINETY_DAYS],
+        periods: [
+          ChartPeriod.TWENTY_FOUR_HOURS,
+          ChartPeriod.SEVEN_DAYS,
+          ChartPeriod.THIRTY_DAYS,
+          ChartPeriod.NINETY_DAYS,
+        ],
         groupBy: [ChartGroupBy.HOUR, ChartGroupBy.DAY, ChartGroupBy.WEEK],
       },
       {
@@ -384,7 +394,7 @@ async function startServer() {
   const server = app.listen(port, () => {
     const startupTime = (Date.now() - appStartTime) / 1000;
     logger.info(`Server is running on port ${port} (startup took ${startupTime}s)`);
-    
+
     // Generate startup profiling report
     startupProfiler.checkpoint('Server started');
     startupProfiler.getReport();
@@ -426,7 +436,7 @@ async function startServer() {
 
     // Clean up chart workers
     await destroyChartWorkerManager();
-    
+
     // Disconnect Redis
     await disconnectRedis();
 

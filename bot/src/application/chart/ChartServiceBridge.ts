@@ -17,7 +17,7 @@ export class ChartServiceBridge {
     // Create simplified service with feature flag migration
     this.simplifiedService = new SimplifiedChartService({
       renderingMode: flags.newChartRendering ? 'advanced' : 'basic',
-      dataMode: flags.newChartRendering ? 'real' : 'mock'
+      dataMode: flags.newChartRendering ? 'real' : 'mock',
     });
 
     // Keep legacy service for comparison/fallback
@@ -35,11 +35,7 @@ export class ChartServiceBridge {
   /**
    * Generate ship usage chart (backward compatible interface)
    */
-  async generateShipUsageChart(
-    characterId?: string,
-    groupId?: string,
-    days: number = 30
-  ): Promise<ChartData | null> {
+  async generateShipUsageChart(characterId?: string, groupId?: string, days: number = 30): Promise<ChartData | null> {
     if (this.useNewPipeline) {
       logger.debug('ChartServiceBridge: Using simplified service for ship usage chart');
       return await this.simplifiedService.generateShipUsageData(characterId, groupId, days);

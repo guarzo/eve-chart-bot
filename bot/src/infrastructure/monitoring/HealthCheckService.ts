@@ -40,9 +40,9 @@ export class HealthCheckService {
 
   async getHealthStatus(): Promise<HealthStatus> {
     const now = Date.now();
-    
+
     // Return cached status if within cache duration
-    if (this.cachedHealthStatus && (now - this.lastHealthCheck) < this.healthCacheDuration) {
+    if (this.cachedHealthStatus && now - this.lastHealthCheck < this.healthCacheDuration) {
       return this.cachedHealthStatus;
     }
 
@@ -85,7 +85,7 @@ export class HealthCheckService {
       return healthStatus;
     } catch (error) {
       logger.error('Error performing health check:', error);
-      
+
       return {
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
@@ -93,10 +93,30 @@ export class HealthCheckService {
         version: process.env.npm_package_version || '1.0.0',
         environment: process.env.NODE_ENV || 'development',
         services: {
-          database: { status: 'unhealthy', responseTime: 0, lastCheck: new Date().toISOString(), error: 'Health check failed' },
-          redis: { status: 'unhealthy', responseTime: 0, lastCheck: new Date().toISOString(), error: 'Health check failed' },
-          discord: { status: 'unhealthy', responseTime: 0, lastCheck: new Date().toISOString(), error: 'Health check failed' },
-          websocket: { status: 'unhealthy', responseTime: 0, lastCheck: new Date().toISOString(), error: 'Health check failed' },
+          database: {
+            status: 'unhealthy',
+            responseTime: 0,
+            lastCheck: new Date().toISOString(),
+            error: 'Health check failed',
+          },
+          redis: {
+            status: 'unhealthy',
+            responseTime: 0,
+            lastCheck: new Date().toISOString(),
+            error: 'Health check failed',
+          },
+          discord: {
+            status: 'unhealthy',
+            responseTime: 0,
+            lastCheck: new Date().toISOString(),
+            error: 'Health check failed',
+          },
+          websocket: {
+            status: 'unhealthy',
+            responseTime: 0,
+            lastCheck: new Date().toISOString(),
+            error: 'Health check failed',
+          },
         },
         system: {
           memory: process.memoryUsage(),
@@ -109,11 +129,11 @@ export class HealthCheckService {
 
   private async checkDatabase(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       const responseTime = Date.now() - startTime;
-      
+
       return {
         status: responseTime < 1000 ? 'healthy' : 'degraded',
         responseTime,
@@ -131,11 +151,11 @@ export class HealthCheckService {
 
   private async checkRedis(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       await redis.ping();
       const responseTime = Date.now() - startTime;
-      
+
       return {
         status: responseTime < 500 ? 'healthy' : 'degraded',
         responseTime,
@@ -153,14 +173,14 @@ export class HealthCheckService {
 
   private async checkDiscord(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       // Check if Discord client is available and ready
       // This would need to be implemented based on your Discord client setup
       const isDiscordReady = process.env.DISCORD_TOKEN && process.env.DISCORD_TOKEN.length > 0;
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       return {
         status: isDiscordReady ? 'healthy' : 'unhealthy',
         responseTime,
@@ -179,15 +199,15 @@ export class HealthCheckService {
 
   private async checkWebSocket(): Promise<ServiceHealth> {
     const startTime = Date.now();
-    
+
     try {
       // Check WebSocket connection health
       // This would need to be implemented based on your WebSocket setup
       const websocketUrl = process.env.WANDERER_KILLS_URL;
       const isWebSocketConfigured = websocketUrl && websocketUrl.length > 0;
-      
+
       const responseTime = Date.now() - startTime;
-      
+
       return {
         status: isWebSocketConfigured ? 'healthy' : 'degraded',
         responseTime,
@@ -217,7 +237,9 @@ export class HealthCheckService {
     }
   }
 
-  private determineOverallStatus(serviceStatuses: Array<'healthy' | 'unhealthy' | 'degraded'>): 'healthy' | 'unhealthy' | 'degraded' {
+  private determineOverallStatus(
+    serviceStatuses: Array<'healthy' | 'unhealthy' | 'degraded'>
+  ): 'healthy' | 'unhealthy' | 'degraded' {
     if (serviceStatuses.every(status => status === 'healthy')) {
       return 'healthy';
     } else if (serviceStatuses.some(status => status === 'unhealthy')) {
@@ -230,11 +252,11 @@ export class HealthCheckService {
   async getReadinessStatus(): Promise<{ ready: boolean; services: string[] }> {
     const health = await this.getHealthStatus();
     const criticalServices = ['database', 'redis'];
-    
+
     const readyServices = criticalServices.filter(
       service => health.services[service as keyof typeof health.services].status !== 'unhealthy'
     );
-    
+
     return {
       ready: readyServices.length === criticalServices.length,
       services: readyServices,

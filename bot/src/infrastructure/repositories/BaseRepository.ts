@@ -22,40 +22,25 @@ export abstract class BaseRepository {
   /**
    * Execute a database query with error handling and retry logic
    */
-  protected async executeQuery<R>(
-    queryFn: () => Promise<R>,
-    operation?: string,
-    correlationId?: string
-  ): Promise<R> {
+  protected async executeQuery<R>(queryFn: () => Promise<R>, operation?: string, correlationId?: string): Promise<R> {
     const actualCorrelationId = correlationId || errorHandler.createCorrelationId();
     const actualOperation = operation || 'db.query';
-    
+
     try {
-      const result = await errorHandler.withRetry(
-        queryFn,
-        3,
-        1000,
-        {
-          correlationId: actualCorrelationId,
-          operation: `${this.modelName}.${actualOperation}`,
-        }
-      );
-      
+      const result = await errorHandler.withRetry(queryFn, 3, 1000, {
+        correlationId: actualCorrelationId,
+        operation: `${this.modelName}.${actualOperation}`,
+      });
+
       logger.debug('Database query executed successfully', {
         correlationId: actualCorrelationId,
         modelName: this.modelName,
         operation: actualOperation,
       });
-      
+
       return result;
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'query',
-        this.modelName.toLowerCase(),
-        undefined,
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'query', this.modelName.toLowerCase(), undefined, undefined);
     }
   }
 

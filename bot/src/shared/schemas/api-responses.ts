@@ -29,24 +29,26 @@ export const ApiErrorResponseSchema = z.object({
 /**
  * zKillboard API schemas
  */
-export const ZkillResponseSchema = z.object({
-  killID: z.number().optional(),
-  killmail_id: z.number(),
-  zkb: z.object({
-    hash: z.string(),
-    totalValue: z.number(),
-    points: z.number().default(0),
-    npc: z.boolean().default(false),
-    solo: z.boolean().default(false),
-    awox: z.boolean().default(false),
-    labels: z.array(z.string()).default([]),
-    locationID: z.number().optional(),
-    fittedValue: z.number().default(0),
-    droppedValue: z.number().default(0),
-    destroyedValue: z.number().default(0),
-  }),
-  // Allow additional fields but validate core structure
-}).passthrough();
+export const ZkillResponseSchema = z
+  .object({
+    killID: z.number().optional(),
+    killmail_id: z.number(),
+    zkb: z.object({
+      hash: z.string(),
+      totalValue: z.number(),
+      points: z.number().default(0),
+      npc: z.boolean().default(false),
+      solo: z.boolean().default(false),
+      awox: z.boolean().default(false),
+      labels: z.array(z.string()).default([]),
+      locationID: z.number().optional(),
+      fittedValue: z.number().default(0),
+      droppedValue: z.number().default(0),
+      destroyedValue: z.number().default(0),
+    }),
+    // Allow additional fields but validate core structure
+  })
+  .passthrough();
 
 /**
  * ESI API schemas

@@ -21,14 +21,14 @@ export class ChartConfiguration {
     if (this.characterIds.length === 0) {
       throw new Error('At least one character ID is required');
     }
-    
+
     if (this.startDate >= this.endDate) {
       throw new Error('Start date must be before end date');
     }
-    
+
     const maxDays = this.getMaxDaysForTimePeriod();
     const daysDiff = Math.ceil((this.endDate.getTime() - this.startDate.getTime()) / (1000 * 60 * 60 * 24));
-    
+
     if (daysDiff > maxDays) {
       throw new Error(`Time range too large for ${this.timePeriod} period. Maximum: ${maxDays} days`);
     }
@@ -36,13 +36,20 @@ export class ChartConfiguration {
 
   private getMaxDaysForTimePeriod(): number {
     switch (this.timePeriod) {
-      case TimePeriod.HOUR: return 7;
-      case TimePeriod.DAY: return 90;
-      case TimePeriod.WEEK: return 365;
-      case TimePeriod.MONTH: return 730;
-      case TimePeriod.QUARTER: return 1095;
-      case TimePeriod.YEAR: return 1825;
-      default: return 90;
+      case TimePeriod.HOUR:
+        return 7;
+      case TimePeriod.DAY:
+        return 90;
+      case TimePeriod.WEEK:
+        return 365;
+      case TimePeriod.MONTH:
+        return 730;
+      case TimePeriod.QUARTER:
+        return 1095;
+      case TimePeriod.YEAR:
+        return 1825;
+      default:
+        return 90;
     }
   }
 
@@ -59,10 +66,13 @@ export class ChartConfiguration {
   }
 
   public getCacheKey(): string {
-    const characterIdsStr = this.characterIds.map(id => id.toString()).sort().join(',');
+    const characterIdsStr = this.characterIds
+      .map(id => id.toString())
+      .sort()
+      .join(',');
     const startDateStr = this.startDate.toISOString();
     const endDateStr = this.endDate.toISOString();
-    
+
     return `chart:${this.type}:${this.timePeriod}:${characterIdsStr}:${startDateStr}:${endDateStr}:${this.displayOptions.getCacheKey()}`;
   }
 }
@@ -108,5 +118,5 @@ export class ChartDisplayOptions {
 export enum ChartTheme {
   LIGHT = 'light',
   DARK = 'dark',
-  EVE = 'eve'
+  EVE = 'eve',
 }

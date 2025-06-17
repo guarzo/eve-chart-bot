@@ -46,7 +46,7 @@ export class LegacyChartServiceAdapter {
   async generateKillsChart(options: LegacyChartOptions): Promise<LegacyChartData> {
     const config = this.convertToChartConfiguration(options, ChartType.KILLS);
     const result = await this.generateChartUseCase.execute(config);
-    
+
     if (!result.success || !result.data) {
       throw new Error(result.error || 'Failed to generate chart');
     }
@@ -63,7 +63,7 @@ export class LegacyChartServiceAdapter {
   async generateLossesChart(options: LegacyChartOptions): Promise<LegacyChartData> {
     const config = this.convertToChartConfiguration(options, ChartType.LOSSES);
     const result = await this.generateChartUseCase.execute(config);
-    
+
     if (!result.success || !result.data) {
       throw new Error(result.error || 'Failed to generate chart');
     }
@@ -77,7 +77,7 @@ export class LegacyChartServiceAdapter {
   async generateEfficiencyChart(options: LegacyChartOptions): Promise<LegacyChartData> {
     const config = this.convertToChartConfiguration(options, ChartType.EFFICIENCY);
     const result = await this.generateChartUseCase.execute(config);
-    
+
     if (!result.success || !result.data) {
       throw new Error(result.error || 'Failed to generate chart');
     }
@@ -88,20 +88,15 @@ export class LegacyChartServiceAdapter {
   /**
    * Convert legacy options to new ChartConfiguration value object
    */
-  private convertToChartConfiguration(
-    options: LegacyChartOptions,
-    chartType: ChartType
-  ): ChartConfiguration {
+  private convertToChartConfiguration(options: LegacyChartOptions, chartType: ChartType): ChartConfiguration {
     // Extract character IDs from character groups
     const characterIds = options.characterGroups.flatMap(group =>
       BigIntTransformer.migrateCharacterIds(group.characters)
     );
 
     // Determine time period based on date range
-    const daysDiff = Math.ceil(
-      (options.endDate.getTime() - options.startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    
+    const daysDiff = Math.ceil((options.endDate.getTime() - options.startDate.getTime()) / (1000 * 60 * 60 * 24));
+
     let timePeriod: TimePeriod;
     if (daysDiff <= 7) {
       timePeriod = TimePeriod.DAY;
@@ -118,7 +113,7 @@ export class LegacyChartServiceAdapter {
       600, // height
       true, // showLegend
       true, // showGrid
-      '#ffffff', // backgroundColor
+      '#ffffff' // backgroundColor
     );
 
     return new ChartConfiguration(
@@ -134,16 +129,13 @@ export class LegacyChartServiceAdapter {
   /**
    * Convert new chart format back to legacy format for compatibility
    */
-  private convertToLegacyFormat(
-    config: ChartConfiguration,
-    originalOptions: LegacyChartOptions
-  ): LegacyChartData {
+  private convertToLegacyFormat(config: ChartConfiguration, originalOptions: LegacyChartOptions): LegacyChartData {
     // This is a simplified conversion for backward compatibility
     // In practice, we'd need to actually get the ChartData from the use case
     // For now, return a basic structure that maintains compatibility
-    
+
     const groupNames = originalOptions.characterGroups.map(group => group.name);
-    
+
     return {
       labels: groupNames,
       datasets: [
@@ -152,8 +144,8 @@ export class LegacyChartServiceAdapter {
           data: new Array(groupNames.length).fill(0), // Placeholder data
           backgroundColor: this.getChartColors(config.type).primary,
           borderColor: this.getChartColors(config.type).secondary,
-          borderWidth: 2
-        }
+          borderWidth: 2,
+        },
       ],
       displayType: originalOptions.displayType,
       summary: `${config.type} chart generated for ${groupNames.length} groups`,
@@ -161,19 +153,23 @@ export class LegacyChartServiceAdapter {
         responsive: true,
         plugins: {
           legend: {
-            position: 'top'
-          }
-        }
-      }
+            position: 'top',
+          },
+        },
+      },
     };
   }
 
   private getDatasetLabel(chartType: ChartType): string {
     switch (chartType) {
-      case ChartType.KILLS: return 'Total Kills';
-      case ChartType.LOSSES: return 'Total Losses';
-      case ChartType.EFFICIENCY: return 'Efficiency %';
-      default: return 'Data';
+      case ChartType.KILLS:
+        return 'Total Kills';
+      case ChartType.LOSSES:
+        return 'Total Losses';
+      case ChartType.EFFICIENCY:
+        return 'Efficiency %';
+      default:
+        return 'Data';
     }
   }
 

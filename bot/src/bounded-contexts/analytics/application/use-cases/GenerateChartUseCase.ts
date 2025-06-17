@@ -12,19 +12,11 @@ import { OperationResult, ChartType } from '../../../../shared/types/common';
 
 // Repository interfaces (will be implemented in infrastructure layer)
 export interface KillDataRepository {
-  getKillDataForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<KillDataPoint[]>;
+  getKillDataForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<KillDataPoint[]>;
 }
 
 export interface LossDataRepository {
-  getLossDataForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<LossDataPoint[]>;
+  getLossDataForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<LossDataPoint[]>;
 }
 
 export interface ChartCacheRepository {
@@ -53,13 +45,14 @@ export class GenerateChartUseCase {
       // 1. Check cache first
       const cacheKey = config.getCacheKey();
       const cachedData = await this.chartCacheRepository.get(cacheKey);
-      
-      if (cachedData && !cachedData.metadata.isStale(5 * 60 * 1000)) { // 5 minutes
+
+      if (cachedData && !cachedData.metadata.isStale(5 * 60 * 1000)) {
+        // 5 minutes
         const renderedChart = await this.chartRenderer.render(cachedData, config);
         return {
           success: true,
           data: renderedChart,
-          correlationId
+          correlationId,
         };
       }
 
@@ -73,18 +66,17 @@ export class GenerateChartUseCase {
       const renderedChart = await this.chartRenderer.render(chartData, config);
 
       // Processing completed successfully
-      
+
       return {
         success: true,
         data: renderedChart,
-        correlationId
+        correlationId,
       };
-
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error occurred',
-        correlationId
+        correlationId,
       };
     }
   }
@@ -93,13 +85,13 @@ export class GenerateChartUseCase {
     switch (config.type) {
       case ChartType.KILLS:
         return this.generateKillChart(config);
-      
+
       case ChartType.LOSSES:
         return this.generateLossChart(config);
-      
+
       case ChartType.EFFICIENCY:
         return this.generateEfficiencyChart(config);
-      
+
       default:
         throw new Error(`Unsupported chart type: ${config.type}`);
     }
@@ -127,16 +119,8 @@ export class GenerateChartUseCase {
 
   private async generateEfficiencyChart(config: ChartConfiguration): Promise<ChartData> {
     const [killData, lossData] = await Promise.all([
-      this.killDataRepository.getKillDataForCharacters(
-        config.characterIds,
-        config.startDate,
-        config.endDate
-      ),
-      this.lossDataRepository.getLossDataForCharacters(
-        config.characterIds,
-        config.startDate,
-        config.endDate
-      )
+      this.killDataRepository.getKillDataForCharacters(config.characterIds, config.startDate, config.endDate),
+      this.lossDataRepository.getLossDataForCharacters(config.characterIds, config.startDate, config.endDate),
     ]);
 
     return this.chartDataProcessor.processEfficiencyData(config, killData, lossData);

@@ -32,86 +32,60 @@ export class DatabaseError extends BaseError {
   }
 
   static connectionFailed(context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    return new DatabaseError(
-      'Failed to connect to database',
-      undefined,
-      undefined,
-      context,
-      cause
-    ).withErrorCode('DATABASE_CONNECTION_FAILED');
+    return new DatabaseError('Failed to connect to database', undefined, undefined, context, cause).withErrorCode(
+      'DATABASE_CONNECTION_FAILED'
+    );
   }
 
   static queryFailed(query: string, table?: string, context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    return new DatabaseError(
-      `Database query failed: ${query}`,
-      'query',
-      table,
-      context,
-      cause,
-      query
-    ).withErrorCode('DATABASE_QUERY_FAILED');
+    return new DatabaseError(`Database query failed: ${query}`, 'query', table, context, cause, query).withErrorCode(
+      'DATABASE_QUERY_FAILED'
+    );
   }
 
   static transactionFailed(context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    return new DatabaseError(
-      'Database transaction failed',
-      'transaction',
-      undefined,
-      context,
-      cause
-    ).withErrorCode('DATABASE_TRANSACTION_FAILED');
+    return new DatabaseError('Database transaction failed', 'transaction', undefined, context, cause).withErrorCode(
+      'DATABASE_TRANSACTION_FAILED'
+    );
   }
 
   static recordNotFound(table: string, identifier: string, context?: ErrorDetails['context']): DatabaseError {
-    return new DatabaseError(
-      `Record not found in ${table}: ${identifier}`,
-      'read',
-      table,
-      context
-    ).withErrorCode('DATABASE_RECORD_NOT_FOUND')
-     .withUserMessage('The requested data was not found.')
-     .withRetryable(false)
-     .withSeverity('medium')
-     .withStatusCode(404);
+    return new DatabaseError(`Record not found in ${table}: ${identifier}`, 'read', table, context)
+      .withErrorCode('DATABASE_RECORD_NOT_FOUND')
+      .withUserMessage('The requested data was not found.')
+      .withRetryable(false)
+      .withSeverity('medium')
+      .withStatusCode(404);
   }
 
-  static constraintViolation(constraint: string, table?: string, context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    return new DatabaseError(
-      `Database constraint violation: ${constraint}`,
-      'create',
-      table,
-      context,
-      cause
-    ).withErrorCode('DATABASE_CONSTRAINT_VIOLATION')
-     .withUserMessage('The operation conflicts with existing data.')
-     .withRetryable(false)
-     .withSeverity('medium')
-     .withStatusCode(409);
+  static constraintViolation(
+    constraint: string,
+    table?: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): DatabaseError {
+    return new DatabaseError(`Database constraint violation: ${constraint}`, 'create', table, context, cause)
+      .withErrorCode('DATABASE_CONSTRAINT_VIOLATION')
+      .withUserMessage('The operation conflicts with existing data.')
+      .withRetryable(false)
+      .withSeverity('medium')
+      .withStatusCode(409);
   }
 
   static timeout(operation: DatabaseOperation, table?: string, context?: ErrorDetails['context']): DatabaseError {
-    return new DatabaseError(
-      `Database operation timed out: ${operation}`,
-      operation,
-      table,
-      context
-    ).withErrorCode('DATABASE_TIMEOUT')
-     .withUserMessage('The database operation took too long. Please try again.')
-     .withRetryable(true)
-     .withSeverity('medium');
+    return new DatabaseError(`Database operation timed out: ${operation}`, operation, table, context)
+      .withErrorCode('DATABASE_TIMEOUT')
+      .withUserMessage('The database operation took too long. Please try again.')
+      .withRetryable(true)
+      .withSeverity('medium');
   }
 
   static deadlock(context?: ErrorDetails['context'], cause?: Error): DatabaseError {
-    return new DatabaseError(
-      'Database deadlock detected',
-      'transaction',
-      undefined,
-      context,
-      cause
-    ).withErrorCode('DATABASE_DEADLOCK')
-     .withUserMessage('A conflict occurred with another operation. Please try again.')
-     .withRetryable(true)
-     .withSeverity('medium');
+    return new DatabaseError('Database deadlock detected', 'transaction', undefined, context, cause)
+      .withErrorCode('DATABASE_DEADLOCK')
+      .withUserMessage('A conflict occurred with another operation. Please try again.')
+      .withRetryable(true)
+      .withSeverity('medium');
   }
 
   protected getDefaultUserMessage(): string {
@@ -161,7 +135,7 @@ export class DatabaseError extends BaseError {
       ...super.toJSON(),
       operation: this.operation,
       table: this.table,
-      query: this.query ? `${this.query.substring(0, 200)  }...` : undefined, // Truncate long queries
+      query: this.query ? `${this.query.substring(0, 200)}...` : undefined, // Truncate long queries
     };
   }
 }

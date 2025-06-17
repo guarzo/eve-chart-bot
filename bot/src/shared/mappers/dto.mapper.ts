@@ -12,15 +12,9 @@ import {
   UserCharacterApiDto,
   WebSocketKillmailDto,
   WebSocketAttackerDto,
-  WebSocketVictimDto
+  WebSocketVictimDto,
 } from '../dto/external-api.dto';
-import {
-  KillmailDto,
-  VictimDto,
-  AttackerDto,
-  CharacterDto,
-  MapActivityDto
-} from '../dto/domain.dto';
+import { KillmailDto, VictimDto, AttackerDto, CharacterDto, MapActivityDto } from '../dto/domain.dto';
 
 /**
  * Map ESI Killmail API response to domain DTO
@@ -97,7 +91,9 @@ export function mapUserCharacterApiToDomain(api: UserCharacterApiDto): Character
     corporationTicker: api.corporation_ticker,
     allianceId: api.alliance_id ? (BigIntTransformer.toBigInt(api.alliance_id) ?? undefined) : undefined,
     allianceTicker: api.alliance_ticker,
-    mainCharacterId: api.main_character_eve_id ? (BigIntTransformer.toBigInt(api.main_character_eve_id) ?? undefined) : undefined,
+    mainCharacterId: api.main_character_eve_id
+      ? (BigIntTransformer.toBigInt(api.main_character_eve_id) ?? undefined)
+      : undefined,
     createdAt: new Date(), // Would need to be fetched from DB or API
     updatedAt: new Date(), // Would need to be fetched from DB or API
   };
@@ -158,12 +154,12 @@ export function mapWebSocketAttackerToDomain(ws: WebSocketAttackerDto): Attacker
  */
 export function mapDomainToDatabase<T extends Record<string, any>>(domain: T): Record<string, any> {
   const mapped: Record<string, any> = {};
-  
+
   for (const [key, value] of Object.entries(domain)) {
     // Convert camelCase to snake_case
     const snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
     mapped[snakeKey] = value;
   }
-  
+
   return mapped;
 }

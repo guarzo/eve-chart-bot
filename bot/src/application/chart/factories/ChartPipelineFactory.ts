@@ -45,7 +45,7 @@ export class ChartPipelineFactory {
 
     // Create data provider
     const dataProvider = this.createShipUsageDataProvider(config);
-    
+
     // Create renderer
     const renderer = this.createRenderer(config.renderingMode ?? 'basic');
 
@@ -74,9 +74,7 @@ export class ChartPipelineFactory {
   private static createRenderer(mode: ChartRenderingMode): IChartRenderer {
     logger.info('ChartPipelineFactory: Creating chart renderer', { mode });
 
-    const strategy = mode === 'advanced' 
-      ? new AdvancedChartRenderStrategy()
-      : new BasicChartRenderStrategy();
+    const strategy = mode === 'advanced' ? new AdvancedChartRenderStrategy() : new BasicChartRenderStrategy();
 
     return new StrategyChartRenderer(strategy);
   }
@@ -87,7 +85,7 @@ export class ChartPipelineFactory {
   private static createDefaultCache(): CacheAdapter {
     const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
     const ttl = Configuration.charts.defaultCacheTTLSeconds;
-    
+
     logger.info('ChartPipelineFactory: Creating default Redis cache', {
       redisUrl: redisUrl.replace(/\/\/[^@]*@/, '//***@'), // Hide credentials in logs
       ttl,
@@ -100,11 +98,9 @@ export class ChartPipelineFactory {
    * Create pipeline from environment variables (clean feature flag replacement)
    */
   static createFromEnvironment(): ChartPipeline {
-    const renderingMode: ChartRenderingMode = 
-      process.env.CHART_RENDERING_MODE === 'advanced' ? 'advanced' : 'basic';
-    
-    const dataMode: ChartDataMode = 
-      process.env.CHART_DATA_MODE === 'mock' ? 'mock' : 'real';
+    const renderingMode: ChartRenderingMode = process.env.CHART_RENDERING_MODE === 'advanced' ? 'advanced' : 'basic';
+
+    const dataMode: ChartDataMode = process.env.CHART_DATA_MODE === 'mock' ? 'mock' : 'real';
 
     logger.info('ChartPipelineFactory: Creating pipeline from environment', {
       renderingMode,

@@ -22,16 +22,14 @@ export abstract class BaseChartRenderStrategy implements IChartRenderStrategy {
     try {
       const chartOptions = this.mergeChartOptions(options);
       const colors = this.getColorScheme(chartOptions.lightMode);
-      
+
       // Get styling configuration - can be overridden by subclasses
       const styling = this.getHtmlStyling();
 
       // Build chart components using centralized builder
       const datasetHeaders = ChartHtmlBuilder.buildDatasetHeaders(chartData, styling);
       const dataRows = ChartHtmlBuilder.buildDataRows(chartData, styling);
-      const legendSection = chartOptions.showLegend 
-        ? ChartHtmlBuilder.buildLegend(chartData, styling) 
-        : '';
+      const legendSection = chartOptions.showLegend ? ChartHtmlBuilder.buildLegend(chartData, styling) : '';
 
       // Allow subclasses to customize the title
       const title = this.getChartTitle(chartOptions.title);

@@ -8,7 +8,7 @@ export enum ChartPeriod {
   TWENTY_FOUR_HOURS = '24h',
   SEVEN_DAYS = '7d',
   THIRTY_DAYS = '30d',
-  NINETY_DAYS = '90d'
+  NINETY_DAYS = '90d',
 }
 
 // Chart display types
@@ -26,13 +26,13 @@ export enum ChartDisplayType {
   POLAR_AREA = 'polarArea',
   BUBBLE = 'bubble',
   SCATTER = 'scatter',
-  GAUGE = 'gauge'
+  GAUGE = 'gauge',
 }
 
 // Chart source types
 export enum ChartSourceType {
   KILLS = 'kills',
-  MAP_ACTIVITY = 'map_activity'
+  MAP_ACTIVITY = 'map_activity',
 }
 
 // Chart metrics
@@ -40,7 +40,7 @@ export enum ChartMetric {
   VALUE = 'value',
   KILLS = 'kills',
   POINTS = 'points',
-  ATTACKERS = 'attackers'
+  ATTACKERS = 'attackers',
 }
 
 // Log levels
@@ -49,7 +49,7 @@ export enum LogLevel {
   INFO = 'info',
   WARN = 'warn',
   ERROR = 'error',
-  FATAL = 'fatal'
+  FATAL = 'fatal',
 }
 
 // Operation status
@@ -58,7 +58,7 @@ export enum OperationStatus {
   IN_PROGRESS = 'in_progress',
   COMPLETED = 'completed',
   FAILED = 'failed',
-  CANCELLED = 'cancelled'
+  CANCELLED = 'cancelled',
 }
 
 // User roles (if needed for Discord integration)
@@ -66,7 +66,7 @@ export enum UserRole {
   ADMIN = 'admin',
   MODERATOR = 'moderator',
   USER = 'user',
-  OWNER = 'owner'
+  OWNER = 'owner',
 }
 
 // Discord command types
@@ -82,7 +82,7 @@ export enum CommandType {
   RATIO = 'ratio',
   CORPS = 'corps',
   SHIP_TYPES = 'shiptypes',
-  LIST = 'list'
+  LIST = 'list',
 }
 
 // HTTP methods
@@ -91,14 +91,14 @@ export enum HttpMethod {
   POST = 'POST',
   PUT = 'PUT',
   DELETE = 'DELETE',
-  PATCH = 'PATCH'
+  PATCH = 'PATCH',
 }
 
 // Chart axis types
 export enum ChartAxis {
   X = 'x',
   Y = 'y',
-  Y2 = 'y2'
+  Y2 = 'y2',
 }
 
 // Chart legend positions
@@ -106,7 +106,7 @@ export enum LegendPosition {
   TOP = 'top',
   BOTTOM = 'bottom',
   LEFT = 'left',
-  RIGHT = 'right'
+  RIGHT = 'right',
 }
 
 // Chart grouping options
@@ -114,13 +114,13 @@ export enum ChartGroupBy {
   HOUR = 'hour',
   DAY = 'day',
   WEEK = 'week',
-  MONTH = 'month'
+  MONTH = 'month',
 }
 
 // Sort directions
 export enum SortDirection {
   ASC = 'asc',
-  DESC = 'desc'
+  DESC = 'desc',
 }
 
 // Environment types
@@ -128,5 +128,5 @@ export enum Environment {
   DEVELOPMENT = 'development',
   STAGING = 'staging',
   PRODUCTION = 'production',
-  TEST = 'test'
+  TEST = 'test',
 }

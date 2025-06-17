@@ -19,13 +19,15 @@ export function isRetryableError(error: unknown): boolean {
   // For non-BaseError, check common patterns
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
-    
+
     // Network-related errors are usually retryable
-    if (message.includes('timeout') || 
-        message.includes('connection') || 
-        message.includes('network') ||
-        message.includes('econnreset') ||
-        message.includes('enotfound')) {
+    if (
+      message.includes('timeout') ||
+      message.includes('connection') ||
+      message.includes('network') ||
+      message.includes('econnreset') ||
+      message.includes('enotfound')
+    ) {
       return true;
     }
 
@@ -49,26 +51,24 @@ export function getErrorSeverity(error: unknown): 'low' | 'medium' | 'high' | 'c
 
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
-    
+
     // Critical errors
-    if (message.includes('out of memory') || 
-        message.includes('fatal') ||
-        message.includes('segfault')) {
+    if (message.includes('out of memory') || message.includes('fatal') || message.includes('segfault')) {
       return 'critical';
     }
 
     // High severity errors
-    if (message.includes('database') || 
-        message.includes('connection') ||
-        message.includes('unauthorized') ||
-        message.includes('forbidden')) {
+    if (
+      message.includes('database') ||
+      message.includes('connection') ||
+      message.includes('unauthorized') ||
+      message.includes('forbidden')
+    ) {
       return 'high';
     }
 
     // Low severity errors
-    if (message.includes('validation') || 
-        message.includes('not found') ||
-        message.includes('invalid')) {
+    if (message.includes('validation') || message.includes('not found') || message.includes('invalid')) {
       return 'low';
     }
   }
@@ -86,9 +86,7 @@ export function extractCorrelationId(
 ): string | undefined {
   // Check headers first
   if (headers) {
-    return headers['x-correlation-id'] || 
-           headers['correlation-id'] || 
-           headers['request-id'];
+    return headers['x-correlation-id'] || headers['correlation-id'] || headers['request-id'];
   }
 
   // Check query parameters
@@ -98,9 +96,7 @@ export function extractCorrelationId(
 
   // Check context object
   if (context) {
-    return context.correlationId || 
-           context.requestId || 
-           context.traceId;
+    return context.correlationId || context.requestId || context.traceId;
   }
 
   return undefined;
@@ -132,13 +128,15 @@ export function isTemporaryError(error: unknown): boolean {
 
   if (error instanceof Error) {
     const message = error.message.toLowerCase();
-    
-    return message.includes('timeout') ||
-           message.includes('temporarily') ||
-           message.includes('service unavailable') ||
-           message.includes('rate limit') ||
-           message.includes('busy') ||
-           message.includes('overload');
+
+    return (
+      message.includes('timeout') ||
+      message.includes('temporarily') ||
+      message.includes('service unavailable') ||
+      message.includes('rate limit') ||
+      message.includes('busy') ||
+      message.includes('overload')
+    );
   }
 
   return false;
@@ -154,28 +152,28 @@ export function getUserFriendlyMessage(error: unknown): string {
 
   if (error instanceof Error) {
     const message = error.message;
-    
+
     // Common error patterns with user-friendly messages
     if (message.includes('ENOTFOUND') || message.includes('ECONNREFUSED')) {
       return 'Service is currently unavailable. Please try again later.';
     }
-    
+
     if (message.includes('timeout')) {
       return 'The request timed out. Please try again.';
     }
-    
+
     if (message.includes('rate limit')) {
       return 'Too many requests. Please wait a moment before trying again.';
     }
-    
+
     if (message.includes('validation') || message.includes('invalid')) {
       return 'Invalid input provided. Please check your data and try again.';
     }
-    
+
     if (message.includes('not found')) {
       return 'The requested resource was not found.';
     }
-    
+
     if (message.includes('unauthorized') || message.includes('forbidden')) {
       return 'You do not have permission to perform this action.';
     }

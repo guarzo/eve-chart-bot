@@ -12,7 +12,7 @@ import { logger } from '../../lib/logger';
  */
 export class RepositoryManager {
   private static instance: RepositoryManager | null = null;
-  
+
   private characterRepository?: CharacterRepository;
   private killRepository?: KillRepository;
   private lossRepository?: LossRepository;
@@ -32,12 +32,15 @@ export class RepositoryManager {
       this.killRepository = new KillRepository(this.prisma);
       this.lossRepository = new LossRepository(this.prisma);
       this.mapActivityRepository = new MapActivityRepository(this.prisma);
-      
+
       logger.info('RepositoryManager initialized successfully');
     } catch (error) {
       logger.error('Failed to initialize RepositoryManager', error);
       throw DatabaseError.connectionFailed(
-        { operation: 'initialize_repository_manager', metadata: { error: error instanceof Error ? error.message : String(error) } },
+        {
+          operation: 'initialize_repository_manager',
+          metadata: { error: error instanceof Error ? error.message : String(error) },
+        },
         error as Error
       );
     }
@@ -71,7 +74,7 @@ export class RepositoryManager {
     if (!this.characterRepository) {
       throw DatabaseError.connectionFailed({
         operation: 'get_character_repository',
-        metadata: { repository: 'CharacterRepository' }
+        metadata: { repository: 'CharacterRepository' },
       });
     }
     return this.characterRepository;
@@ -84,7 +87,7 @@ export class RepositoryManager {
     if (!this.killRepository) {
       throw DatabaseError.connectionFailed({
         operation: 'get_kill_repository',
-        metadata: { repository: 'KillRepository' }
+        metadata: { repository: 'KillRepository' },
       });
     }
     return this.killRepository;
@@ -97,7 +100,7 @@ export class RepositoryManager {
     if (!this.lossRepository) {
       throw DatabaseError.connectionFailed({
         operation: 'get_loss_repository',
-        metadata: { repository: 'LossRepository' }
+        metadata: { repository: 'LossRepository' },
       });
     }
     return this.lossRepository;
@@ -110,7 +113,7 @@ export class RepositoryManager {
     if (!this.mapActivityRepository) {
       throw DatabaseError.connectionFailed({
         operation: 'get_map_activity_repository',
-        metadata: { repository: 'MapActivityRepository' }
+        metadata: { repository: 'MapActivityRepository' },
       });
     }
     return this.mapActivityRepository;
@@ -126,7 +129,10 @@ export class RepositoryManager {
     } catch (error) {
       logger.error('Error during RepositoryManager cleanup', error);
       throw DatabaseError.connectionFailed(
-        { operation: 'cleanup_repository_manager', metadata: { error: error instanceof Error ? error.message : String(error) } },
+        {
+          operation: 'cleanup_repository_manager',
+          metadata: { error: error instanceof Error ? error.message : String(error) },
+        },
         error as Error
       );
     }

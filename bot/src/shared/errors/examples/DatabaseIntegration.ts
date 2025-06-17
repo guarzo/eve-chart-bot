@@ -8,11 +8,7 @@ import { logger } from '../../../lib/logger';
 export class EnhancedKillRepository {
   constructor(private prisma: PrismaClient) {}
 
-  async getKillsForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
+  async getKillsForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<any[]> {
     const correlationId = errorHandler.createCorrelationId();
 
     try {
@@ -22,8 +18,8 @@ export class EnhancedKillRepository {
             where: {
               characters: {
                 some: {
-                  characterId: { in: characterIds }
-                }
+                  characterId: { in: characterIds },
+                },
               },
               killTime: { gte: startDate, lte: endDate },
             },
@@ -63,7 +59,7 @@ export class EnhancedKillRepository {
         {
           correlationId,
           operation: 'select',
-          metadata: { table: 'kill_fact', characterId: characterIds[0]?.toString() }
+          metadata: { table: 'kill_fact', characterId: characterIds[0]?.toString() },
         },
         {
           includeStackTrace: true,
@@ -91,30 +87,21 @@ export class EnhancedKillRepository {
       }
 
       if (this.isPrismaNotFoundError(error)) {
-        throw DatabaseError.recordNotFound(
-          'kill_fact',
-          killData.killmail_id?.toString() || 'unknown',
-          { correlationId }
-        );
+        throw DatabaseError.recordNotFound('kill_fact', killData.killmail_id?.toString() || 'unknown', {
+          correlationId,
+        });
       }
 
       if (this.isPrismaTimeoutError(error)) {
-        throw DatabaseError.timeout(
-          'create',
-          'kill_fact',
-          { correlationId }
-        );
+        throw DatabaseError.timeout('create', 'kill_fact', { correlationId });
       }
 
       // Generic database error
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'create',
-          metadata: { table: 'kill_fact', characterId: killData.character_id?.toString() }
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'create',
+        metadata: { table: 'kill_fact', characterId: killData.character_id?.toString() },
+      });
     }
   }
 
@@ -123,18 +110,14 @@ export class EnhancedKillRepository {
 
     try {
       // Use a transaction for complex updates
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.prisma.$transaction(async tx => {
         // Check if character exists first
         const existingCharacter = await tx.character.findUnique({
           where: { eveId: characterId },
         });
 
         if (!existingCharacter) {
-          throw DatabaseError.recordNotFound(
-            'character',
-            characterId.toString(),
-            { correlationId }
-          );
+          throw DatabaseError.recordNotFound('character', characterId.toString(), { correlationId });
         }
 
         // Perform the update
@@ -156,14 +139,11 @@ export class EnhancedKillRepository {
         throw error; // Re-throw our custom errors
       }
 
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'update',
-          metadata: { table: 'character', characterId: characterId.toString() }
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'update',
+        metadata: { table: 'character', characterId: characterId.toString() },
+      });
     }
   }
 
@@ -175,7 +155,7 @@ export class EnhancedKillRepository {
       // Process in batches to avoid memory issues
       for (let i = 0; i < killsData.length; i += batchSize) {
         const batch = killsData.slice(i, i + batchSize);
-        
+
         await errorHandler.withRetry(
           async () => {
             await this.prisma.killFact.createMany({
@@ -210,18 +190,15 @@ export class EnhancedKillRepository {
         batchCount: Math.ceil(killsData.length / batchSize),
       });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'bulk_create',
-          metadata: {
-            table: 'kill_fact',
-            totalRecords: killsData.length,
-            batchSize,
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'bulk_create',
+        metadata: {
+          table: 'kill_fact',
+          totalRecords: killsData.length,
+          batchSize,
+        },
+      });
     }
   }
 
@@ -293,10 +270,7 @@ export class DatabaseConnectionManager {
 
       return this.prisma;
     } catch (error) {
-      throw DatabaseError.connectionFailed(
-        { correlationId },
-        error as Error
-      );
+      throw DatabaseError.connectionFailed({ correlationId }, error as Error);
     }
   }
 

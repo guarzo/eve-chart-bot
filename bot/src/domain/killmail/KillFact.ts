@@ -227,7 +227,7 @@ export class KillFact extends BaseEntity {
   }
 
   /**
-   * Explicitly load victim for this kill  
+   * Explicitly load victim for this kill
    * This method should be used by repository layer to safely load relations
    */
   loadVictim(victim: KillVictim): void {

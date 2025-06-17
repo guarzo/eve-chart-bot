@@ -8,21 +8,16 @@ import { ChartType } from '../../../../../shared/types/common';
  * Contains pure business logic for activity distribution analysis
  */
 export class DistributionDataProcessor implements IChartDataProcessor {
-  
   private createMetadata(dataLength: number): ChartMetadata {
     return new ChartMetadata(new Date(), dataLength, 0, false);
   }
-  
+
   /**
    * Process distribution data based on configuration
    */
-  async processData(
-    config: ChartConfiguration,
-    rawData: any[]
-  ): Promise<ChartData> {
-    
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
     const distributionType = config.displayOptions?.distributionType || 'system';
-    
+
     switch (distributionType) {
       case 'system':
         return this.processSystemDistribution(rawData, config);
@@ -40,120 +35,86 @@ export class DistributionDataProcessor implements IChartDataProcessor {
   /**
    * Process distribution by solar system
    */
-  private processSystemDistribution(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processSystemDistribution(rawData: any[], config: ChartConfiguration): ChartData {
     const systemMap = new Map<string, { count: number; value: number }>();
-    
+
     rawData.forEach(dataPoint => {
       const systemName = dataPoint.systemName || dataPoint.solarSystemName || 'Unknown';
-      
+
       if (!systemMap.has(systemName)) {
         systemMap.set(systemName, { count: 0, value: 0 });
       }
-      
+
       const stats = systemMap.get(systemName)!;
       stats.count++;
       stats.value += Number(dataPoint.totalValue || 0);
     });
-    
-    return this.formatDistributionData(
-      systemMap,
-      config,
-      'Activity Distribution by Solar System'
-    );
+
+    return this.formatDistributionData(systemMap, config, 'Activity Distribution by Solar System');
   }
 
   /**
    * Process distribution by region
    */
-  private processRegionDistribution(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processRegionDistribution(rawData: any[], config: ChartConfiguration): ChartData {
     const regionMap = new Map<string, { count: number; value: number }>();
-    
+
     rawData.forEach(dataPoint => {
       const regionName = dataPoint.regionName || 'Unknown';
-      
+
       if (!regionMap.has(regionName)) {
         regionMap.set(regionName, { count: 0, value: 0 });
       }
-      
+
       const stats = regionMap.get(regionName)!;
       stats.count++;
       stats.value += Number(dataPoint.totalValue || 0);
     });
-    
-    return this.formatDistributionData(
-      regionMap,
-      config,
-      'Activity Distribution by Region'
-    );
+
+    return this.formatDistributionData(regionMap, config, 'Activity Distribution by Region');
   }
 
   /**
    * Process distribution by ship class
    */
-  private processShipClassDistribution(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processShipClassDistribution(rawData: any[], config: ChartConfiguration): ChartData {
     const shipClassMap = new Map<string, { count: number; value: number }>();
-    
+
     rawData.forEach(dataPoint => {
       // Extract ship class from ship type or category
       const shipClass = this.determineShipClass(dataPoint);
-      
+
       if (!shipClassMap.has(shipClass)) {
         shipClassMap.set(shipClass, { count: 0, value: 0 });
       }
-      
+
       const stats = shipClassMap.get(shipClass)!;
       stats.count++;
       stats.value += Number(dataPoint.totalValue || 0);
     });
-    
-    return this.formatDistributionData(
-      shipClassMap,
-      config,
-      'Activity Distribution by Ship Class'
-    );
+
+    return this.formatDistributionData(shipClassMap, config, 'Activity Distribution by Ship Class');
   }
 
   /**
    * Process distribution by corporation
    */
-  private processCorporationDistribution(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processCorporationDistribution(rawData: any[], config: ChartConfiguration): ChartData {
     const corpMap = new Map<string, { count: number; value: number }>();
-    
+
     rawData.forEach(dataPoint => {
-      const corpName = dataPoint.corporationName || 
-                      dataPoint.victim?.corporationName || 
-                      'Unknown';
-      
+      const corpName = dataPoint.corporationName || dataPoint.victim?.corporationName || 'Unknown';
+
       if (!corpMap.has(corpName)) {
         corpMap.set(corpName, { count: 0, value: 0 });
       }
-      
+
       const stats = corpMap.get(corpName)!;
       stats.count++;
       stats.value += Number(dataPoint.totalValue || 0);
     });
-    
-    return this.formatDistributionData(
-      corpMap,
-      config,
-      'Activity Distribution by Corporation'
-    );
+
+    return this.formatDistributionData(corpMap, config, 'Activity Distribution by Corporation');
   }
 
   /**
@@ -164,15 +125,15 @@ export class DistributionDataProcessor implements IChartDataProcessor {
     if (dataPoint.shipClass) {
       return dataPoint.shipClass;
     }
-    
+
     if (dataPoint.shipTypeName) {
       return this.classifyShipByName(dataPoint.shipTypeName);
     }
-    
+
     if (dataPoint.victim?.shipTypeName) {
       return this.classifyShipByName(dataPoint.victim.shipTypeName);
     }
-    
+
     return 'Unknown';
   }
 
@@ -181,7 +142,7 @@ export class DistributionDataProcessor implements IChartDataProcessor {
    */
   private classifyShipByName(shipName: string): string {
     const name = shipName.toLowerCase();
-    
+
     // Basic ship classification patterns
     if (name.includes('frigate') || name.includes('interceptor') || name.includes('assault')) {
       return 'Frigate';
@@ -198,7 +159,12 @@ export class DistributionDataProcessor implements IChartDataProcessor {
     if (name.includes('battleship') || name.includes('dreadnought') || name.includes('marauder')) {
       return 'Battleship';
     }
-    if (name.includes('carrier') || name.includes('dreadnought') || name.includes('supercarrier') || name.includes('titan')) {
+    if (
+      name.includes('carrier') ||
+      name.includes('dreadnought') ||
+      name.includes('supercarrier') ||
+      name.includes('titan')
+    ) {
       return 'Capital';
     }
     if (name.includes('industrial') || name.includes('mining') || name.includes('hauler')) {
@@ -207,7 +173,7 @@ export class DistributionDataProcessor implements IChartDataProcessor {
     if (name.includes('shuttle') || name.includes('pod')) {
       return 'Capsule/Shuttle';
     }
-    
+
     return 'Other';
   }
 
@@ -217,29 +183,27 @@ export class DistributionDataProcessor implements IChartDataProcessor {
   private formatDistributionData(
     distributionMap: Map<string, { count: number; value: number }>,
     config: ChartConfiguration,
-_title: string
+    _title: string
   ): ChartData {
-    
     // Sort by count and take top entries
     const limit = config.displayOptions?.limit || 10;
     const sortedEntries = Array.from(distributionMap.entries())
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, limit);
-    
+
     const labels = sortedEntries.map(([name]) => name);
     const counts = sortedEntries.map(([, stats]) => stats.count);
     const values = sortedEntries.map(([, stats]) => stats.value);
-    
-    
+
     const datasets = [
       {
         label: 'Activity Count',
         data: counts,
         backgroundColor: this.generateDistributionColors(counts.length),
-        borderWidth: 1
-      }
+        borderWidth: 1,
+      },
     ];
-    
+
     // Add value dataset if meaningful
     const hasValues = values.some(v => v > 0);
     if (hasValues) {
@@ -247,16 +211,11 @@ _title: string
         label: 'Total Value (ISK)',
         data: values,
         backgroundColor: this.generateDistributionColors(values.length, 0.3),
-        borderWidth: 1
+        borderWidth: 1,
       });
     }
-    
-    return new ChartData(
-      ChartType.DISTRIBUTION,
-      labels,
-      datasets,
-this.createMetadata(counts.length)
-    );
+
+    return new ChartData(ChartType.DISTRIBUTION, labels, datasets, this.createMetadata(counts.length));
   }
 
   /**
@@ -265,15 +224,14 @@ this.createMetadata(counts.length)
   private generateDistributionColors(count: number, alpha: number = 0.8): string[] {
     const colors = [];
     const hueStep = 360 / count;
-    
+
     for (let i = 0; i < count; i++) {
       const hue = i * hueStep;
       colors.push(`hsla(${hue}, 70%, 60%, ${alpha})`);
     }
-    
+
     return colors;
   }
-
 
   /**
    * Validate distribution configuration

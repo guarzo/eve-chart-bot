@@ -31,7 +31,7 @@ export class CharacterSyncService {
    */
   public async start(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.info('Starting character sync service...', {
         correlationId,
@@ -47,15 +47,10 @@ export class CharacterSyncService {
 
       // Validate map name
       if (typeof mapName !== 'string' || mapName.trim().length === 0) {
-        throw ValidationError.invalidFormat(
-          'mapName',
-          'non-empty string',
-          mapName,
-          {
-            correlationId,
-            operation: 'characterSync.start',
-          }
-        );
+        throw ValidationError.invalidFormat('mapName', 'non-empty string', mapName, {
+          correlationId,
+          operation: 'characterSync.start',
+        });
       }
 
       logger.debug(`Fetching character data for map ${mapName}`, {
@@ -68,17 +63,11 @@ export class CharacterSyncService {
         async () => {
           const result = await this.map.getUserCharacters(mapName);
           if (!result) {
-            throw new ExternalServiceError(
-              'MAP_API',
-              'No data returned from Map API',
-              '/characters',
-              undefined,
-              {
-                correlationId,
-                operation: 'getUserCharacters',
-                metadata: { mapName },
-              }
-            );
+            throw new ExternalServiceError('MAP_API', 'No data returned from Map API', '/characters', undefined, {
+              correlationId,
+              operation: 'getUserCharacters',
+              metadata: { mapName },
+            });
           }
           return result;
         },
@@ -120,14 +109,11 @@ export class CharacterSyncService {
         }
       );
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'start',
-          metadata: { mapName: Configuration.apis.map.name },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'start',
+        metadata: { mapName: Configuration.apis.map.name },
+      });
     }
   }
 
@@ -138,7 +124,7 @@ export class CharacterSyncService {
     errors: number;
   }> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input
       if (!mapData?.data || !Array.isArray(mapData.data)) {
@@ -161,7 +147,7 @@ export class CharacterSyncService {
         if (!user.characters || !Array.isArray(user.characters)) {
           continue;
         }
-        
+
         for (const character of user.characters) {
           if (character.eve_id) {
             uniqueCharacters.set(character.eve_id, character);
@@ -213,17 +199,14 @@ export class CharacterSyncService {
 
       return results;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'syncUserCharacters',
-          metadata: { 
-            hasMapData: !!mapData,
-            userCount: mapData?.data?.length,
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'syncUserCharacters',
+        metadata: {
+          hasMapData: !!mapData,
+          userCount: mapData?.data?.length,
+        },
+      });
     }
   }
 
@@ -338,28 +321,22 @@ export class CharacterSyncService {
 
   private async syncCharacter(eveId: string, mapCharacterData: any): Promise<'synced' | 'skipped'> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate inputs
       if (!eveId || typeof eveId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'eveId',
-          {
-            correlationId,
-            operation: 'characterSync.syncCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('eveId', {
+          correlationId,
+          operation: 'characterSync.syncCharacter',
+        });
       }
 
       if (!mapCharacterData) {
-        throw ValidationError.fieldRequired(
-          'mapCharacterData',
-          {
-            correlationId,
-            operation: 'characterSync.syncCharacter',
-            metadata: { eveId },
-          }
-        );
+        throw ValidationError.fieldRequired('mapCharacterData', {
+          correlationId,
+          operation: 'characterSync.syncCharacter',
+          metadata: { eveId },
+        });
       }
 
       logger.debug(`Syncing character ${eveId}`, {
@@ -397,7 +374,7 @@ export class CharacterSyncService {
           correlationId,
           eveId,
         });
-        
+
         const esiData = await errorHandler.withRetry(
           async () => {
             return await this.esiService.getCharacter(parseInt(eveId));
@@ -461,26 +438,23 @@ export class CharacterSyncService {
           metadata: { eveId, characterName },
         }
       );
-      
+
       logger.debug(`Successfully synced character ${eveId}`, {
         correlationId,
         eveId,
         characterName,
       });
-      
+
       return 'synced';
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'syncCharacter',
-          metadata: { 
-            eveId,
-            corporationId: mapCharacterData?.corporation_id,
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'syncCharacter',
+        metadata: {
+          eveId,
+          corporationId: mapCharacterData?.corporation_id,
+        },
+      });
     }
   }
 

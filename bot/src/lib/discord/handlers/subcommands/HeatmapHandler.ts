@@ -19,31 +19,25 @@ export class HeatmapHandler extends BaseChartHandler {
     if (!interaction.isChatInputCommand()) return;
 
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
-      
+
       // Validate time parameter
       const timeValue = parseInt(time, 10);
       if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
-        throw ValidationError.outOfRange(
-          'time',
-          1,
-          365,
-          time,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'heatmap_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.outOfRange('time', 1, 365, time, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'heatmap_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
-      
+
       const { startDate, endDate } = this.getTimeRange(time);
 
       logger.info(`Generating heatmap chart for ${time} days`, { correlationId });
@@ -52,17 +46,13 @@ export class HeatmapHandler extends BaseChartHandler {
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        throw ChartError.noDataError(
-          'heatmap',
-          'No character groups found',
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'heatmap_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ChartError.noDataError('heatmap', 'No character groups found', {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'heatmap_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       // Get the chart generator from the factory
@@ -70,12 +60,13 @@ export class HeatmapHandler extends BaseChartHandler {
 
       // Generate chart data with retry mechanism
       const chartData = await errorHandler.withRetry(
-        () => heatmapGenerator.generateChart({
-          characterGroups: groups,
-          startDate,
-          endDate,
-          displayType: 'heatmap',
-        }),
+        () =>
+          heatmapGenerator.generateChart({
+            characterGroups: groups,
+            startDate,
+            endDate,
+            displayType: 'heatmap',
+          }),
         2, // maxRetries
         1000, // baseDelay
         {
@@ -99,12 +90,12 @@ export class HeatmapHandler extends BaseChartHandler {
 
       logger.info('Successfully sent heatmap chart', { correlationId });
     } catch (error) {
-      logger.error('Error in heatmap command handler', { 
-        error, 
-        correlationId, 
+      logger.error('Error in heatmap command handler', {
+        error,
+        correlationId,
         userId: interaction.user.id,
         guildId: interaction.guildId || undefined,
-        metadata: { interactionId: interaction.id }
+        metadata: { interactionId: interaction.id },
       });
       await this.handleError(interaction, error);
     }

@@ -21,7 +21,7 @@ export class LossRepository extends BaseRepository {
    */
   async getLossesByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<number> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching losses for character', {
@@ -68,7 +68,7 @@ export class LossRepository extends BaseRepository {
     valueThreshold: bigint = BigInt(100000000) // 100M ISK default threshold
   ): Promise<number> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching high value losses for character', {
@@ -113,7 +113,7 @@ export class LossRepository extends BaseRepository {
    */
   async getTotalValueLostByCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<bigint> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching total value lost for character', {
@@ -171,7 +171,7 @@ export class LossRepository extends BaseRepository {
     totalValueLost: bigint;
   }> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching losses summary for characters', {
@@ -225,7 +225,7 @@ export class LossRepository extends BaseRepository {
    */
   async getLoss(killmailId: bigint): Promise<LossFact | null> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching loss by killmail ID', {
@@ -265,7 +265,7 @@ export class LossRepository extends BaseRepository {
    */
   async getLossesForCharacter(characterId: bigint, startDate: Date, endDate: Date): Promise<LossFact[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching losses for character', {
@@ -309,7 +309,7 @@ export class LossRepository extends BaseRepository {
    */
   async saveLoss(loss: LossFact): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Saving loss record', {
@@ -372,7 +372,7 @@ export class LossRepository extends BaseRepository {
    */
   async deleteAllLosses(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Deleting all loss records', { correlationId });
@@ -396,7 +396,7 @@ export class LossRepository extends BaseRepository {
    */
   async getLossesByTimeRange(startDate: Date, endDate: Date): Promise<LossFact[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching losses by time range', {
@@ -436,7 +436,7 @@ export class LossRepository extends BaseRepository {
    */
   override async count(): Promise<number> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Counting total loss records', { correlationId });
@@ -465,7 +465,7 @@ export class LossRepository extends BaseRepository {
     limit: number = 10
   ): Promise<Array<{ shipTypeId: string; count: number }>> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching top ship types lost', {
@@ -492,14 +492,14 @@ export class LossRepository extends BaseRepository {
             shipTypeId: true,
           },
         });
-        
+
         // Count occurrences of each ship type
         const shipTypeCounts = new Map<string, number>();
         for (const loss of losses) {
           const shipTypeId = loss.shipTypeId.toString();
           shipTypeCounts.set(shipTypeId, (shipTypeCounts.get(shipTypeId) ?? 0) + 1);
         }
-        
+
         const topShipTypes = Array.from(shipTypeCounts.entries())
           .map(([shipTypeId, count]) => ({ shipTypeId, count }))
           .sort((a, b) => b.count - a.count)

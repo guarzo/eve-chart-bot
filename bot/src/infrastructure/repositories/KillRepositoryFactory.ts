@@ -12,17 +12,12 @@ export type KillRepositoryImplementation = 'original' | 'optimized';
  * Interface that both repository implementations must satisfy
  */
 export interface IKillRepository {
-  ingestKillmail(
-    killFact: any,
-    victim: any,
-    attackers: any[],
-    involvedCharacters: any[]
-  ): Promise<void>;
-  
+  ingestKillmail(killFact: any, victim: any, attackers: any[], involvedCharacters: any[]): Promise<void>;
+
   getTopShipTypesUsed(
-    characterIds: bigint[], 
-    startDate: Date, 
-    endDate: Date, 
+    characterIds: bigint[],
+    startDate: Date,
+    endDate: Date,
     limit: number
   ): Promise<Array<{ shipTypeId: number; count: number }>>;
 
@@ -49,12 +44,8 @@ export class KillRepositoryFactory {
   /**
    * Create a kill repository instance based on configuration
    */
-  static create(
-    prisma: PrismaClient,
-    implementation?: KillRepositoryImplementation
-  ): IKillRepository {
-    const useOptimized = implementation === 'optimized' || 
-                        process.env.USE_OPTIMIZED_KILL_REPOSITORY === 'true';
+  static create(prisma: PrismaClient, implementation?: KillRepositoryImplementation): IKillRepository {
+    const useOptimized = implementation === 'optimized' || process.env.USE_OPTIMIZED_KILL_REPOSITORY === 'true';
 
     if (useOptimized) {
       logger.info('KillRepositoryFactory: Creating optimized repository');
@@ -92,7 +83,7 @@ export class KillRepositoryFactory {
   static getRecommendedImplementation(): KillRepositoryImplementation {
     // Check system characteristics to recommend implementation
     // Check system characteristics to recommend implementation
-    
+
     // For production environments with high throughput, recommend optimized
     if (process.env.NODE_ENV === 'production') {
       logger.info('KillRepositoryFactory: Recommending optimized implementation for production');
@@ -119,7 +110,7 @@ export class KillRepositoryFactory {
   ): Promise<boolean> {
     try {
       logger.info(`KillRepositoryFactory: Validating ${implementation} implementation`);
-      
+
       // Create test data
       const testData = {
         killFact: {
@@ -140,12 +131,14 @@ export class KillRepositoryFactory {
           ship_type_id: 588,
           damage_taken: 100,
         },
-        attackers: [{
-          character_id: BigInt(999999993),
-          corporation_id: BigInt(999999994),
-          damage_done: 100,
-          final_blow: true,
-        }],
+        attackers: [
+          {
+            character_id: BigInt(999999993),
+            corporation_id: BigInt(999999994),
+            damage_done: 100,
+            final_blow: true,
+          },
+        ],
         involvedCharacters: [
           { character_id: BigInt(999999991), role: 'victim' as const },
           { character_id: BigInt(999999993), role: 'attacker' as const },
@@ -180,9 +173,8 @@ export class KillRepositoryFactory {
     const envImplementation = process.env.KILL_REPOSITORY_IMPLEMENTATION as KillRepositoryImplementation;
     const envOptimized = process.env.USE_OPTIMIZED_KILL_REPOSITORY === 'true';
     const recommended = this.getRecommendedImplementation();
-    
-    const current: KillRepositoryImplementation = 
-      envImplementation || (envOptimized ? 'optimized' : recommended);
+
+    const current: KillRepositoryImplementation = envImplementation || (envOptimized ? 'optimized' : recommended);
 
     return {
       currentImplementation: current,

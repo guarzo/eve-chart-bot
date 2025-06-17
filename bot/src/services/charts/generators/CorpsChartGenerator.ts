@@ -92,7 +92,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     // TODO: getTopEnemyCorporations method needs to be implemented in KillRepository
     // For now, return empty data to prevent compilation errors
     const corpsData: Array<{ corpId: string; killCount: number }> = [];
-    
+
     // Placeholder warning
     console.warn('getTopEnemyCorporations not implemented - returning empty data');
 
@@ -101,7 +101,9 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     }
 
     // Lookup tickers for all corpIds
-    const labelTickers = await Promise.all(corpsData.map((corp: { corpId: string; killCount: number }) => this.getCorpTicker(corp.corpId)));
+    const labelTickers = await Promise.all(
+      corpsData.map((corp: { corpId: string; killCount: number }) => this.getCorpTicker(corp.corpId))
+    );
 
     // Sort by kill count in descending order
     corpsData.sort((a: { killCount: number }, b: { killCount: number }) => b.killCount - a.killCount);
@@ -120,7 +122,9 @@ export class CorpsChartGenerator extends BaseChartGenerator {
         {
           label: 'Kills',
           data: corpsData.map((corp: { killCount: number }) => corp.killCount),
-          backgroundColor: corpsData.map((_: any, i: number) => CorpsChartConfig.colors[i % CorpsChartConfig.colors.length]),
+          backgroundColor: corpsData.map(
+            (_: any, i: number) => CorpsChartConfig.colors[i % CorpsChartConfig.colors.length]
+          ),
           borderColor: corpsData.map((_: any, i: number) =>
             this.adjustColorBrightness(CorpsChartConfig.colors[i % CorpsChartConfig.colors.length], -20)
           ),
@@ -180,7 +184,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     // TODO: getTopEnemyCorporations method needs to be implemented in KillRepository
     // For now, return empty data to prevent compilation errors
     const corpsData: Array<{ corpId: string; killCount: number }> = [];
-    
+
     // Placeholder warning
     console.warn('getTopEnemyCorporations not implemented - returning empty data');
 
@@ -208,7 +212,7 @@ export class CorpsChartGenerator extends BaseChartGenerator {
     const othersThreshold = totalAllCorpsKills * 0.01;
 
     // Copy the data and add "Others" if needed
-    const pieLabels = corpsData.map((corp) => corp.corpId);
+    const pieLabels = corpsData.map(corp => corp.corpId);
     const pieData = corpsData.map((corp: { killCount: number }) => corp.killCount);
     const pieColors = corpsData.map((_: any, i: number) => CorpsChartConfig.colors[i % CorpsChartConfig.colors.length]);
 

@@ -52,36 +52,27 @@ export class KillsDataProcessor implements IChartDataProcessor {
       characterId: BigInt(item.characterId),
       groupId: item.groupId,
       solo: Boolean(item.solo),
-      npc: Boolean(item.npc)
+      npc: Boolean(item.npc),
     }));
   }
 
   /**
    * Process kill data points into chart-ready format
    */
-  processKillData(
-    config: ChartConfiguration,
-    killData: KillDataPoint[],
-    groupLabels: string[]
-  ): ChartData {
+  processKillData(config: ChartConfiguration, killData: KillDataPoint[], groupLabels: string[]): ChartData {
     const startTime = Date.now();
-    
+
     // Group kills by the configured grouping (character, time, etc)
     const aggregations = this.aggregateKills(killData, groupLabels, config);
-    
+
     // Create datasets for the chart
     const datasets = this.createKillDatasets(aggregations, config);
-    
+
     // Extract labels
     const labels = aggregations.map(agg => agg.label);
-    
-    const metadata = new ChartMetadata(
-      new Date(),
-      killData.length,
-      Date.now() - startTime,
-      false
-    );
-    
+
+    const metadata = new ChartMetadata(new Date(), killData.length, Date.now() - startTime, false);
+
     return new ChartData(ChartType.KILLS, labels, datasets, metadata);
   }
 
@@ -94,7 +85,7 @@ export class KillsDataProcessor implements IChartDataProcessor {
     config: ChartConfiguration
   ): KillAggregation[] {
     const aggregations: Map<string, KillAggregation> = new Map();
-    
+
     // Initialize aggregations for each group
     groupLabels.forEach(label => {
       aggregations.set(label, {
@@ -102,74 +93,77 @@ export class KillsDataProcessor implements IChartDataProcessor {
         totalKills: 0,
         soloKills: 0,
         npcKills: 0,
-        averagePerDay: 0
+        averagePerDay: 0,
       });
     });
-    
+
     // Process each kill
     killData.forEach(kill => {
       const groupLabel = this.determineGroupLabel(kill, groupLabels);
       const agg = aggregations.get(groupLabel);
-      
+
       if (agg) {
         agg.totalKills++;
         if (kill.solo) agg.soloKills++;
         if (kill.npc) agg.npcKills++;
       }
     });
-    
+
     // Calculate averages
     const daysDiff = this.calculateDaysDifference(config.startDate, config.endDate);
     aggregations.forEach(agg => {
       agg.averagePerDay = daysDiff > 0 ? agg.totalKills / daysDiff : 0;
     });
-    
+
     return Array.from(aggregations.values());
   }
 
   /**
    * Create chart datasets from aggregations
    */
-  private createKillDatasets(
-    aggregations: KillAggregation[],
-    config: ChartConfiguration
-  ): ChartDataset[] {
+  private createKillDatasets(aggregations: KillAggregation[], config: ChartConfiguration): ChartDataset[] {
     const datasets: ChartDataset[] = [];
-    
+
     // Total kills dataset
-    datasets.push(new ChartDataset(
-      'Total Kills',
-      aggregations.map(agg => agg.totalKills),
-      this.getChartColor('primary'),
-      this.getChartColor('primaryBorder'),
-      2,
-      false
-    ));
-    
+    datasets.push(
+      new ChartDataset(
+        'Total Kills',
+        aggregations.map(agg => agg.totalKills),
+        this.getChartColor('primary'),
+        this.getChartColor('primaryBorder'),
+        2,
+        false
+      )
+    );
+
     // Solo kills dataset (if requested)
     if (config.displayOptions.showSoloKills !== false) {
-      datasets.push(new ChartDataset(
-        'Solo Kills',
-        aggregations.map(agg => agg.soloKills),
-        this.getChartColor('secondary'),
-        this.getChartColor('secondaryBorder'),
-        2,
-        false
-      ));
+      datasets.push(
+        new ChartDataset(
+          'Solo Kills',
+          aggregations.map(agg => agg.soloKills),
+          this.getChartColor('secondary'),
+          this.getChartColor('secondaryBorder'),
+          2,
+          false
+        )
+      );
     }
-    
+
     // NPC kills dataset (if requested)
     if (config.displayOptions.showNpcKills === true) {
-      datasets.push(new ChartDataset(
-        'NPC Kills',
-        aggregations.map(agg => agg.npcKills),
-        this.getChartColor('tertiary'),
-        this.getChartColor('tertiaryBorder'),
-        2,
-        false
-      ));
+      datasets.push(
+        new ChartDataset(
+          'NPC Kills',
+          aggregations.map(agg => agg.npcKills),
+          this.getChartColor('tertiary'),
+          this.getChartColor('tertiaryBorder'),
+          2,
+          false
+        )
+      );
     }
-    
+
     return datasets;
   }
 
@@ -199,9 +193,9 @@ export class KillsDataProcessor implements IChartDataProcessor {
       secondary: '#2196F3',
       secondaryBorder: '#1976D2',
       tertiary: '#FF9800',
-      tertiaryBorder: '#F57C00'
+      tertiaryBorder: '#F57C00',
     };
-    
+
     return colorMap[type] || '#9E9E9E';
   }
 }

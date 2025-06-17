@@ -6,11 +6,7 @@
 // Domain exports
 export * from './domain/value-objects/ChartConfiguration';
 export * from './domain/value-objects/ChartData';
-export { 
-  ChartDataProcessor,
-  type KillDataPoint,
-  type LossDataPoint 
-} from './domain/services/ChartDataProcessor';
+export { ChartDataProcessor, type KillDataPoint, type LossDataPoint } from './domain/services/ChartDataProcessor';
 export * from './domain/services/ChartProcessorFactory';
 export type { IChartDataProcessor } from './domain/services/IChartDataProcessor';
 export * from './domain/services/processors/KillsDataProcessor';
@@ -23,7 +19,7 @@ export * from './domain/services/processors/RatioDataProcessor';
 export * from './domain/services/processors/DistributionDataProcessor';
 export * from './domain/services/processors/CorpsDataProcessor';
 
-// Application exports  
+// Application exports
 export * from './application/use-cases/GenerateChartUseCase';
 export * from './application/services/IChartService';
 export * from './application/services/UnifiedChartService';

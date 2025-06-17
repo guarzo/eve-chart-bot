@@ -64,7 +64,7 @@ export enum Priority {
   LOW = 'low',
   MEDIUM = 'medium',
   HIGH = 'high',
-  CRITICAL = 'critical'
+  CRITICAL = 'critical',
 }
 
 export enum Status {
@@ -73,13 +73,13 @@ export enum Status {
   PENDING = 'pending',
   PROCESSING = 'processing',
   COMPLETED = 'completed',
-  FAILED = 'failed'
+  FAILED = 'failed',
 }
 
 // Chart and analytics types (will be extended in analytics bounded context)
 export enum ChartType {
   KILLS = 'kills',
-  LOSSES = 'losses', 
+  LOSSES = 'losses',
   EFFICIENCY = 'efficiency',
   HEATMAP = 'heatmap',
   TIME_OF_DAY_HEATMAP = 'time-of-day-heatmap',
@@ -92,7 +92,7 @@ export enum ChartType {
   CORPS_KILLS = 'corps-kills',
   CORPS_LOSSES = 'corps-losses',
   CORPS_EFFICIENCY = 'corps-efficiency',
-  ENEMY_CORPS = 'enemy-corps'
+  ENEMY_CORPS = 'enemy-corps',
 }
 
 export enum TimePeriod {
@@ -101,5 +101,5 @@ export enum TimePeriod {
   WEEK = '1w',
   MONTH = '1m',
   QUARTER = '3m',
-  YEAR = '1y'
+  YEAR = '1y',
 }

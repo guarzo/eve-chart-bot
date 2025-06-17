@@ -64,18 +64,18 @@ export class UnifiedESIClient implements IESIClient {
       // Try to get from cache first
       const cachedData = await this.cache.get<T>(cacheKey);
       if (cachedData) {
-        logger.debug('ESI cache hit', { 
-          correlationId, 
-          url, 
-          cacheKey 
+        logger.debug('ESI cache hit', {
+          correlationId,
+          url,
+          cacheKey,
         });
         return cachedData;
       }
 
       // Not in cache, fetch from API with retry logic
-      logger.debug('ESI cache miss, fetching from API', { 
-        correlationId, 
-        url 
+      logger.debug('ESI cache miss, fetching from API', {
+        correlationId,
+        url,
       });
 
       // Apply rate limiting if configured
@@ -94,26 +94,23 @@ export class UnifiedESIClient implements IESIClient {
         this.config.initialRetryDelay,
         {
           operation: 'esi.fetch',
-          metadata: { 
-            endpoint: url, 
+          metadata: {
+            endpoint: url,
             baseUrl: this.config.baseUrl,
-            hasParams: Object.keys(options.params ?? {}).length > 0
+            hasParams: Object.keys(options.params ?? {}).length > 0,
           },
         }
       );
 
       if (!data) {
-        throw ExternalServiceError.serviceUnavailable(
-          'ESI',
-          {
-            correlationId,
-            operation: 'esi.fetch',
-            metadata: { 
-              endpoint: url,
-              retriesAttempted: this.config.maxRetries
-            },
-          }
-        );
+        throw ExternalServiceError.serviceUnavailable('ESI', {
+          correlationId,
+          operation: 'esi.fetch',
+          metadata: {
+            endpoint: url,
+            retriesAttempted: this.config.maxRetries,
+          },
+        });
       }
 
       // Cache the response
@@ -128,11 +125,7 @@ export class UnifiedESIClient implements IESIClient {
 
       return data;
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        url
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', url);
     }
   }
 
@@ -156,21 +149,17 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchKillmail(killmailId: number, hash: string): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching killmail data', {
         correlationId,
         killmailId,
         hash,
       });
-      
+
       return await this.fetch(`/killmails/${killmailId}/${hash}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/killmails/${killmailId}/${hash}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/killmails/${killmailId}/${hash}/`);
     }
   }
 
@@ -179,20 +168,16 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchCharacter(characterId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching character data', {
         correlationId,
         characterId,
       });
-      
+
       return await this.fetch(`/characters/${characterId}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/characters/${characterId}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/characters/${characterId}/`);
     }
   }
 
@@ -201,20 +186,16 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchCorporation(corporationId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching corporation data', {
         correlationId,
         corporationId,
       });
-      
+
       return await this.fetch(`/corporations/${corporationId}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/corporations/${corporationId}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/corporations/${corporationId}/`);
     }
   }
 
@@ -223,20 +204,16 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchAlliance(allianceId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching alliance data', {
         correlationId,
         allianceId,
       });
-      
+
       return await this.fetch(`/alliances/${allianceId}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/alliances/${allianceId}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/alliances/${allianceId}/`);
     }
   }
 
@@ -245,20 +222,16 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchSolarSystem(systemId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching solar system data', {
         correlationId,
         systemId,
       });
-      
+
       return await this.fetch(`/universe/systems/${systemId}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/universe/systems/${systemId}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/universe/systems/${systemId}/`);
     }
   }
 
@@ -267,20 +240,16 @@ export class UnifiedESIClient implements IESIClient {
    */
   async fetchType(typeId: number): Promise<any> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Fetching type data', {
         correlationId,
         typeId,
       });
-      
+
       return await this.fetch(`/universe/types/${typeId}/`);
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'ESI',
-        `/universe/types/${typeId}/`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'ESI', `/universe/types/${typeId}/`);
     }
   }
 

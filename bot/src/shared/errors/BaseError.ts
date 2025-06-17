@@ -31,7 +31,7 @@ export abstract class BaseError extends Error {
 
   constructor(details: ErrorDetails) {
     super(details.message);
-    
+
     this.name = this.constructor.name;
     this.code = details.code;
     this.statusCode = details.statusCode;
@@ -63,11 +63,13 @@ export abstract class BaseError extends Error {
       timestamp: this.timestamp.toISOString(),
       context: this.context,
       stack: this.stack,
-      cause: this.cause ? {
-        name: this.cause.name,
-        message: this.cause.message,
-        stack: this.cause.stack,
-      } : undefined,
+      cause: this.cause
+        ? {
+            name: this.cause.name,
+            message: this.cause.message,
+            stack: this.cause.stack,
+          }
+        : undefined,
     };
   }
 
@@ -109,7 +111,7 @@ export abstract class BaseError extends Error {
   withContext(additionalContext: Partial<ErrorContext>): this {
     const newContext = { ...this.context, ...additionalContext };
     const constructor = this.constructor as any;
-    
+
     return new constructor({
       code: this.code,
       message: this.message,

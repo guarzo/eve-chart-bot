@@ -13,7 +13,7 @@ export class SimplifiedChartService {
 
   constructor(config?: ChartPipelineConfig) {
     // Create pipeline with clean configuration instead of feature flags
-    this.pipeline = config 
+    this.pipeline = config
       ? ChartPipelineFactory.createShipUsagePipeline(config)
       : ChartPipelineFactory.createFromEnvironment();
 
@@ -23,11 +23,7 @@ export class SimplifiedChartService {
   /**
    * Generate ship usage chart data
    */
-  async generateShipUsageData(
-    characterId?: string, 
-    groupId?: string, 
-    days: number = 30
-  ): Promise<ChartData | null> {
+  async generateShipUsageData(characterId?: string, groupId?: string, days: number = 30): Promise<ChartData | null> {
     try {
       logger.info('SimplifiedChartService: Generating ship usage data', {
         characterId,

@@ -17,7 +17,7 @@ export class MonitoringServer {
     this.app = express();
     this.healthCheckService = new HealthCheckService(prisma);
     this.port = port;
-    
+
     this.setupMiddleware();
     this.setupRoutes();
   }
@@ -25,7 +25,7 @@ export class MonitoringServer {
   private setupMiddleware(): void {
     // Basic middleware
     this.app.use(express.json());
-    
+
     // CORS for monitoring tools
     this.app.use((_req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
@@ -38,14 +38,14 @@ export class MonitoringServer {
       const correlationId = tracingService.createCorrelationId();
       req.correlationId = correlationId;
       res.setHeader('X-Correlation-ID', correlationId);
-      
+
       logger.info('Monitoring request', {
         correlationId,
         method: req.method,
         url: req.url,
         userAgent: req.get('User-Agent'),
       });
-      
+
       next();
     });
   }
@@ -55,9 +55,8 @@ export class MonitoringServer {
     this.app.get('/health', async (_req, res) => {
       try {
         const health = await this.healthCheckService.getHealthStatus();
-        const statusCode = health.status === 'healthy' ? 200 : 
-                          health.status === 'degraded' ? 200 : 503;
-        
+        const statusCode = health.status === 'healthy' ? 200 : health.status === 'degraded' ? 200 : 503;
+
         res.status(statusCode).json(health);
       } catch (error) {
         logger.error('Health check failed:', error);
@@ -74,7 +73,7 @@ export class MonitoringServer {
       try {
         const readiness = await this.healthCheckService.getReadinessStatus();
         const statusCode = readiness.ready ? 200 : 503;
-        
+
         res.status(statusCode).json(readiness);
       } catch (error) {
         logger.error('Readiness check failed:', error);
@@ -173,7 +172,7 @@ export class MonitoringServer {
     const cacheInvalidateHandler: RequestHandler = async (req, res) => {
       try {
         const { type, characterIds, startDate, endDate } = req.body;
-        
+
         switch (type) {
           case 'character':
             if (!characterIds) {
@@ -182,20 +181,23 @@ export class MonitoringServer {
             }
             await chartCacheService.invalidateCharacterCache(characterIds);
             break;
-          
+
           case 'timeRange':
             if (!startDate) {
               res.status(400).json({ error: 'startDate required for timeRange invalidation' });
               return;
             }
-            await chartCacheService.invalidateTimeRangeCache(new Date(startDate), endDate ? new Date(endDate) : undefined);
+            await chartCacheService.invalidateTimeRangeCache(
+              new Date(startDate),
+              endDate ? new Date(endDate) : undefined
+            );
             break;
-          
+
           default:
             res.status(400).json({ error: 'Invalid invalidation type. Use "character" or "timeRange"' });
             return;
         }
-        
+
         res.json({ success: true, type, invalidatedAt: new Date().toISOString() });
       } catch (error) {
         logger.error('Cache invalidation failed:', error);
@@ -218,7 +220,7 @@ export class MonitoringServer {
           external: `${Math.round(memoryUsage.external / 1024 / 1024)} MB`,
           arrayBuffers: `${Math.round(memoryUsage.arrayBuffers / 1024 / 1024)} MB`,
         };
-        
+
         res.json({
           memory: formattedMemory,
           raw: memoryUsage,
@@ -232,7 +234,7 @@ export class MonitoringServer {
           const beforeMemory = process.memoryUsage();
           global.gc();
           const afterMemory = process.memoryUsage();
-          
+
           res.json({
             message: 'Garbage collection forced',
             before: beforeMemory,
@@ -306,7 +308,7 @@ export class MonitoringServer {
           resolve();
         });
 
-        this.server.on('error', (error) => {
+        this.server.on('error', error => {
           logger.error('Monitoring server error:', error);
           reject(error);
         });
@@ -319,7 +321,7 @@ export class MonitoringServer {
   async stop(): Promise<void> {
     if (this.server) {
       return new Promise((resolve, reject) => {
-        this.server!.close((error) => {
+        this.server!.close(error => {
           if (error) {
             logger.error('Error stopping monitoring server:', error);
             reject(error);

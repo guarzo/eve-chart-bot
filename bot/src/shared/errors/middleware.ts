@@ -7,12 +7,7 @@ import { extractCorrelationId } from './utils';
 /**
  * Express error middleware for handling standardized errors
  */
-export function errorMiddleware(
-  error: unknown,
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function errorMiddleware(error: unknown, req: Request, res: Response, next: NextFunction): void {
   // Skip if response already sent
   if (res.headersSent) {
     return next(error);
@@ -49,16 +44,11 @@ export function errorMiddleware(
 /**
  * Middleware to add correlation ID to requests
  */
-export function correlationMiddleware(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
+export function correlationMiddleware(req: Request, res: Response, next: NextFunction): void {
   // Extract or create correlation ID
-  const correlationId = extractCorrelationId(
-    req.headers as Record<string, string>,
-    req.query as Record<string, string>
-  ) || errorHandler.createCorrelationId();
+  const correlationId =
+    extractCorrelationId(req.headers as Record<string, string>, req.query as Record<string, string>) ||
+    errorHandler.createCorrelationId();
 
   // Add to request object
   (req as any).correlationId = correlationId;
@@ -128,22 +118,17 @@ export function rateLimitErrorHandler(
   options?: { windowMs?: number; maxRequests?: number }
 ): void {
   const correlationId = (req as any).correlationId || errorHandler.createCorrelationId();
-  
-  const rateLimitError = new AppError(
-    'Too many requests',
-    429,
-    'RATE_LIMIT_EXCEEDED',
-    {
-      correlationId,
-      operation: `${req.method} ${req.path}`,
-      windowMs: options?.windowMs,
-      maxRequests: options?.maxRequests,
-      ip: req.ip,
-    }
-  );
+
+  const rateLimitError = new AppError('Too many requests', 429, 'RATE_LIMIT_EXCEEDED', {
+    correlationId,
+    operation: `${req.method} ${req.path}`,
+    windowMs: options?.windowMs,
+    maxRequests: options?.maxRequests,
+    ip: req.ip,
+  });
 
   const apiResponse = rateLimitError.toApiResponse();
-  
+
   // Add rate limit headers
   if (options?.windowMs) {
     res.setHeader('X-RateLimit-Window', Math.ceil(options.windowMs / 1000));
@@ -160,16 +145,11 @@ export function rateLimitErrorHandler(
  */
 export function notFoundHandler(req: Request, res: Response): void {
   const correlationId = (req as any).correlationId || errorHandler.createCorrelationId();
-  
-  const notFoundError = new AppError(
-    `Resource not found: ${req.method} ${req.path}`,
-    404,
-    'RESOURCE_NOT_FOUND',
-    {
-      correlationId,
-      operation: `${req.method} ${req.path}`,
-    }
-  );
+
+  const notFoundError = new AppError(`Resource not found: ${req.method} ${req.path}`, 404, 'RESOURCE_NOT_FOUND', {
+    correlationId,
+    operation: `${req.method} ${req.path}`,
+  });
 
   res.setHeader('X-Correlation-ID', correlationId);
   res.status(404).json(notFoundError.toApiResponse());

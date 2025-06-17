@@ -51,10 +51,10 @@ export class MetricsCollector extends EventEmitter {
   private gauges = new Map<string, number>();
   private histograms = new Map<string, number[]>();
   private timings = new Map<string, number[]>();
-  
+
   private readonly maxMetricsHistory = 1000;
   private readonly metricsRetentionMs = 3600000; // 1 hour
-  
+
   private cleanupInterval: NodeJS.Timeout;
 
   constructor() {
@@ -69,7 +69,7 @@ export class MetricsCollector extends EventEmitter {
     const key = this.getMetricKey(name, labels);
     const currentValue = this.counters.get(key) || 0;
     this.counters.set(key, currentValue + value);
-    
+
     this.recordMetric({
       name,
       value: currentValue + value,
@@ -83,7 +83,7 @@ export class MetricsCollector extends EventEmitter {
   setGauge(name: string, value: number, labels?: Record<string, string>): void {
     const key = this.getMetricKey(name, labels);
     this.gauges.set(key, value);
-    
+
     this.recordMetric({
       name,
       value,
@@ -98,14 +98,14 @@ export class MetricsCollector extends EventEmitter {
     const key = this.getMetricKey(name, labels);
     const values = this.histograms.get(key) || [];
     values.push(value);
-    
+
     // Keep only recent values
     if (values.length > 100) {
       values.splice(0, values.length - 100);
     }
-    
+
     this.histograms.set(key, values);
-    
+
     this.recordMetric({
       name,
       value,
@@ -120,14 +120,14 @@ export class MetricsCollector extends EventEmitter {
     const key = this.getMetricKey(name, labels);
     const times = this.timings.get(key) || [];
     times.push(duration);
-    
+
     // Keep only recent times
     if (times.length > 100) {
       times.splice(0, times.length - 100);
     }
-    
+
     this.timings.set(key, times);
-    
+
     this.recordMetric({
       name,
       value: duration,
@@ -161,7 +161,10 @@ export class MetricsCollector extends EventEmitter {
     return this.gauges.get(key) || 0;
   }
 
-  getHistogramStats(name: string, labels?: Record<string, string>): {
+  getHistogramStats(
+    name: string,
+    labels?: Record<string, string>
+  ): {
     count: number;
     sum: number;
     min: number;
@@ -172,12 +175,12 @@ export class MetricsCollector extends EventEmitter {
   } | null {
     const key = this.getMetricKey(name, labels);
     const values = this.histograms.get(key);
-    
+
     if (!values || values.length === 0) return null;
-    
+
     const sorted = [...values].sort((a, b) => a - b);
     const sum = values.reduce((a, b) => a + b, 0);
-    
+
     return {
       count: values.length,
       sum,
@@ -189,7 +192,10 @@ export class MetricsCollector extends EventEmitter {
     };
   }
 
-  getTimingStats(name: string, labels?: Record<string, string>): {
+  getTimingStats(
+    name: string,
+    labels?: Record<string, string>
+  ): {
     count: number;
     totalTime: number;
     averageTime: number;
@@ -200,12 +206,12 @@ export class MetricsCollector extends EventEmitter {
   } | null {
     const key = this.getMetricKey(name, labels);
     const times = this.timings.get(key);
-    
+
     if (!times || times.length === 0) return null;
-    
+
     const sorted = [...times].sort((a, b) => a - b);
     const totalTime = times.reduce((a, b) => a + b, 0);
-    
+
     return {
       count: times.length,
       totalTime,
@@ -220,7 +226,7 @@ export class MetricsCollector extends EventEmitter {
   // Get comprehensive metrics snapshot
   async getMetricsSnapshot(): Promise<MetricSnapshot> {
     const timestamp = Date.now();
-    
+
     // Discord metrics
     const commandsProcessed = this.getCounter('discord_commands_processed');
     const commandErrors = this.getCounter('discord_command_errors');
@@ -289,50 +295,78 @@ export class MetricsCollector extends EventEmitter {
   // Get metrics in Prometheus format
   getPrometheusMetrics(): string {
     const lines: string[] = [];
-    
+
     // Counters
     for (const [key, value] of this.counters) {
       const { name, labels } = this.parseMetricKey(key);
-      const labelStr = labels ? `{${Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}}` : '';
+      const labelStr = labels
+        ? `{${Object.entries(labels)
+            .map(([k, v]) => `${k}="${v}"`)
+            .join(',')}}`
+        : '';
       lines.push(`${name}_total${labelStr} ${value}`);
     }
-    
+
     // Gauges
     for (const [key, value] of this.gauges) {
       const { name, labels } = this.parseMetricKey(key);
-      const labelStr = labels ? `{${Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}}` : '';
+      const labelStr = labels
+        ? `{${Object.entries(labels)
+            .map(([k, v]) => `${k}="${v}"`)
+            .join(',')}}`
+        : '';
       lines.push(`${name}${labelStr} ${value}`);
     }
-    
+
     // Histograms
     for (const [key] of this.histograms) {
       const { name, labels } = this.parseMetricKey(key);
       const stats = this.getHistogramStats(name, labels);
       if (stats) {
-        const labelStr = labels ? `{${Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}}` : '';
+        const labelStr = labels
+          ? `{${Object.entries(labels)
+              .map(([k, v]) => `${k}="${v}"`)
+              .join(',')}}`
+          : '';
         lines.push(`${name}_count${labelStr} ${stats.count}`);
         lines.push(`${name}_sum${labelStr} ${stats.sum}`);
-        lines.push(`${name}_bucket{le="95"${labels ? `,${  Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}` : ''}} ${stats.p95}`);
-        lines.push(`${name}_bucket{le="99"${labels ? `,${  Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}` : ''}} ${stats.p99}`);
+        lines.push(
+          `${name}_bucket{le="95"${
+            labels
+              ? `,${Object.entries(labels)
+                  .map(([k, v]) => `${k}="${v}"`)
+                  .join(',')}`
+              : ''
+          }} ${stats.p95}`
+        );
+        lines.push(
+          `${name}_bucket{le="99"${
+            labels
+              ? `,${Object.entries(labels)
+                  .map(([k, v]) => `${k}="${v}"`)
+                  .join(',')}`
+              : ''
+          }} ${stats.p99}`
+        );
       }
     }
-    
+
     return lines.join('\n');
   }
 
   private recordMetric(metric: Metric): void {
     const key = metric.name;
     const metrics = this.metrics.get(key) || [];
-    
+
     metrics.push(metric);
-    
+
     // Keep only recent metrics
     if (metrics.length > this.maxMetricsHistory) {
       metrics.splice(0, metrics.length - this.maxMetricsHistory);
     }
-    
+
     this.metrics.set(key, metrics);
-    
+
     // Emit metric event for real-time monitoring
     this.emit('metric', metric);
   }
@@ -341,41 +375,41 @@ export class MetricsCollector extends EventEmitter {
     if (!labels || Object.keys(labels).length === 0) {
       return name;
     }
-    
+
     const labelStr = Object.entries(labels)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}=${value}`)
       .join(',');
-    
+
     return `${name}{${labelStr}}`;
   }
 
   private parseMetricKey(key: string): { name: string; labels?: Record<string, string> } {
     const match = key.match(/^([^{]+)(?:\{(.+)\})?$/);
     if (!match) return { name: key };
-    
+
     const [, name, labelStr] = match;
     if (!labelStr) return { name };
-    
+
     const labels: Record<string, string> = {};
     for (const pair of labelStr.split(',')) {
       const [k, v] = pair.split('=');
       labels[k] = v;
     }
-    
+
     return { name, labels };
   }
 
   private cleanupOldMetrics(): void {
     const cutoff = Date.now() - this.metricsRetentionMs;
-    
+
     for (const [key, metrics] of this.metrics) {
       const filtered = metrics.filter(m => m.timestamp > cutoff);
       if (filtered.length !== metrics.length) {
         this.metrics.set(key, filtered);
       }
     }
-    
+
     logger.debug('Cleaned up old metrics');
   }
 

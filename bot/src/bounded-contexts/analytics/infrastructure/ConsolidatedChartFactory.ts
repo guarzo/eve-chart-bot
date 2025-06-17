@@ -22,19 +22,11 @@ class UnifiedDataRepository {
     private readonly lossRepo: PrismaLossDataRepository
   ) {}
 
-  async getKillData(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<KillDataPoint[]> {
+  async getKillData(characterIds: bigint[], startDate: Date, endDate: Date): Promise<KillDataPoint[]> {
     return this.killRepo.getKillDataForCharacters(characterIds, startDate, endDate);
   }
 
-  async getLossData(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<LossDataPoint[]> {
+  async getLossData(characterIds: bigint[], startDate: Date, endDate: Date): Promise<LossDataPoint[]> {
     return this.lossRepo.getLossDataForCharacters(characterIds, startDate, endDate);
   }
 
@@ -43,12 +35,12 @@ class UnifiedDataRepository {
     const characters = await this.prisma.character.findMany({
       where: {
         eveId: {
-          in: characterIds
-        }
+          in: characterIds,
+        },
       },
       include: {
-        characterGroup: true
-      }
+        characterGroup: true,
+      },
     });
 
     const labelMap = new Map<bigint, string>();
@@ -90,19 +82,11 @@ export class ConsolidatedChartFactory {
       const lossRepo = new PrismaLossDataRepository(this.prisma);
       const cacheRepo = new RedisChartCacheRepository(this.redis);
       const renderer = new CanvasChartRenderer();
-      
-      const dataRepo = new UnifiedDataRepository(
-        this.prisma,
-        killRepo,
-        lossRepo
-      );
+
+      const dataRepo = new UnifiedDataRepository(this.prisma, killRepo, lossRepo);
 
       // Create the unified service
-      this.chartService = new UnifiedChartService(
-        dataRepo,
-        cacheRepo,
-        renderer
-      );
+      this.chartService = new UnifiedChartService(dataRepo, cacheRepo, renderer);
     }
 
     return this.chartService;
@@ -114,35 +98,41 @@ export class ConsolidatedChartFactory {
    */
   getLegacyChartService(): any {
     const chartService = this.getChartService();
-    
-    // Return a proxy that adapts the new interface to the old one
-    return new Proxy({}, {
-      get: (_target, prop) => {
-        // Map old method names to new service
-        const methodMap: Record<string, Function> = {
-          generateKillsChart: async (options: any) => {
-            // Convert legacy options to new configuration
-            const config = this.convertLegacyOptions(options, 'kills');
-            const result = await chartService.generateChart(config);
-            return result.success ? result.data : null;
-          },
-          generateLossChart: async (options: any) => {
-            const config = this.convertLegacyOptions(options, 'losses');
-            const result = await chartService.generateChart(config);
-            return result.success ? result.data : null;
-          },
-          generateEfficiencyChart: async (options: any) => {
-            const config = this.convertLegacyOptions(options, 'efficiency');
-            const result = await chartService.generateChart(config);
-            return result.success ? result.data : null;
-          }
-        };
 
-        return methodMap[prop as string] || (() => {
-          throw new Error(`Method ${String(prop)} not implemented in consolidated chart service`);
-        });
+    // Return a proxy that adapts the new interface to the old one
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          // Map old method names to new service
+          const methodMap: Record<string, Function> = {
+            generateKillsChart: async (options: any) => {
+              // Convert legacy options to new configuration
+              const config = this.convertLegacyOptions(options, 'kills');
+              const result = await chartService.generateChart(config);
+              return result.success ? result.data : null;
+            },
+            generateLossChart: async (options: any) => {
+              const config = this.convertLegacyOptions(options, 'losses');
+              const result = await chartService.generateChart(config);
+              return result.success ? result.data : null;
+            },
+            generateEfficiencyChart: async (options: any) => {
+              const config = this.convertLegacyOptions(options, 'efficiency');
+              const result = await chartService.generateChart(config);
+              return result.success ? result.data : null;
+            },
+          };
+
+          return (
+            methodMap[prop as string] ||
+            (() => {
+              throw new Error(`Method ${String(prop)} not implemented in consolidated chart service`);
+            })
+          );
+        },
       }
-    });
+    );
   }
 
   /**
@@ -156,7 +146,7 @@ export class ConsolidatedChartFactory {
       characterIds: [],
       startDate: options.startDate,
       endDate: options.endDate,
-      displayOptions: {}
+      displayOptions: {},
     };
   }
 }

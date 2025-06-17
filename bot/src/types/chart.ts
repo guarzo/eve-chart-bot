@@ -1,11 +1,11 @@
 import { ChartType, ChartOptions as ChartJSOptions, ScriptableContext, Tick, Scale, TooltipItem } from 'chart.js';
-import { 
-  ChartPeriod as ChartPeriodEnum, 
-  ChartSourceType as ChartSourceTypeEnum, 
-  ChartDisplayType as ChartDisplayTypeEnum, 
+import {
+  ChartPeriod as ChartPeriodEnum,
+  ChartSourceType as ChartSourceTypeEnum,
+  ChartDisplayType as ChartDisplayTypeEnum,
   ChartMetric as ChartMetricEnum,
   ChartGroupBy as ChartGroupByEnum,
-  LegendPosition as LegendPositionEnum
+  LegendPosition as LegendPositionEnum,
 } from '../shared/enums';
 
 // Export the enum values as types for backward compatibility
@@ -17,13 +17,13 @@ export type ChartGroupBy = `${ChartGroupByEnum}`;
 export type LegendPosition = `${LegendPositionEnum}`;
 
 // Re-export enums for direct usage
-export { 
-  ChartPeriodEnum, 
-  ChartSourceTypeEnum, 
-  ChartDisplayTypeEnum, 
+export {
+  ChartPeriodEnum,
+  ChartSourceTypeEnum,
+  ChartDisplayTypeEnum,
   ChartMetricEnum,
   ChartGroupByEnum,
-  LegendPositionEnum
+  LegendPositionEnum,
 };
 
 export interface ChartConfig {

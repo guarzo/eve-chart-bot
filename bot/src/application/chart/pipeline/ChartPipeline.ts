@@ -54,7 +54,7 @@ export class ChartPipeline {
       });
 
       const chartData = await this.dataProvider.generateChartData(config);
-      
+
       if (!chartData) {
         logger.warn('Chart pipeline: No data generated');
         return null;
@@ -84,7 +84,7 @@ export class ChartPipeline {
       });
 
       const buffer = await this.renderer.renderPNG(chartData, options);
-      
+
       if (!buffer) {
         logger.warn('Chart pipeline: PNG rendering returned null');
         return null;
@@ -112,7 +112,7 @@ export class ChartPipeline {
       });
 
       const html = await this.renderer.renderHTML(chartData, options);
-      
+
       logger.info('Chart pipeline: HTML rendering completed', {
         htmlLength: html.length,
       });
@@ -127,10 +127,7 @@ export class ChartPipeline {
   /**
    * Complete pipeline: generate data and render as PNG
    */
-  async generateAndRenderPNG(
-    config: ChartGenerationConfig, 
-    options?: Partial<ChartOptions>
-  ): Promise<Buffer | null> {
+  async generateAndRenderPNG(config: ChartGenerationConfig, options?: Partial<ChartOptions>): Promise<Buffer | null> {
     const chartData = await this.generateData(config);
     if (!chartData) {
       return null;
@@ -141,10 +138,7 @@ export class ChartPipeline {
   /**
    * Complete pipeline: generate data and render as HTML
    */
-  async generateAndRenderHTML(
-    config: ChartGenerationConfig, 
-    options?: Partial<ChartOptions>
-  ): Promise<string | null> {
+  async generateAndRenderHTML(config: ChartGenerationConfig, options?: Partial<ChartOptions>): Promise<string | null> {
     const chartData = await this.generateData(config);
     if (!chartData) {
       return null;

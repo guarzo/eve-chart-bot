@@ -7,7 +7,8 @@
 export class WandererMapClient {
   // private readonly _client: UnifiedESIClient;
 
-  constructor(_baseUrl: string, _apiKey: string) { // _apiKey not used currently
+  constructor(_baseUrl: string, _apiKey: string) {
+    // _apiKey not used currently
     // this._client = new UnifiedESIClient({
     //   baseUrl,
     //   userAgent: 'EVE-Chart-Bot/1.0',

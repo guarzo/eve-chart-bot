@@ -39,7 +39,7 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
   /**
    * Separate raw data into kills and losses
    */
-  private separateKillsAndLosses(rawData: any[]): { killData: KillDataPoint[], lossData: LossDataPoint[] } {
+  private separateKillsAndLosses(rawData: any[]): { killData: KillDataPoint[]; lossData: LossDataPoint[] } {
     const killData: KillDataPoint[] = rawData
       .filter(item => item.type === 'kill' || item.isKill)
       .map(item => ({
@@ -48,9 +48,9 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
         characterId: BigInt(item.characterId),
         groupId: item.groupId,
         solo: Boolean(item.solo),
-        npc: Boolean(item.npc)
+        npc: Boolean(item.npc),
       }));
-    
+
     const lossData: LossDataPoint[] = rawData
       .filter(item => item.type === 'loss' || item.isLoss)
       .map(item => ({
@@ -60,9 +60,9 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
         groupId: item.groupId,
         totalValue: BigInt(item.totalValue || 0),
         shipTypeId: Number(item.shipTypeId),
-        systemId: Number(item.systemId)
+        systemId: Number(item.systemId),
       }));
-    
+
     return { killData, lossData };
   }
 
@@ -76,28 +76,18 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
     groupLabels: string[]
   ): ChartData {
     const startTime = Date.now();
-    
+
     // Calculate efficiency metrics for each group
-    const aggregations = this.calculateEfficiency(
-      killData,
-      lossData,
-      groupLabels,
-      config
-    );
-    
+    const aggregations = this.calculateEfficiency(killData, lossData, groupLabels, config);
+
     // Create datasets for the chart
     const datasets = this.createEfficiencyDatasets(aggregations, config);
-    
+
     // Extract labels
     const labels = aggregations.map(agg => agg.label);
-    
-    const metadata = new ChartMetadata(
-      new Date(),
-      killData.length + lossData.length,
-      Date.now() - startTime,
-      false
-    );
-    
+
+    const metadata = new ChartMetadata(new Date(), killData.length + lossData.length, Date.now() - startTime, false);
+
     return new ChartData(ChartType.EFFICIENCY, labels, datasets, metadata);
   }
 
@@ -111,7 +101,7 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
     _config: ChartConfiguration
   ): EfficiencyAggregation[] {
     const aggregations: Map<string, EfficiencyAggregation> = new Map();
-    
+
     // Initialize aggregations
     groupLabels.forEach(label => {
       aggregations.set(label, {
@@ -121,10 +111,10 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
         efficiency: 0,
         iskDestroyed: BigInt(0),
         iskLost: BigInt(0),
-        iskEfficiency: 0
+        iskEfficiency: 0,
       });
     });
-    
+
     // Count kills
     killData.forEach(kill => {
       const groupLabel = this.determineGroupLabel(kill, groupLabels);
@@ -134,7 +124,7 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
         // Note: We'd need ISK destroyed data here - simplified for now
       }
     });
-    
+
     // Count losses and ISK lost
     lossData.forEach(loss => {
       const groupLabel = this.determineGroupLabel(loss, groupLabels);
@@ -144,71 +134,71 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
         agg.iskLost = agg.iskLost + loss.totalValue;
       }
     });
-    
+
     // Calculate efficiency percentages
     aggregations.forEach(agg => {
       // Kill/Death efficiency
       const total = agg.kills + agg.losses;
       agg.efficiency = total > 0 ? (agg.kills / total) * 100 : 0;
-      
+
       // ISK efficiency (simplified without ISK destroyed data)
       // In a real implementation, we'd calculate: iskDestroyed / (iskDestroyed + iskLost)
       agg.iskEfficiency = 0; // Placeholder
     });
-    
+
     return Array.from(aggregations.values());
   }
 
   /**
    * Create chart datasets from efficiency data
    */
-  private createEfficiencyDatasets(
-    aggregations: EfficiencyAggregation[],
-    config: ChartConfiguration
-  ): ChartDataset[] {
+  private createEfficiencyDatasets(aggregations: EfficiencyAggregation[], config: ChartConfiguration): ChartDataset[] {
     const datasets: ChartDataset[] = [];
-    
+
     // Main efficiency percentage dataset
-    datasets.push(new ChartDataset(
-      'Efficiency %',
-      aggregations.map(agg => Math.round(agg.efficiency * 10) / 10),
-      this.getChartColor('efficiency'),
-      this.getChartColor('efficiencyBorder'),
-      3,
-      true
-    ));
-    
+    datasets.push(
+      new ChartDataset(
+        'Efficiency %',
+        aggregations.map(agg => Math.round(agg.efficiency * 10) / 10),
+        this.getChartColor('efficiency'),
+        this.getChartColor('efficiencyBorder'),
+        3,
+        true
+      )
+    );
+
     // Kill/Loss counts (if requested)
     if (config.displayOptions.showKillLossCounts === true) {
-      datasets.push(new ChartDataset(
-        'Kills',
-        aggregations.map(agg => agg.kills),
-        this.getChartColor('kills'),
-        this.getChartColor('killsBorder'),
-        2,
-        false
-      ));
-      
-      datasets.push(new ChartDataset(
-        'Losses',
-        aggregations.map(agg => agg.losses),
-        this.getChartColor('losses'),
-        this.getChartColor('lossesBorder'),
-        2,
-        false
-      ));
+      datasets.push(
+        new ChartDataset(
+          'Kills',
+          aggregations.map(agg => agg.kills),
+          this.getChartColor('kills'),
+          this.getChartColor('killsBorder'),
+          2,
+          false
+        )
+      );
+
+      datasets.push(
+        new ChartDataset(
+          'Losses',
+          aggregations.map(agg => agg.losses),
+          this.getChartColor('losses'),
+          this.getChartColor('lossesBorder'),
+          2,
+          false
+        )
+      );
     }
-    
+
     return datasets;
   }
 
   /**
    * Determine which group a data point belongs to
    */
-  private determineGroupLabel(
-    dataPoint: KillDataPoint | LossDataPoint,
-    groupLabels: string[]
-  ): string {
+  private determineGroupLabel(dataPoint: KillDataPoint | LossDataPoint, groupLabels: string[]): string {
     return dataPoint.groupId || groupLabels[0] || 'Unknown';
   }
 
@@ -222,9 +212,9 @@ export class EfficiencyDataProcessor implements IChartDataProcessor {
       kills: '#4CAF50',
       killsBorder: '#388E3C',
       losses: '#F44336',
-      lossesBorder: '#D32F2F'
+      lossesBorder: '#D32F2F',
     };
-    
+
     return colorMap[type] || '#9E9E9E';
   }
 }

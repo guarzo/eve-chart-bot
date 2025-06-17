@@ -22,12 +22,14 @@ export class MonitoringIntegration {
     return MonitoringIntegration.instance;
   }
 
-  async initialize(options: {
-    enableServer?: boolean;
-    serverPort?: number;
-    enableMetrics?: boolean;
-    enableTracing?: boolean; // Currently not used
-  } = {}): Promise<void> {
+  async initialize(
+    options: {
+      enableServer?: boolean;
+      serverPort?: number;
+      enableMetrics?: boolean;
+      enableTracing?: boolean; // Currently not used
+    } = {}
+  ): Promise<void> {
     if (this.isInitialized) {
       return;
     }
@@ -75,24 +77,24 @@ export class MonitoringIntegration {
   private setupPrismaMiddleware(): void {
     this.prisma.$use(async (params, next) => {
       const startTime = Date.now();
-      
+
       try {
         const result = await tracingService.instrumentDatabaseOperation(
           params.action,
           params.model || 'unknown',
-          async (span) => {
+          async span => {
             tracingService.addTags(span, {
               'db.args': JSON.stringify(params.args).substring(0, 1000), // Limit size
             });
-            
+
             const result = await next(params);
-            
+
             metricsCollector.incrementCounter('database_queries', 1, {
               model: params.model || 'unknown',
               action: params.action,
               status: 'success',
             });
-            
+
             return result;
           }
         );
@@ -153,15 +155,15 @@ export class MonitoringIntegration {
     // Collect garbage collection metrics if available
     if (process.env.NODE_ENV === 'development' && global.gc) {
       const originalGc = global.gc;
-      
+
       (global as any).gc = async (options?: any) => {
         const start = Date.now();
         const result = await originalGc.call(global, options);
         const duration = Date.now() - start;
-        
+
         metricsCollector.incrementCounter('gc_runs');
         metricsCollector.recordTiming('gc_duration', duration);
-        
+
         return result;
       };
     }
@@ -169,10 +171,10 @@ export class MonitoringIntegration {
 
   private setupErrorTracking(): void {
     // Track uncaught exceptions
-    process.on('uncaughtException', (error) => {
+    process.on('uncaughtException', error => {
       metricsCollector.incrementCounter('uncaught_exceptions');
       logger.error('Uncaught exception:', error);
-      
+
       // Don't exit immediately, let other handlers run
     });
 
@@ -183,7 +185,7 @@ export class MonitoringIntegration {
     });
 
     // Track warnings
-    process.on('warning', (warning) => {
+    process.on('warning', warning => {
       metricsCollector.incrementCounter('process_warnings', 1, {
         name: warning.name,
       });
@@ -194,7 +196,7 @@ export class MonitoringIntegration {
   private setupGracefulShutdown(): void {
     const shutdown = async (signal: string) => {
       logger.info(`Received ${signal}, shutting down monitoring gracefully...`);
-      
+
       try {
         // Stop monitoring server
         if (this.monitoringServer) {
@@ -215,12 +217,18 @@ export class MonitoringIntegration {
   }
 
   // Helper methods for application integration
-  
+
   async getApplicationHealth(): Promise<any> {
     return this.healthCheckService.getHealthStatus();
   }
 
-  recordDiscordCommand(commandName: string, _userId: string, _guildId: string, duration: number, success: boolean): void {
+  recordDiscordCommand(
+    commandName: string,
+    _userId: string,
+    _guildId: string,
+    duration: number,
+    success: boolean
+  ): void {
     metricsCollector.incrementCounter('discord_commands_processed', 1, {
       command: commandName,
       status: success ? 'success' : 'error',

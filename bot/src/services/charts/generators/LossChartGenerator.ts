@@ -39,9 +39,7 @@ export class LossChartGenerator extends BaseChartGenerator {
     const { startDate, endDate, characterGroups } = options;
 
     // Get all character IDs from all groups using standardized transformer
-    const characterIds = characterGroups.flatMap(group => 
-      BigIntTransformer.migrateCharacterIds(group.characters)
-    );
+    const characterIds = characterGroups.flatMap(group => BigIntTransformer.migrateCharacterIds(group.characters));
 
     // Debug: Log character IDs and time range using standardized transformer
     logger.info(`[LossChart] Character IDs: ${BigIntTransformer.arrayToStringArray(characterIds).join(', ')}`);

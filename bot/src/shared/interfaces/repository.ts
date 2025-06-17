@@ -40,8 +40,7 @@ export interface AggregationRepository {
 }
 
 // Combined repository interface for complex entities
-export interface CompleteRepository<TEntity, TId> extends 
-  BaseRepository<TEntity, TId>,
-  BulkRepository<TEntity>,
-  AggregationRepository {
-}
+export interface CompleteRepository<TEntity, TId>
+  extends BaseRepository<TEntity, TId>,
+    BulkRepository<TEntity>,
+    AggregationRepository {}

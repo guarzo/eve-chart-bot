@@ -45,10 +45,8 @@ export class DistributionChartGenerator extends BaseChartGenerator {
     // Group data by character group
     const groupData = characterGroups.map(group => {
       const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
-      const groupKills = kills.filter(kill => 
-        kill.attackers?.some((attacker: any) => 
-          groupCharacterIds.includes(BigInt(attacker.characterId || '0'))
-        )
+      const groupKills = kills.filter(kill =>
+        kill.attackers?.some((attacker: any) => groupCharacterIds.includes(BigInt(attacker.characterId || '0')))
       );
 
       // Calculate solo and group kills based on attacker count

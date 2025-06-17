@@ -25,45 +25,61 @@ export class ValidationError extends BaseError {
   }
 
   static fromZodError(zodError: any, context?: ErrorDetails['context']): ValidationError {
-    const issues: ValidationIssue[] = zodError.errors?.map((err: any) => ({
-      field: err.path.join('.'),
-      value: err.received,
-      constraint: err.code,
-      message: err.message,
-    })) || [];
+    const issues: ValidationIssue[] =
+      zodError.errors?.map((err: any) => ({
+        field: err.path.join('.'),
+        value: err.received,
+        constraint: err.code,
+        message: err.message,
+      })) || [];
 
     const message = `Validation failed: ${issues.map(i => i.message).join(', ')}`;
-    
+
     return new ValidationError(message, issues, context);
   }
 
   static fieldRequired(field: string, context?: ErrorDetails['context']): ValidationError {
     return new ValidationError(
       `Required field '${field}' is missing`,
-      [{
-        field,
-        value: undefined,
-        constraint: 'required',
-        message: `${field} is required`,
-      }],
+      [
+        {
+          field,
+          value: undefined,
+          constraint: 'required',
+          message: `${field} is required`,
+        },
+      ],
       context
     );
   }
 
-  static invalidFormat(field: string, expectedFormat: string, actualValue: any, context?: ErrorDetails['context']): ValidationError {
+  static invalidFormat(
+    field: string,
+    expectedFormat: string,
+    actualValue: any,
+    context?: ErrorDetails['context']
+  ): ValidationError {
     return new ValidationError(
       `Field '${field}' has invalid format`,
-      [{
-        field,
-        value: actualValue,
-        constraint: 'format',
-        message: `${field} must be a valid ${expectedFormat}`,
-      }],
+      [
+        {
+          field,
+          value: actualValue,
+          constraint: 'format',
+          message: `${field} must be a valid ${expectedFormat}`,
+        },
+      ],
       context
     );
   }
 
-  static outOfRange(field: string, min?: number, max?: number, actualValue?: any, context?: ErrorDetails['context']): ValidationError {
+  static outOfRange(
+    field: string,
+    min?: number,
+    max?: number,
+    actualValue?: any,
+    context?: ErrorDetails['context']
+  ): ValidationError {
     let message = `${field} is out of range`;
     if (min !== undefined && max !== undefined) {
       message = `${field} must be between ${min} and ${max}`;
@@ -75,12 +91,14 @@ export class ValidationError extends BaseError {
 
     return new ValidationError(
       message,
-      [{
-        field,
-        value: actualValue,
-        constraint: 'range',
-        message,
-      }],
+      [
+        {
+          field,
+          value: actualValue,
+          constraint: 'range',
+          message,
+        },
+      ],
       context
     );
   }
@@ -89,7 +107,10 @@ export class ValidationError extends BaseError {
     if (this.issues.length === 1) {
       return `Invalid input: ${this.issues[0].message}`;
     } else if (this.issues.length > 1) {
-      return `Multiple validation errors: ${this.issues.slice(0, 3).map(i => i.message).join(', ')}${this.issues.length > 3 ? '...' : ''}`;
+      return `Multiple validation errors: ${this.issues
+        .slice(0, 3)
+        .map(i => i.message)
+        .join(', ')}${this.issues.length > 3 ? '...' : ''}`;
     }
     return 'The provided data is invalid. Please check your input and try again.';
   }

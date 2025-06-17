@@ -37,14 +37,16 @@ export class TrendChartGenerator extends BaseChartGenerator {
     displayType: string;
   }): Promise<ChartData> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const { startDate, endDate, characterGroups, displayType } = options;
 
       // Input validation
       this.validateChartOptions(options, correlationId);
 
-      logger.info(`Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`, { correlationId });
+      logger.info(`Generating trend chart from ${startDate.toISOString()} to ${endDate.toISOString()}`, {
+        correlationId,
+      });
       logger.debug(`Chart type: ${displayType}, Groups: ${characterGroups.length}`, { correlationId });
 
       // Select chart generation function based on display type
@@ -57,24 +59,30 @@ export class TrendChartGenerator extends BaseChartGenerator {
         return this.generateTimelineChart(characterGroups, startDate, endDate, correlationId);
       }
     } catch (error) {
-      logger.error('Error generating trend chart', { 
-        error, 
+      logger.error('Error generating trend chart', {
+        error,
         correlationId,
-        context: { 
+        context: {
           operation: 'generateTrendChart',
           hasOptions: !!options,
           displayType: options?.displayType,
-          characterGroupCount: options?.characterGroups?.length || 0
-        }
+          characterGroupCount: options?.characterGroups?.length || 0,
+        },
       });
 
       if (error instanceof ChartError || error instanceof ValidationError) {
         throw error;
       }
 
-      throw ChartError.generationError('trend', 'Failed to generate trend chart', {
-        correlationId, operation: 'generateTrendChart'
-      }, error as Error);
+      throw ChartError.generationError(
+        'trend',
+        'Failed to generate trend chart',
+        {
+          correlationId,
+          operation: 'generateTrendChart',
+        },
+        error as Error
+      );
     }
   }
 
@@ -360,7 +368,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     if (allCharacterIds.length === 0) {
       throw ChartError.noDataError('dual-axis', 'No characters found in the provided groups', {
-        correlationId, operation: 'generateDualAxisChart'
+        correlationId,
+        operation: 'generateDualAxisChart',
       });
     }
 
@@ -385,7 +394,8 @@ export class TrendChartGenerator extends BaseChartGenerator {
 
     if (killData.length === 0) {
       throw ChartError.noDataError('dual-axis', 'No kill data found for the specified time period', {
-        correlationId, metadata: { startDate, endDate, characterCount: allCharacterIds.length }
+        correlationId,
+        metadata: { startDate, endDate, characterCount: allCharacterIds.length },
       });
     }
 
@@ -529,21 +539,29 @@ export class TrendChartGenerator extends BaseChartGenerator {
   /**
    * Validate chart generation options
    */
-  private validateChartOptions(options: {
-    startDate: Date;
-    endDate: Date;
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-    }>;
-    displayType: string;
-  }, correlationId: string): void {
+  private validateChartOptions(
+    options: {
+      startDate: Date;
+      endDate: Date;
+      characterGroups: Array<{
+        groupId: string;
+        name: string;
+        characters: Array<{ eveId: string; name: string }>;
+      }>;
+      displayType: string;
+    },
+    correlationId: string
+  ): void {
     const issues: ValidationIssue[] = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', value: options.startDate, constraint: 'format', message: 'Invalid start date' });
+      issues.push({
+        field: 'startDate',
+        value: options.startDate,
+        constraint: 'format',
+        message: 'Invalid start date',
+      });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
@@ -551,44 +569,74 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'dateOrder', message: 'Start date must be before end date' });
+      issues.push({
+        field: 'dateRange',
+        value: { startDate: options.startDate, endDate: options.endDate },
+        constraint: 'dateOrder',
+        message: 'Start date must be before end date',
+      });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'type', message: 'Character groups must be an array' });
+      issues.push({
+        field: 'characterGroups',
+        value: options.characterGroups,
+        constraint: 'type',
+        message: 'Character groups must be an array',
+      });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
+        issues.push({
+          field: 'characterGroups',
+          value: options.characterGroups,
+          constraint: 'minLength',
+          message: 'At least one character group is required',
+        });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
+          issues.push({
+            field: `characterGroups[${index}].groupId`,
+            value: group.groupId,
+            constraint: 'required',
+            message: 'Group ID is required',
+          });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
+          issues.push({
+            field: `characterGroups[${index}].name`,
+            value: group.name,
+            constraint: 'required',
+            message: 'Group name is required',
+          });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'type', message: 'Characters must be an array' });
+          issues.push({
+            field: `characterGroups[${index}].characters`,
+            value: group.characters,
+            constraint: 'type',
+            message: 'Characters must be an array',
+          });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`,
                 value: char.eveId,
                 constraint: 'required',
-                message: 'Character eveId is required' 
+                message: 'Character eveId is required',
               });
             }
             if (!char.name || typeof char.name !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].name`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].name`,
                 value: char.name,
                 constraint: 'required',
-                message: 'Character name is required' 
+                message: 'Character name is required',
               });
             }
           });
@@ -597,8 +645,9 @@ export class TrendChartGenerator extends BaseChartGenerator {
     }
 
     if (issues.length > 0) {
-      throw new ValidationError('Invalid chart generation options', issues, { 
-        correlationId, operation: 'validateTrendChartOptions'
+      throw new ValidationError('Invalid chart generation options', issues, {
+        correlationId,
+        operation: 'validateTrendChartOptions',
       });
     }
   }

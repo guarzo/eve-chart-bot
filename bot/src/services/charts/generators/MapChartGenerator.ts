@@ -35,7 +35,7 @@ export class MapChartGenerator extends BaseChartGenerator {
     displayType: string;
   }): Promise<ChartData> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const { startDate, endDate, characterGroups } = options;
 
@@ -63,12 +63,10 @@ export class MapChartGenerator extends BaseChartGenerator {
       // Check if we have any data to work with
       if (activities.length === 0) {
         logger.warn('No map activity found for the specified time period and characters', { correlationId });
-        throw new ChartError(
-          'CHART_DATA_ERROR',
-          'No map activity found in the specified time period',
-          'map',
-          { metadata: { startDate, endDate, characterCount: characterIds.length }, correlationId }
-        );
+        throw new ChartError('CHART_DATA_ERROR', 'No map activity found in the specified time period', 'map', {
+          metadata: { startDate, endDate, characterCount: characterIds.length },
+          correlationId,
+        });
       }
 
       // Group activities by character group
@@ -79,52 +77,63 @@ export class MapChartGenerator extends BaseChartGenerator {
           logger.info(`Character in group ${group.name}: ${JSON.stringify(c)}`, { correlationId });
 
           if (!c.eveId || c.eveId === '' || c.eveId === 'undefined' || c.eveId === 'null') {
-            logger.warn(`Skipping character with invalid eveId in group ${group.name}: ${JSON.stringify(c)}`, { correlationId });
+            logger.warn(`Skipping character with invalid eveId in group ${group.name}: ${JSON.stringify(c)}`, {
+              correlationId,
+            });
             return false;
           }
           return true;
         });
 
-      const groupCharacterIds = validCharacters
-        .map(c => {
-          try {
-            return BigInt(c.eveId);
-          } catch (error) {
-            logger.warn(`Failed to convert character eveId to BigInt: ${c.eveId}`, { error, correlationId });
-            return null;
-          }
-        })
-        .filter((id): id is bigint => id !== null);
+        const groupCharacterIds = validCharacters
+          .map(c => {
+            try {
+              return BigInt(c.eveId);
+            } catch (error) {
+              logger.warn(`Failed to convert character eveId to BigInt: ${c.eveId}`, { error, correlationId });
+              return null;
+            }
+          })
+          .filter((id): id is bigint => id !== null);
 
-      const groupActivities = activities.filter((activity: { characterId: bigint | null | undefined }) => {
-        if (activity.characterId === null || activity.characterId === undefined) {
-          return false;
-        }
-        return groupCharacterIds.includes(activity.characterId);
+        const groupActivities = activities.filter((activity: { characterId: bigint | null | undefined }) => {
+          if (activity.characterId === null || activity.characterId === undefined) {
+            return false;
+          }
+          return groupCharacterIds.includes(activity.characterId);
+        });
+
+        // Calculate totals for each metric
+        const totalSignatures = groupActivities.reduce(
+          (sum: number, activity: { signatures: number }) => sum + activity.signatures,
+          0
+        );
+        const totalConnections = groupActivities.reduce(
+          (sum: number, activity: { connections: number }) => sum + activity.connections,
+          0
+        );
+        const totalPassages = groupActivities.reduce(
+          (sum: number, activity: { passages: number }) => sum + activity.passages,
+          0
+        );
+
+        return {
+          group,
+          activities: groupActivities,
+          totalSignatures,
+          totalConnections,
+          totalPassages,
+        };
       });
 
-      // Calculate totals for each metric
-      const totalSignatures = groupActivities.reduce((sum: number, activity: { signatures: number }) => sum + activity.signatures, 0);
-      const totalConnections = groupActivities.reduce((sum: number, activity: { connections: number }) => sum + activity.connections, 0);
-      const totalPassages = groupActivities.reduce((sum: number, activity: { passages: number }) => sum + activity.passages, 0);
-
-      return {
-        group,
-        activities: groupActivities,
-        totalSignatures,
-        totalConnections,
-        totalPassages,
-      };
-    });
-
-    // Sort groups by total activity (sum of all metrics)
-    groupData.sort(
-      (a, b) =>
-        b.totalSignatures +
-        b.totalConnections +
-        b.totalPassages -
-        (a.totalSignatures + a.totalConnections + a.totalPassages)
-    );
+      // Sort groups by total activity (sum of all metrics)
+      groupData.sort(
+        (a, b) =>
+          b.totalSignatures +
+          b.totalConnections +
+          b.totalPassages -
+          (a.totalSignatures + a.totalConnections + a.totalPassages)
+      );
 
       // Create chart data
       return {
@@ -149,14 +158,14 @@ export class MapChartGenerator extends BaseChartGenerator {
         displayType: 'horizontalBar',
       };
     } catch (error) {
-      logger.error('Error generating map activity chart', { 
-        error, 
+      logger.error('Error generating map activity chart', {
+        error,
         correlationId,
-        context: { 
+        context: {
           operation: 'generateMapChart',
           hasOptions: !!options,
-          characterGroupCount: options?.characterGroups?.length || 0
-        }
+          characterGroupCount: options?.characterGroups?.length || 0,
+        },
       });
 
       if (error instanceof ChartError || error instanceof ValidationError) {
@@ -176,17 +185,20 @@ export class MapChartGenerator extends BaseChartGenerator {
   /**
    * Validate chart generation options
    */
-  private validateChartOptions(options: {
-    startDate: Date;
-    endDate: Date;
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>;
-    displayType: string;
-  }, correlationId: string): void {
+  private validateChartOptions(
+    options: {
+      startDate: Date;
+      endDate: Date;
+      characterGroups: Array<{
+        groupId: string;
+        name: string;
+        characters: Array<{ eveId: string; name: string }>;
+        mainCharacterId?: string;
+      }>;
+      displayType: string;
+    },
+    correlationId: string
+  ): void {
     const issues: Array<{ field: string; value: any; constraint: string; message: string }> = [];
 
     // Validate dates
@@ -199,44 +211,74 @@ export class MapChartGenerator extends BaseChartGenerator {
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'range', message: 'Start date must be before end date' });
+      issues.push({
+        field: 'dateRange',
+        value: { startDate: options.startDate, endDate: options.endDate },
+        constraint: 'range',
+        message: 'Start date must be before end date',
+      });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'array', message: 'Character groups must be an array' });
+      issues.push({
+        field: 'characterGroups',
+        value: options.characterGroups,
+        constraint: 'array',
+        message: 'Character groups must be an array',
+      });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', value: options.characterGroups, constraint: 'minLength', message: 'At least one character group is required' });
+        issues.push({
+          field: 'characterGroups',
+          value: options.characterGroups,
+          constraint: 'minLength',
+          message: 'At least one character group is required',
+        });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, value: group.groupId, constraint: 'required', message: 'Group ID is required' });
+          issues.push({
+            field: `characterGroups[${index}].groupId`,
+            value: group.groupId,
+            constraint: 'required',
+            message: 'Group ID is required',
+          });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, value: group.name, constraint: 'required', message: 'Group name is required' });
+          issues.push({
+            field: `characterGroups[${index}].name`,
+            value: group.name,
+            constraint: 'required',
+            message: 'Group name is required',
+          });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, value: group.characters, constraint: 'array', message: 'Characters must be an array' });
+          issues.push({
+            field: `characterGroups[${index}].characters`,
+            value: group.characters,
+            constraint: 'array',
+            message: 'Characters must be an array',
+          });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`,
                 value: char.eveId,
                 constraint: 'required',
-                message: 'Character eveId is required' 
+                message: 'Character eveId is required',
               });
             }
             if (!char.name || typeof char.name !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].name`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].name`,
                 value: char.name,
                 constraint: 'required',
-                message: 'Character name is required' 
+                message: 'Character name is required',
               });
             }
           });
@@ -245,8 +287,9 @@ export class MapChartGenerator extends BaseChartGenerator {
     }
 
     if (issues.length > 0) {
-      throw new ValidationError('Invalid chart generation options', issues, { 
-        correlationId, operation: 'validateMapChartOptions'
+      throw new ValidationError('Invalid chart generation options', issues, {
+        correlationId,
+        operation: 'validateMapChartOptions',
       });
     }
   }

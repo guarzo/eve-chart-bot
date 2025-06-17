@@ -34,19 +34,14 @@ export class ZkillClient {
    */
   async getKillmail(killId: number, signal?: AbortSignal): Promise<ZkillResponse | null> {
     const correlationId = crypto.randomUUID();
-    
+
     try {
       // Validate input
       if (!killId || killId <= 0) {
-        throw ValidationError.invalidFormat(
-          'killId',
-          'positive integer',
-          killId.toString(),
-          {
-            correlationId,
-            operation: 'zkill.getKillmail',
-          }
-        );
+        throw ValidationError.invalidFormat('killId', 'positive integer', killId.toString(), {
+          correlationId,
+          operation: 'zkill.getKillmail',
+        });
       }
 
       logger.info('Fetching killmail from zKillboard', {
@@ -69,7 +64,7 @@ export class ZkillClient {
 
       // Handle different response formats from zKillboard
       let killData: unknown;
-      
+
       if (Array.isArray(response)) {
         killData = response[0]; // First element in array
       } else if (response && typeof response === 'object') {
@@ -106,16 +101,11 @@ export class ZkillClient {
 
       // Ensure the killID matches (if present)
       if (validatedKill.killID && validatedKill.killID !== killId) {
-        throw ValidationError.invalidFormat(
-          'killID',
-          killId.toString(),
-          validatedKill.killID.toString(),
-          {
-            correlationId,
-            operation: 'zkill.validate.killIdMatch',
-            metadata: { expectedKillId: killId, actualKillId: validatedKill.killID },
-          }
-        );
+        throw ValidationError.invalidFormat('killID', killId.toString(), validatedKill.killID.toString(), {
+          correlationId,
+          operation: 'zkill.validate.killIdMatch',
+          metadata: { expectedKillId: killId, actualKillId: validatedKill.killID },
+        });
       }
 
       logger.debug('Successfully validated killmail data', {
@@ -146,34 +136,23 @@ export class ZkillClient {
    */
   async getCharacterKills(characterId: number, page: number = 1, signal?: AbortSignal): Promise<ZkillResponse[]> {
     const correlationId = crypto.randomUUID();
-    
+
     try {
       // Validate input
       if (!characterId || characterId <= 0) {
-        throw ValidationError.invalidFormat(
-          'characterId',
-          'positive integer',
-          characterId.toString(),
-          {
-            correlationId,
-            operation: 'zkill.getCharacterKills',
-            metadata: { page },
-          }
-        );
+        throw ValidationError.invalidFormat('characterId', 'positive integer', characterId.toString(), {
+          correlationId,
+          operation: 'zkill.getCharacterKills',
+          metadata: { page },
+        });
       }
-      
+
       if (page <= 0) {
-        throw ValidationError.outOfRange(
-          'page',
-          1,
-          Number.MAX_SAFE_INTEGER,
-          page.toString(),
-          {
-            correlationId,
-            operation: 'zkill.getCharacterKills',
-            metadata: { characterId },
-          }
-        );
+        throw ValidationError.outOfRange('page', 1, Number.MAX_SAFE_INTEGER, page.toString(), {
+          correlationId,
+          operation: 'zkill.getCharacterKills',
+          metadata: { characterId },
+        });
       }
 
       logger.info('Fetching character kills from zKillboard', {
@@ -256,34 +235,23 @@ export class ZkillClient {
    */
   async getCharacterLosses(characterId: number, page: number = 1, signal?: AbortSignal): Promise<ZkillResponse[]> {
     const correlationId = crypto.randomUUID();
-    
+
     try {
       // Validate input
       if (!characterId || characterId <= 0) {
-        throw ValidationError.invalidFormat(
-          'characterId',
-          'positive integer',
-          characterId.toString(),
-          {
-            correlationId,
-            operation: 'zkill.getCharacterLosses',
-            metadata: { page },
-          }
-        );
+        throw ValidationError.invalidFormat('characterId', 'positive integer', characterId.toString(), {
+          correlationId,
+          operation: 'zkill.getCharacterLosses',
+          metadata: { page },
+        });
       }
-      
+
       if (page <= 0) {
-        throw ValidationError.outOfRange(
-          'page',
-          1,
-          Number.MAX_SAFE_INTEGER,
-          page.toString(),
-          {
-            correlationId,
-            operation: 'zkill.getCharacterLosses',
-            metadata: { characterId },
-          }
-        );
+        throw ValidationError.outOfRange('page', 1, Number.MAX_SAFE_INTEGER, page.toString(), {
+          correlationId,
+          operation: 'zkill.getCharacterLosses',
+          metadata: { characterId },
+        });
       }
 
       logger.info('Fetching character losses from zKillboard', {

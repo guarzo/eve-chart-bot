@@ -7,7 +7,7 @@ import { logger } from '../../../lib/logger';
  */
 export async function handleKillsCommand(interaction: ChatInputCommandInteraction): Promise<void> {
   const correlationId = errorHandler.createCorrelationId();
-  
+
   try {
     // Add correlation ID to interaction context for tracking
     (interaction as any).correlationId = correlationId;
@@ -21,34 +21,26 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
 
     // Validate input
     if (characterIds.length === 0) {
-      throw DiscordError.commandError(
-        'kills',
-        'No character IDs provided',
-        {
-          // correlationId removed
-          userId: interaction.user.id,
-          guildId: interaction.guildId || undefined,
-          operation: 'kills_command',
-          metadata: { interactionId: interaction.id },
-        }
-      );
+      throw DiscordError.commandError('kills', 'No character IDs provided', {
+        // correlationId removed
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        operation: 'kills_command',
+        metadata: { interactionId: interaction.id },
+      });
     }
 
     if (characterIds.length > 10) {
-      throw DiscordError.commandError(
-        'kills',
-        'Too many characters specified (max: 10)',
-        {
-          // correlationId removed
-          userId: interaction.user.id,
-          guildId: interaction.guildId || undefined,
-          operation: 'kills_command',
-          metadata: { 
-            interactionId: interaction.id,
-            characterCount: characterIds.length,
-          },
-        }
-      );
+      throw DiscordError.commandError('kills', 'Too many characters specified (max: 10)', {
+        // correlationId removed
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        operation: 'kills_command',
+        metadata: {
+          interactionId: interaction.id,
+          characterCount: characterIds.length,
+        },
+      });
     }
 
     // Process the command with error handling
@@ -86,7 +78,6 @@ export async function handleKillsCommand(interaction: ChatInputCommandInteractio
       period,
       chartType,
     });
-
   } catch (error) {
     // Handle error with full context
     const standardizedError = errorHandler.handleDiscordError(
@@ -130,7 +121,7 @@ async function generateKillsChart(
   try {
     // This would call your actual chart service
     // throw new Error('Chart generation not implemented yet');
-    
+
     return { buffer: Buffer.from('fake chart data') };
   } catch (error) {
     // Convert to chart-specific error
@@ -193,14 +184,10 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       break;
     // Add other commands here
     default:
-      throw DiscordError.commandError(
-        interaction.commandName,
-        'Unknown command',
-        {
-          userId: interaction.user.id,
-          guildId: interaction.guildId || undefined,
-          operation: interaction.commandName,
-        }
-      );
+      throw DiscordError.commandError(interaction.commandName, 'Unknown command', {
+        userId: interaction.user.id,
+        guildId: interaction.guildId || undefined,
+        operation: interaction.commandName,
+      });
   }
 }

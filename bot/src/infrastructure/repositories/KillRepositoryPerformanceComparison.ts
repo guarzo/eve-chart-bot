@@ -54,7 +54,7 @@ export class KillRepositoryPerformanceComparison {
       'original'
     );
 
-    // Test optimized repository  
+    // Test optimized repository
     const optimizedMetrics = await this.measureRepository(
       new OptimizedKillRepository(this.prisma),
       testData,
@@ -65,8 +65,10 @@ export class KillRepositoryPerformanceComparison {
     // Calculate improvements
     const improvement = {
       timeReduction: ((originalMetrics.totalTime - optimizedMetrics.totalTime) / originalMetrics.totalTime) * 100,
-      queryReduction: ((originalMetrics.databaseQueries - optimizedMetrics.databaseQueries) / originalMetrics.databaseQueries) * 100,
-      memoryReduction: ((originalMetrics.memoryUsage - optimizedMetrics.memoryUsage) / originalMetrics.memoryUsage) * 100,
+      queryReduction:
+        ((originalMetrics.databaseQueries - optimizedMetrics.databaseQueries) / originalMetrics.databaseQueries) * 100,
+      memoryReduction:
+        ((originalMetrics.memoryUsage - optimizedMetrics.memoryUsage) / originalMetrics.memoryUsage) * 100,
     };
 
     const result: ComparisonResult = {
@@ -95,7 +97,7 @@ export class KillRepositoryPerformanceComparison {
   ): Promise<PerformanceMetrics> {
     const startMemory = process.memoryUsage().heapUsed;
     const startTime = performance.now();
-    
+
     // Track database queries (simplified - in real implementation you'd use Prisma middleware)
     const queryCount = 0;
     // Monkey-patching Prisma methods is not type-safe

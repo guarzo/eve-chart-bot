@@ -22,7 +22,7 @@ export class StrategyChartRenderer implements IChartRenderer {
       });
 
       const buffer = await this.strategy.renderPNG(chartData, options);
-      
+
       if (buffer) {
         logger.info('StrategyChartRenderer: PNG rendering successful', {
           bufferSize: buffer.length,
@@ -53,7 +53,7 @@ export class StrategyChartRenderer implements IChartRenderer {
       });
 
       const html = await this.strategy.renderHTML(chartData, options);
-      
+
       logger.info('StrategyChartRenderer: HTML rendering successful', {
         htmlLength: html.length,
       });

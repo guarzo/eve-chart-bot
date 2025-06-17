@@ -17,7 +17,7 @@ export class CharacterRepository {
    */
   async getAllCharacters(): Promise<Character[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const characters = await errorHandler.withRetry(
         async () => {
@@ -28,20 +28,15 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.debug('Successfully retrieved all characters', {
         correlationId,
         characterCount: characters.length,
       });
-      
+
       return PrismaMapper.mapArray(characters, Character);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'character',
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'character', undefined);
     }
   }
 
@@ -50,7 +45,7 @@ export class CharacterRepository {
    */
   async getCharacter(eveId: bigint): Promise<Character | null> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const character = await errorHandler.withRetry(
         async () => {
@@ -61,7 +56,7 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       if (!character) {
         logger.debug('Character not found', {
           correlationId,
@@ -69,21 +64,16 @@ export class CharacterRepository {
         });
         return null;
       }
-      
+
       logger.debug('Successfully retrieved character', {
         correlationId,
         eveId: eveId.toString(),
         characterName: character.name,
       });
-      
+
       return PrismaMapper.map(character, Character);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'character',
-        eveId.toString()
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'character', eveId.toString());
     }
   }
 
@@ -92,7 +82,7 @@ export class CharacterRepository {
    */
   async getCharactersByGroup(groupId: string): Promise<Character[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const characters = await errorHandler.withRetry(
         async () => {
@@ -104,21 +94,16 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.debug('Successfully retrieved characters by group', {
         correlationId,
         groupId,
         characterCount: characters.length,
       });
-      
+
       return PrismaMapper.mapArray(characters, Character);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'character',
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'character', undefined);
     }
   }
 
@@ -135,7 +120,7 @@ export class CharacterRepository {
     characterGroupId?: string | null;
   }): Promise<Character> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const result = await errorHandler.withRetry(
         async () => {
@@ -155,21 +140,16 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.debug('Successfully upserted character', {
         correlationId,
         eveId: character.eveId.toString(),
         name: character.name,
       });
-      
+
       return PrismaMapper.map(result, Character);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'upsert',
-        'character',
-        character.eveId.toString()
-      );
+      throw errorHandler.handleDatabaseError(error, 'upsert', 'character', character.eveId.toString());
     }
   }
 
@@ -178,7 +158,7 @@ export class CharacterRepository {
    */
   async deleteCharacter(eveId: bigint): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await errorHandler.withRetry(
         async () => {
@@ -189,18 +169,13 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.info('Successfully deleted character', {
         correlationId,
         eveId: eveId.toString(),
       });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'delete',
-        'character',
-        eveId.toString()
-      );
+      throw errorHandler.handleDatabaseError(error, 'delete', 'character', eveId.toString());
     }
   }
 
@@ -209,7 +184,7 @@ export class CharacterRepository {
    */
   async getAllCharacterGroups(): Promise<CharacterGroup[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const groups = await errorHandler.withRetry(
         async () => {
@@ -224,20 +199,15 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.debug('Successfully retrieved all character groups', {
         correlationId,
         groupCount: groups.length,
       });
-      
+
       return PrismaMapper.mapArray(groups, CharacterGroup);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'characterGroup',
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'characterGroup', undefined);
     }
   }
 
@@ -246,7 +216,7 @@ export class CharacterRepository {
    */
   async getCharacterGroup(id: string): Promise<CharacterGroup | null> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const group = await errorHandler.withRetry(
         async () => {
@@ -261,7 +231,7 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       if (!group) {
         logger.debug('Character group not found', {
           correlationId,
@@ -269,21 +239,16 @@ export class CharacterRepository {
         });
         return null;
       }
-      
+
       logger.debug('Successfully retrieved character group', {
         correlationId,
         groupId: id,
         characterCount: group.characters?.length || 0,
       });
-      
+
       return PrismaMapper.map(group, CharacterGroup);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'characterGroup',
-        id
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'characterGroup', id);
     }
   }
 
@@ -292,7 +257,7 @@ export class CharacterRepository {
    */
   async createCharacterGroup(data: { mapName: string; mainCharacterId?: bigint | null }): Promise<CharacterGroup> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const group = await errorHandler.withRetry(
         async () => {
@@ -310,22 +275,17 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.info('Successfully created character group', {
         correlationId,
         groupId: group.id,
         mapName: data.mapName,
         mainCharacterId: data.mainCharacterId?.toString(),
       });
-      
+
       return PrismaMapper.map(group, CharacterGroup);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'create',
-        'characterGroup',
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'create', 'characterGroup', undefined);
     }
   }
 
@@ -334,7 +294,7 @@ export class CharacterRepository {
    */
   async updateCharacterGroup(groupId: string, characterIds: bigint[]): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await errorHandler.withRetry(
         async () => {
@@ -364,12 +324,7 @@ export class CharacterRepository {
         characterCount: characterIds.length,
       });
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'update',
-        'characterGroup',
-        groupId
-      );
+      throw errorHandler.handleDatabaseError(error, 'update', 'characterGroup', groupId);
     }
   }
 
@@ -378,7 +333,7 @@ export class CharacterRepository {
    */
   async getTrackedCharacterIds(): Promise<bigint[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const characters = await errorHandler.withRetry(
         async () => {
@@ -389,20 +344,15 @@ export class CharacterRepository {
         3,
         1000
       );
-      
+
       logger.debug('Successfully retrieved tracked character IDs', {
         correlationId,
         characterCount: characters.length,
       });
-      
+
       return characters.map(c => c.eveId);
     } catch (error) {
-      throw errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'character',
-        undefined
-      );
+      throw errorHandler.handleDatabaseError(error, 'read', 'character', undefined);
     }
   }
 }

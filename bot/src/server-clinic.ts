@@ -19,7 +19,7 @@ process.on('SIGINT', () => {
 import './server';
 
 // Override the error throwing behavior for clinic tools
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   if (error.message === 'Server shutdown complete') {
     // Exit cleanly for clinic tools
     process.exit(0);

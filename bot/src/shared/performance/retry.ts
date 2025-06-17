@@ -46,7 +46,10 @@ export interface RetryOptions {
 export async function retry<T>(fn: () => Promise<T>, description?: string, options: RetryOptions = {}): Promise<T> {
   // Normalize options to handle legacy aliases
   const baseDelay =
-    options.baseDelayMs ?? options.initialDelayMs ?? options.initialRetryDelay ?? ValidatedConfiguration.http.initialRetryDelay;
+    options.baseDelayMs ??
+    options.initialDelayMs ??
+    options.initialRetryDelay ??
+    ValidatedConfiguration.http.initialRetryDelay;
 
   const maxDelay = options.maxDelayMs ?? options.maxRetryDelay ?? ValidatedConfiguration.http.maxRetryDelay;
 
@@ -289,21 +292,21 @@ export const retryStrategies = {
 //         logger.info(`Circuit breaker for ${this.serviceName} transitioning to HALF_OPEN for test`);
 //       }
 //     }
-// 
+//
 //     try {
 //       const result = await operation();
-// 
+//
 //       // Success - reset failure count and close circuit if needed
 //       if (this.state === 'HALF_OPEN') {
 //         logger.info(`Circuit breaker for ${this.serviceName} test successful, transitioning to CLOSED`);
 //         this.state = 'CLOSED';
 //       }
-// 
+//
 //       this.failureCount = 0;
 //       return result;
 //     } catch (error) {
 //       this.failureCount++;
-// 
+//
 //       logger.warn(
 //         `Circuit breaker for ${this.serviceName} recorded failure ${this.failureCount}/${this.maxFailuresBeforeOpen}`,
 //         {
@@ -311,23 +314,23 @@ export const retryStrategies = {
 //           currentState: this.state,
 //         }
 //       );
-// 
+//
 //       if (this.failureCount >= this.maxFailuresBeforeOpen || this.state === 'HALF_OPEN') {
 //         // Open the circuit
 //         this.state = 'OPEN';
 //         this.nextAttemptTime = Date.now() + this.cooldownPeriodMs;
-// 
+//
 //         logger.error(
 //           `Circuit breaker for ${this.serviceName} OPENED due to ${
 //             this.failureCount
 //           } failures. Will attempt retry at ${new Date(this.nextAttemptTime).toISOString()}`
 //         );
 //       }
-// 
+//
 //       throw error;
 //     }
 //   }
-// 
+//
 //   /**
 //    * Get current circuit breaker state
 //    */
@@ -338,7 +341,7 @@ export const retryStrategies = {
 //       nextAttemptTime: this.nextAttemptTime,
 //     };
 //   }
-// 
+//
 //   /**
 //    * Manually reset the circuit breaker
 //    */

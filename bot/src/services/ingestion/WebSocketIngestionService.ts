@@ -65,7 +65,7 @@ export class WebSocketIngestionService {
 
   private subscribedCharacters: Set<number> = new Set();
   private subscribedSystems: Set<number> = new Set();
-  
+
   // Size limits to prevent memory exhaustion
   private readonly MAX_SUBSCRIBED_CHARACTERS = 50000;
   private readonly MAX_SUBSCRIBED_SYSTEMS = 10000;
@@ -90,7 +90,7 @@ export class WebSocketIngestionService {
 
   async start(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     if (this.isRunning) {
       logger.warn('WebSocket ingestion service is already running', {
         correlationId,
@@ -103,7 +103,7 @@ export class WebSocketIngestionService {
       correlationId,
       url: this.config.url,
     });
-    
+
     // Start periodic cleanup to prevent unbounded growth
     this.cleanupInterval = setInterval(() => {
       this.cleanupSubscriptions();
@@ -129,17 +129,13 @@ export class WebSocketIngestionService {
       });
     } catch (error) {
       this.isRunning = false;
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'WEBSOCKET',
-        'start'
-      );
+      throw errorHandler.handleExternalServiceError(error, 'WEBSOCKET', 'start');
     }
   }
 
   async stop(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     if (!this.isRunning) {
       logger.debug('WebSocket ingestion service is not running', {
         correlationId,
@@ -150,7 +146,7 @@ export class WebSocketIngestionService {
     logger.info('Stopping WebSocket ingestion service', {
       correlationId,
     });
-    
+
     this.isRunning = false;
 
     if (this.socket) {
@@ -166,7 +162,7 @@ export class WebSocketIngestionService {
           error: err instanceof Error ? err.message : String(err),
         });
       }
-      
+
       this.socket.disconnect();
       this.socket = null;
       logger.debug('Disconnected WebSocket', {
@@ -183,7 +179,7 @@ export class WebSocketIngestionService {
     this.connected = false;
     this.subscribedCharacters.clear();
     this.subscribedSystems.clear();
-    
+
     logger.info('WebSocket ingestion service stopped successfully', {
       correlationId,
     });
@@ -195,18 +191,20 @@ export class WebSocketIngestionService {
 
   private async connect(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate configuration
       if (!this.config.url) {
         throw new ValidationError(
           'Missing required field: config.url',
-          [{
-            field: 'config.url',
-            value: undefined,
-            constraint: 'required',
-            message: 'config.url is required'
-          }],
+          [
+            {
+              field: 'config.url',
+              value: undefined,
+              constraint: 'required',
+              message: 'config.url is required',
+            },
+          ],
           {
             correlationId,
             operation: 'websocket.connect',
@@ -220,11 +218,7 @@ export class WebSocketIngestionService {
         timeout: this.config.timeout,
       });
 
-      this.socket = new PhoenixWebsocket(
-        this.config.url, 
-        { client_identifier: 'eve-chart-bot' }, 
-        this.config.timeout
-      );
+      this.socket = new PhoenixWebsocket(this.config.url, { client_identifier: 'eve-chart-bot' }, this.config.timeout);
 
       // Track connection status for metrics.
       this.socket.onConnectedCallback = () => {
@@ -246,16 +240,12 @@ export class WebSocketIngestionService {
 
       // Join the lobby topic & attach broadcast handlers.
       await this.joinLobby();
-      
+
       logger.info('WebSocket connection established successfully', {
         correlationId,
       });
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'WEBSOCKET',
-        'connect'
-      );
+      throw errorHandler.handleExternalServiceError(error, 'WEBSOCKET', 'connect');
     }
   }
 
@@ -331,13 +321,10 @@ export class WebSocketIngestionService {
 
   private async subscribeToTrackedCharacters(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       if (!this.socket) {
-        throw new ExternalServiceError(
-          'WEBSOCKET',
-          'Socket not initialized'
-        );
+        throw new ExternalServiceError('WEBSOCKET', 'Socket not initialized');
       }
 
       logger.debug('Getting tracked characters for subscription', {
@@ -389,7 +376,7 @@ export class WebSocketIngestionService {
           metadata: { characterCount: characterIds.length },
         }
       );
-      
+
       const duration = Date.now() - startTime;
 
       characterIds.forEach(id => this.subscribedCharacters.add(id));
@@ -404,11 +391,7 @@ export class WebSocketIngestionService {
         }
       );
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'WEBSOCKET',
-        'subscribeToTrackedCharacters'
-      );
+      throw errorHandler.handleExternalServiceError(error, 'WEBSOCKET', 'subscribeToTrackedCharacters');
     }
   }
 
@@ -432,7 +415,9 @@ export class WebSocketIngestionService {
             if (this.subscribedCharacters.size < this.MAX_SUBSCRIBED_CHARACTERS) {
               this.subscribedCharacters.add(id);
             } else {
-              logger.warn(`Reached max subscribed characters limit (${this.MAX_SUBSCRIBED_CHARACTERS}), skipping character ${id}`);
+              logger.warn(
+                `Reached max subscribed characters limit (${this.MAX_SUBSCRIBED_CHARACTERS}), skipping character ${id}`
+              );
             }
           });
           logger.info(
@@ -561,14 +546,14 @@ export class WebSocketIngestionService {
   private cleanupSubscriptions(): void {
     const charCount = this.subscribedCharacters.size;
     const sysCount = this.subscribedSystems.size;
-    
+
     if (charCount > this.MAX_SUBSCRIBED_CHARACTERS * 0.9 || sysCount > this.MAX_SUBSCRIBED_SYSTEMS * 0.9) {
       logger.warn('Subscription sets approaching limits', {
         characters: `${charCount}/${this.MAX_SUBSCRIBED_CHARACTERS}`,
         systems: `${sysCount}/${this.MAX_SUBSCRIBED_SYSTEMS}`,
       });
     }
-    
+
     // Log current sizes for monitoring
     logger.info('WebSocket subscription sizes', {
       subscribedCharacters: charCount,

@@ -9,32 +9,28 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaLossDataRepository implements LossDataRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async getLossDataForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<LossDataPoint[]> {
+  async getLossDataForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<LossDataPoint[]> {
     // Query the database using the new camelCase properties
     const lossFacts = await this.prisma.lossFact.findMany({
       where: {
         killTime: {
           gte: startDate,
-          lte: endDate
+          lte: endDate,
         },
         characterId: {
-          in: characterIds
-        }
+          in: characterIds,
+        },
       },
       select: {
         killTime: true,
         killmailId: true,
         characterId: true,
         totalValue: true,
-        shipTypeId: true
+        shipTypeId: true,
       },
       orderBy: {
-        killTime: 'desc'
-      }
+        killTime: 'desc',
+      },
     });
 
     // Transform database records to domain objects (now using camelCase)
@@ -44,7 +40,7 @@ export class PrismaLossDataRepository implements LossDataRepository {
       characterId: lossFact.characterId,
       totalValue: lossFact.totalValue,
       shipTypeId: lossFact.shipTypeId,
-      systemId: lossFact.systemId
+      systemId: lossFact.systemId,
     }));
   }
 }

@@ -32,7 +32,7 @@ export class ChartCacheService {
       ...keyData,
       characterIds: keyData.characterIds.sort(), // Ensure consistent ordering
     });
-    
+
     const hash = createHash('sha256').update(keyString).digest('hex').substring(0, 16);
     const config = this.configs.get(keyData.type === 'data' ? 'chart_data' : 'chart_result');
     return `${config?.prefix || 'chart:'}${hash}`;
@@ -42,12 +42,12 @@ export class ChartCacheService {
     try {
       const key = this.generateCacheKey({ ...keyData, type: 'data' });
       const cached = await redis.get(key);
-      
+
       if (cached) {
         logger.debug(`Chart data cache hit for key: ${key}`);
         return JSON.parse(cached);
       }
-      
+
       logger.debug(`Chart data cache miss for key: ${key}`);
       return null;
     } catch (error) {
@@ -60,7 +60,7 @@ export class ChartCacheService {
     try {
       const key = this.generateCacheKey({ ...keyData, type: 'data' });
       const config = this.configs.get('chart_data')!;
-      
+
       await redis.setex(key, config.ttl, JSON.stringify(data));
       logger.debug(`Cached chart data with key: ${key}, TTL: ${config.ttl}s`);
     } catch (error) {
@@ -72,12 +72,12 @@ export class ChartCacheService {
     try {
       const key = this.generateCacheKey({ ...keyData, type: 'result' });
       const cached = await redis.getBuffer(key);
-      
+
       if (cached) {
         logger.debug(`Chart result cache hit for key: ${key}`);
         return cached;
       }
-      
+
       logger.debug(`Chart result cache miss for key: ${key}`);
       return null;
     } catch (error) {
@@ -90,7 +90,7 @@ export class ChartCacheService {
     try {
       const key = this.generateCacheKey({ ...keyData, type: 'result' });
       const config = this.configs.get('chart_result')!;
-      
+
       await redis.setex(key, config.ttl, buffer);
       logger.debug(`Cached chart result with key: ${key}, TTL: ${config.ttl}s, size: ${buffer.length} bytes`);
     } catch (error) {
@@ -102,12 +102,12 @@ export class ChartCacheService {
     try {
       const key = `${this.configs.get('db_query')?.prefix}${queryKey}`;
       const cached = await redis.get(key);
-      
+
       if (cached) {
         logger.debug(`DB query cache hit for key: ${key}`);
         return JSON.parse(cached);
       }
-      
+
       logger.debug(`DB query cache miss for key: ${key}`);
       return null;
     } catch (error) {
@@ -120,7 +120,7 @@ export class ChartCacheService {
     try {
       const key = `${this.configs.get('db_query')?.prefix}${queryKey}`;
       const config = this.configs.get('db_query')!;
-      
+
       await redis.setex(key, config.ttl, JSON.stringify(data));
       logger.debug(`Cached DB query with key: ${key}, TTL: ${config.ttl}s`);
     } catch (error) {
@@ -132,12 +132,12 @@ export class ChartCacheService {
     try {
       const key = `${this.configs.get('aggregated_data')?.prefix}${aggregationKey}`;
       const cached = await redis.get(key);
-      
+
       if (cached) {
         logger.debug(`Aggregated data cache hit for key: ${key}`);
         return JSON.parse(cached);
       }
-      
+
       logger.debug(`Aggregated data cache miss for key: ${key}`);
       return null;
     } catch (error) {
@@ -150,7 +150,7 @@ export class ChartCacheService {
     try {
       const key = `${this.configs.get('aggregated_data')?.prefix}${aggregationKey}`;
       const config = this.configs.get('aggregated_data')!;
-      
+
       await redis.setex(key, config.ttl, JSON.stringify(data));
       logger.debug(`Cached aggregated data with key: ${key}, TTL: ${config.ttl}s`);
     } catch (error) {
@@ -172,11 +172,8 @@ export class ChartCacheService {
       endDate: params.endDate?.toISOString(),
       ...params.additionalParams,
     };
-    
-    return createHash('sha256')
-      .update(JSON.stringify(keyData))
-      .digest('hex')
-      .substring(0, 16);
+
+    return createHash('sha256').update(JSON.stringify(keyData)).digest('hex').substring(0, 16);
   }
 
   generateAggregationKey(params: {
@@ -193,11 +190,8 @@ export class ChartCacheService {
       groupBy: params.groupBy,
       ...params.additionalParams,
     };
-    
-    return createHash('sha256')
-      .update(JSON.stringify(keyData))
-      .digest('hex')
-      .substring(0, 16);
+
+    return createHash('sha256').update(JSON.stringify(keyData)).digest('hex').substring(0, 16);
   }
 
   async invalidateCharacterCache(characterIds: string[]): Promise<void> {
@@ -231,11 +225,7 @@ export class ChartCacheService {
       ];
 
       if (endDate) {
-        patterns.push(
-          `chart_data:*${endDateStr}*`,
-          `chart_result:*${endDateStr}*`,
-          `db_query:*${endDateStr}*`
-        );
+        patterns.push(`chart_data:*${endDateStr}*`, `chart_result:*${endDateStr}*`, `db_query:*${endDateStr}*`);
       }
 
       for (const pattern of patterns) {
@@ -291,11 +281,8 @@ export class ChartCacheService {
       responsive: options.responsive,
       maintainAspectRatio: options.maintainAspectRatio,
     };
-    
-    return createHash('sha256')
-      .update(JSON.stringify(sanitizedOptions))
-      .digest('hex')
-      .substring(0, 8);
+
+    return createHash('sha256').update(JSON.stringify(sanitizedOptions)).digest('hex').substring(0, 8);
   }
 }
 

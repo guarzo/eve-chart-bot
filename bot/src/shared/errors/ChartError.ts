@@ -1,6 +1,6 @@
 import { BaseError, ErrorDetails } from './BaseError';
 
-export type ChartErrorType = 
+export type ChartErrorType =
   | 'CHART_GENERATION_ERROR'
   | 'CHART_RENDERING_ERROR'
   | 'CHART_DATA_ERROR'
@@ -39,7 +39,12 @@ export class ChartError extends BaseError {
     this.renderingEngine = context?.metadata?.renderingEngine || 'chart.js';
   }
 
-  static generationError(chartType: string, message: string, context?: ErrorDetails['context'], cause?: Error): ChartError {
+  static generationError(
+    chartType: string,
+    message: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ChartError {
     return new ChartError(
       'CHART_GENERATION_ERROR',
       `Chart generation failed for ${chartType}: ${message}`,
@@ -49,7 +54,12 @@ export class ChartError extends BaseError {
     );
   }
 
-  static renderingError(chartType: string, message: string, context?: ErrorDetails['context'], cause?: Error): ChartError {
+  static renderingError(
+    chartType: string,
+    message: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ChartError {
     return new ChartError(
       'CHART_RENDERING_ERROR',
       `Chart rendering failed for ${chartType}: ${message}`,
@@ -69,7 +79,12 @@ export class ChartError extends BaseError {
     );
   }
 
-  static cacheError(operation: string, chartType?: string, context?: ErrorDetails['context'], cause?: Error): ChartError {
+  static cacheError(
+    operation: string,
+    chartType?: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ChartError {
     return new ChartError(
       'CHART_CACHE_ERROR',
       `Chart cache ${operation} failed${chartType ? ` for ${chartType}` : ''}`,
@@ -79,7 +94,12 @@ export class ChartError extends BaseError {
     );
   }
 
-  static workerError(message: string, chartType?: string, context?: ErrorDetails['context'], cause?: Error): ChartError {
+  static workerError(
+    message: string,
+    chartType?: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ChartError {
     return new ChartError(
       'CHART_WORKER_ERROR',
       `Chart worker error${chartType ? ` for ${chartType}` : ''}: ${message}`,
@@ -99,52 +119,65 @@ export class ChartError extends BaseError {
   }
 
   static noDataError(chartType: string, reason: string, context?: ErrorDetails['context']): ChartError {
-    return new ChartError(
-      'CHART_DATA_ERROR',
-      `No data available for ${chartType} chart: ${reason}`,
-      chartType,
-      context
-    ).withUserMessage('No data is available for the requested chart. Try adjusting your filters or time range.')
-     .withStatusCode(404)
-     .withSeverity('low')
-     .withRetryable(false);
+    return new ChartError('CHART_DATA_ERROR', `No data available for ${chartType} chart: ${reason}`, chartType, context)
+      .withUserMessage('No data is available for the requested chart. Try adjusting your filters or time range.')
+      .withStatusCode(404)
+      .withSeverity('low')
+      .withRetryable(false);
   }
 
-  static dataTooLarge(chartType: string, dataSize: number, maxSize: number, context?: ErrorDetails['context']): ChartError {
+  static dataTooLarge(
+    chartType: string,
+    dataSize: number,
+    maxSize: number,
+    context?: ErrorDetails['context']
+  ): ChartError {
     return new ChartError(
       'CHART_DATA_ERROR',
       `Dataset too large for ${chartType} chart: ${dataSize} records (max: ${maxSize})`,
       chartType,
       { ...context, metadata: { ...context?.metadata, dataSize, maxSize } }
-    ).withUserMessage(`The requested data is too large to process. Please reduce your time range or apply additional filters.`)
-     .withStatusCode(413)
-     .withSeverity('medium')
-     .withRetryable(false);
+    )
+      .withUserMessage(
+        `The requested data is too large to process. Please reduce your time range or apply additional filters.`
+      )
+      .withStatusCode(413)
+      .withSeverity('medium')
+      .withRetryable(false);
   }
 
   static workerTimeout(chartType: string, timeout: number, context?: ErrorDetails['context']): ChartError {
-    return new ChartError(
-      'CHART_WORKER_ERROR',
-      `Chart worker timeout for ${chartType}: ${timeout}ms`,
-      chartType,
-      { ...context, metadata: { ...context?.metadata, timeout } }
-    ).withUserMessage('Chart generation is taking longer than expected. Please try again or reduce the complexity of your request.')
-     .withStatusCode(408)
-     .withSeverity('medium')
-     .withRetryable(true);
+    return new ChartError('CHART_WORKER_ERROR', `Chart worker timeout for ${chartType}: ${timeout}ms`, chartType, {
+      ...context,
+      metadata: { ...context?.metadata, timeout },
+    })
+      .withUserMessage(
+        'Chart generation is taking longer than expected. Please try again or reduce the complexity of your request.'
+      )
+      .withStatusCode(408)
+      .withSeverity('medium')
+      .withRetryable(true);
   }
 
-  static memoryError(chartType: string, memoryUsed: number, context?: ErrorDetails['context'], cause?: Error): ChartError {
+  static memoryError(
+    chartType: string,
+    memoryUsed: number,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ChartError {
     return new ChartError(
       'CHART_GENERATION_ERROR',
       `Chart generation out of memory for ${chartType}: ${Math.round(memoryUsed / 1024 / 1024)}MB`,
       chartType,
       { ...context, metadata: { ...context?.metadata, memoryUsed } },
       cause
-    ).withUserMessage('The chart data is too complex to process. Please try reducing the time range or number of characters.')
-     .withStatusCode(507)
-     .withSeverity('high')
-     .withRetryable(false);
+    )
+      .withUserMessage(
+        'The chart data is too complex to process. Please try reducing the time range or number of characters.'
+      )
+      .withStatusCode(507)
+      .withSeverity('high')
+      .withRetryable(false);
   }
 
   protected getDefaultUserMessage(): string {

@@ -57,36 +57,27 @@ export class LossDataProcessor implements IChartDataProcessor {
       groupId: item.groupId,
       totalValue: BigInt(item.totalValue || 0),
       shipTypeId: Number(item.shipTypeId),
-      systemId: Number(item.systemId)
+      systemId: Number(item.systemId),
     }));
   }
 
   /**
    * Process loss data points into chart-ready format
    */
-  processLossData(
-    config: ChartConfiguration,
-    lossData: LossDataPoint[],
-    groupLabels: string[]
-  ): ChartData {
+  processLossData(config: ChartConfiguration, lossData: LossDataPoint[], groupLabels: string[]): ChartData {
     const startTime = Date.now();
-    
+
     // Group losses by the configured grouping
     const aggregations = this.aggregateLosses(lossData, groupLabels, config);
-    
+
     // Create datasets for the chart
     const datasets = this.createLossDatasets(aggregations, config);
-    
+
     // Extract labels
     const labels = aggregations.map(agg => agg.label);
-    
-    const metadata = new ChartMetadata(
-      new Date(),
-      lossData.length,
-      Date.now() - startTime,
-      false
-    );
-    
+
+    const metadata = new ChartMetadata(new Date(), lossData.length, Date.now() - startTime, false);
+
     return new ChartData(ChartType.LOSSES, labels, datasets, metadata);
   }
 
@@ -99,7 +90,7 @@ export class LossDataProcessor implements IChartDataProcessor {
     _config: ChartConfiguration
   ): LossAggregation[] {
     const aggregations: Map<string, LossAggregation> = new Map();
-    
+
     // Initialize aggregations for each group
     groupLabels.forEach(label => {
       aggregations.set(label, {
@@ -107,78 +98,81 @@ export class LossDataProcessor implements IChartDataProcessor {
         totalLosses: 0,
         totalValue: BigInt(0),
         highValueLosses: 0,
-        averageValue: BigInt(0)
+        averageValue: BigInt(0),
       });
     });
-    
+
     // Process each loss
     lossData.forEach(loss => {
       const groupLabel = this.determineGroupLabel(loss, groupLabels);
       const agg = aggregations.get(groupLabel);
-      
+
       if (agg) {
         agg.totalLosses++;
         agg.totalValue = agg.totalValue + loss.totalValue;
-        
+
         if (loss.totalValue >= this.HIGH_VALUE_THRESHOLD) {
           agg.highValueLosses++;
         }
       }
     });
-    
+
     // Calculate averages
     aggregations.forEach(agg => {
       if (agg.totalLosses > 0) {
         agg.averageValue = agg.totalValue / BigInt(agg.totalLosses);
       }
     });
-    
+
     return Array.from(aggregations.values());
   }
 
   /**
    * Create chart datasets from aggregations
    */
-  private createLossDatasets(
-    aggregations: LossAggregation[],
-    config: ChartConfiguration
-  ): ChartDataset[] {
+  private createLossDatasets(aggregations: LossAggregation[], config: ChartConfiguration): ChartDataset[] {
     const datasets: ChartDataset[] = [];
-    
+
     // Total losses count dataset
-    datasets.push(new ChartDataset(
-      'Total Losses',
-      aggregations.map(agg => agg.totalLosses),
-      this.getChartColor('loss'),
-      this.getChartColor('lossBorder'),
-      2,
-      false
-    ));
-    
-    // ISK value dataset (in billions)
-    if (config.displayOptions.showIskValue !== false) {
-      datasets.push(new ChartDataset(
-        'ISK Lost (Billions)',
-        aggregations.map(agg => this.convertToIskBillions(agg.totalValue)),
-        this.getChartColor('isk'),
-        this.getChartColor('iskBorder'),
-        2,
-        true
-      ));
-    }
-    
-    // High value losses dataset
-    if (config.displayOptions.showHighValueLosses === true) {
-      datasets.push(new ChartDataset(
-        'High Value Losses',
-        aggregations.map(agg => agg.highValueLosses),
-        this.getChartColor('highValue'),
-        this.getChartColor('highValueBorder'),
+    datasets.push(
+      new ChartDataset(
+        'Total Losses',
+        aggregations.map(agg => agg.totalLosses),
+        this.getChartColor('loss'),
+        this.getChartColor('lossBorder'),
         2,
         false
-      ));
+      )
+    );
+
+    // ISK value dataset (in billions)
+    if (config.displayOptions.showIskValue !== false) {
+      datasets.push(
+        new ChartDataset(
+          'ISK Lost (Billions)',
+          aggregations.map(agg => this.convertToIskBillions(agg.totalValue)),
+          this.getChartColor('isk'),
+          this.getChartColor('iskBorder'),
+          2,
+          true
+        )
+      );
     }
-    
+
+    // High value losses dataset
+    if (config.displayOptions.showHighValueLosses === true) {
+      datasets.push(
+        new ChartDataset(
+          'High Value Losses',
+          aggregations.map(agg => agg.highValueLosses),
+          this.getChartColor('highValue'),
+          this.getChartColor('highValueBorder'),
+          2,
+          false
+        )
+      );
+    }
+
     return datasets;
   }
 
@@ -206,9 +200,9 @@ export class LossDataProcessor implements IChartDataProcessor {
       isk: '#FF9800',
       iskBorder: '#F57C00',
       highValue: '#9C27B0',
-      highValueBorder: '#7B1FA2'
+      highValueBorder: '#7B1FA2',
     };
-    
+
     return colorMap[type] || '#9E9E9E';
   }
 }

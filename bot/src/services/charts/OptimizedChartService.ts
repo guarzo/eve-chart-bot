@@ -58,7 +58,7 @@ export class OptimizedChartService extends BaseChartService {
 
       // Check for cached chart data
       let chartData = await chartCacheService.getCachedChartData(cacheKey);
-      
+
       if (!chartData) {
         // Generate chart data with optimizations
         chartData = await this.generateOptimizedChartData(
@@ -88,7 +88,9 @@ export class OptimizedChartService extends BaseChartService {
       await chartCacheService.setCachedChartResult(cacheKey, chartBuffer);
 
       const totalTime = Date.now() - metrics.startTime;
-      logger.info(`Chart generation completed: ${totalTime}ms total, ${metrics.processingTime}ms processing, ${metrics.renderingTime}ms rendering`);
+      logger.info(
+        `Chart generation completed: ${totalTime}ms total, ${metrics.processingTime}ms processing, ${metrics.renderingTime}ms rendering`
+      );
       logger.debug('Chart metrics:', metrics);
 
       return chartBuffer;
@@ -115,7 +117,12 @@ export class OptimizedChartService extends BaseChartService {
     logger.info(`Processing chart for ${allCharacters.length} characters (expanded from ${characterIds.length})`);
 
     // Get kills with caching
-    const kills = await this.getKillsWithCaching(allCharacterIds.map(id => BigInt(id)), startDate, new Date(), metrics);
+    const kills = await this.getKillsWithCaching(
+      allCharacterIds.map(id => BigInt(id)),
+      startDate,
+      new Date(),
+      metrics
+    );
 
     if (kills.length === 0) {
       return this.createEmptyKillsChart(characterIdsBigInt, groupBy, limit, allCharacters);
@@ -125,7 +132,13 @@ export class OptimizedChartService extends BaseChartService {
     const groupedData = await this.streamProcessKillsData(kills, groupBy, allCharacters, metrics);
 
     // Generate datasets efficiently
-    const datasets = await this.createOptimizedDatasets(groupedData, characterIdsBigInt, displayMetric, limit, allCharacters);
+    const datasets = await this.createOptimizedDatasets(
+      groupedData,
+      characterIdsBigInt,
+      displayMetric,
+      limit,
+      allCharacters
+    );
 
     // Generate time labels
     const labels = this.generateTimeLabels(startDate, new Date(), groupBy);
@@ -159,9 +172,9 @@ export class OptimizedChartService extends BaseChartService {
     // Limit concurrent operations
     for (let i = 0; i < batches.length; i += this.maxConcurrentQueries) {
       const batchSlice = batches.slice(i, i + this.maxConcurrentQueries);
-      
+
       const batchResults = await Promise.all(
-        batchSlice.map(async (batch) => {
+        batchSlice.map(async batch => {
           metrics.dbQueries++;
           const charactersNested = await Promise.all(
             batch.map(async (id: string) => {
@@ -180,14 +193,14 @@ export class OptimizedChartService extends BaseChartService {
     }
 
     const allCharacters = allCharactersBatched.flat();
-    
+
     // Remove duplicates
-    const uniqueCharacters = allCharacters.filter((char, index, self) => 
-      index === self.findIndex(c => c.eveId === char.eveId)
+    const uniqueCharacters = allCharacters.filter(
+      (char, index, self) => index === self.findIndex(c => c.eveId === char.eveId)
     );
 
     await chartCacheService.setCachedAggregatedData(cacheKey, uniqueCharacters);
-    
+
     return uniqueCharacters;
   }
 
@@ -248,16 +261,17 @@ export class OptimizedChartService extends BaseChartService {
     const chunkSize = 1000;
     for (let i = 0; i < kills.length; i += chunkSize) {
       const chunk = kills.slice(i, i + chunkSize);
-      
+
       for (const kill of chunk) {
         const killData = {
           killTime: new Date(kill.kill_time),
           totalValue: BigInt(kill.total_value),
           points: kill.points,
           attackerCount: kill.attackers?.length ?? 0,
-          characters: kill.characters?.map((char: any) => ({
-            characterId: BigInt(char.character_id),
-          })) ?? [],
+          characters:
+            kill.characters?.map((char: any) => ({
+              characterId: BigInt(char.character_id),
+            })) ?? [],
         };
 
         const timeKey = this.getTimeKey(killData.killTime, groupBy);
@@ -299,10 +313,7 @@ export class OptimizedChartService extends BaseChartService {
 
     // Convert Maps to plain objects for caching
     const cacheData = Object.fromEntries(
-      Array.from(grouped.entries()).map(([key, value]) => [
-        key,
-        Object.fromEntries(value.entries())
-      ])
+      Array.from(grouped.entries()).map(([key, value]) => [key, Object.fromEntries(value.entries())])
     );
 
     await chartCacheService.setCachedAggregatedData(cacheKey, cacheData);
@@ -322,10 +333,10 @@ export class OptimizedChartService extends BaseChartService {
 
     // Process datasets in parallel but limit concurrency
     const results: any[] = [];
-    
+
     for (let i = 0; i < limitedCharacterIds.length; i += this.maxConcurrentQueries) {
       const batch = limitedCharacterIds.slice(i, i + this.maxConcurrentQueries);
-      
+
       const batchResults = await Promise.all(
         batch.map(async (characterId, batchIndex) => {
           const character = characterMap.get(characterId.toString());
@@ -365,7 +376,7 @@ export class OptimizedChartService extends BaseChartService {
     characters: Character[]
   ): ChartData {
     const characterMap = new Map(characters.map(c => [c.eveId.toString(), c]));
-    
+
     const emptyDatasets = characterIds.slice(0, limit).map((characterId, index) => {
       const character = characterMap.get(characterId.toString());
       return {
@@ -412,7 +423,7 @@ export class OptimizedChartService extends BaseChartService {
   private getTimeKey(date: Date, groupBy: string): string {
     switch (groupBy) {
       case 'hour':
-        return `${date.toISOString().substring(0, 13)  }:00:00.000Z`;
+        return `${date.toISOString().substring(0, 13)}:00:00.000Z`;
       case 'day':
         return date.toISOString().substring(0, 10);
       case 'week': {

@@ -24,7 +24,7 @@ export class MainChartService extends BaseChartService implements IChartService 
 
   async generateChart(config: ChartConfigInput): Promise<ChartData> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       const {
         type,
@@ -48,43 +48,39 @@ export class MainChartService extends BaseChartService implements IChartService 
         displayMetric,
         limit,
         optimized: this.useOptimizedCharts,
-        correlationId
+        correlationId,
       });
 
-    // Calculate start date based on period
-    const startDate = this.calculateStartDate(period);
+      // Calculate start date based on period
+      const startDate = this.calculateStartDate(period);
 
-    // Generate chart based on type
-    switch (type) {
-      case 'kills':
-        return this.killsChartService.generateKillsChart(
-          characterIds.map(id => id.toString()),
-          startDate,
-          groupBy,
-          displayMetric,
-          limit
-        );
+      // Generate chart based on type
+      switch (type) {
+        case 'kills':
+          return this.killsChartService.generateKillsChart(
+            characterIds.map(id => id.toString()),
+            startDate,
+            groupBy,
+            displayMetric,
+            limit
+          );
 
-      case 'map_activity':
-        return this.mapActivityChartService.generateMapActivityChart(
-          characterIds.map(id => id.toString()),
-          startDate,
-          groupBy,
-          displayMetric,
-          limit
-        );
+        case 'map_activity':
+          return this.mapActivityChartService.generateMapActivityChart(
+            characterIds.map(id => id.toString()),
+            startDate,
+            groupBy,
+            displayMetric,
+            limit
+          );
 
-      default:
-        throw ChartError.configError(
-          type,
-          `Unsupported chart type '${type}'. Supported types: kills, map_activity`,
-          {
+        default:
+          throw ChartError.configError(type, `Unsupported chart type '${type}'. Supported types: kills, map_activity`, {
             correlationId,
             operation: 'generateChart',
             metadata: { supportedTypes: ['kills', 'map_activity'] },
-          }
-        );
-    }
+          });
+      }
     } catch (error) {
       throw errorHandler.handleChartError(
         error,
@@ -96,16 +92,9 @@ export class MainChartService extends BaseChartService implements IChartService 
 
   async generateOptimizedChart(config: ChartConfigInput, options: ChartOptions = {}): Promise<Buffer> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
-      const {
-        type,
-        characterIds,
-        period,
-        groupBy = 'hour',
-        displayMetric = 'value',
-        limit = 10,
-      } = config;
+      const { type, characterIds, period, groupBy = 'hour', displayMetric = 'value', limit = 10 } = config;
 
       logger.info('Generating optimized chart', {
         correlationId,
@@ -155,33 +144,24 @@ export class MainChartService extends BaseChartService implements IChartService 
    */
   private validateChartConfig(config: ChartConfigInput, correlationId: string): void {
     if (!config.type) {
-      throw ValidationError.fieldRequired(
-        'type',
-        {
-          correlationId,
-          operation: 'validateChartConfig',
-        }
-      );
+      throw ValidationError.fieldRequired('type', {
+        correlationId,
+        operation: 'validateChartConfig',
+      });
     }
 
     if (!config.characterIds || config.characterIds.length === 0) {
-      throw ValidationError.fieldRequired(
-        'characterIds',
-        {
-          correlationId,
-          operation: 'validateChartConfig',
-        }
-      );
+      throw ValidationError.fieldRequired('characterIds', {
+        correlationId,
+        operation: 'validateChartConfig',
+      });
     }
 
     if (!config.period) {
-      throw ValidationError.fieldRequired(
-        'period',
-        {
-          correlationId,
-          operation: 'validateChartConfig',
-        }
-      );
+      throw ValidationError.fieldRequired('period', {
+        correlationId,
+        operation: 'validateChartConfig',
+      });
     }
   }
 }

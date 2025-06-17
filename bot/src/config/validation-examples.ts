@@ -139,14 +139,10 @@ void _validConfig;
  * Example of runtime validation for environment variables
  */
 export function validateEnvironmentConfig(): void {
-  const requiredEnvVars = [
-    'DATABASE_URL',
-    'DISCORD_BOT_TOKEN',
-    'MAP_API_KEY',
-  ];
+  const requiredEnvVars = ['DATABASE_URL', 'DISCORD_BOT_TOKEN', 'MAP_API_KEY'];
 
   const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-  
+
   if (missingVars.length > 0) {
     console.warn(`Missing required environment variables: ${missingVars.join(', ')}`);
   }
@@ -171,10 +167,10 @@ export function useConfiguration(config: ApplicationConfig): void {
   const port: number = config.server.port;
   const env: `${Environment}` = config.server.nodeEnv;
   const logLevel: `${LogLevel}` = config.logging.level;
-  
+
   // TypeScript prevents invalid usage
   // config.server.port = 'invalid'; // Error: Cannot assign to 'port' because it is a read-only property
   // config.logging.level = 'invalid'; // Error: Type '"invalid"' is not assignable
-  
+
   console.log(`Server running on port ${port} in ${env} mode with log level ${logLevel}`);
 }

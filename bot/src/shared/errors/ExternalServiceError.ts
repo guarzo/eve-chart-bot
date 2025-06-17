@@ -35,34 +35,62 @@ export class ExternalServiceError extends BaseError {
     this.retryCount = context?.metadata?.retryCount || 0;
   }
 
-  static esiError(message: string, endpoint?: string, status?: number, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
+  static esiError(
+    message: string,
+    endpoint?: string,
+    status?: number,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
     return new ExternalServiceError('ESI', `ESI API error: ${message}`, endpoint, status, context, cause);
   }
 
-  static zkillError(message: string, endpoint?: string, status?: number, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
+  static zkillError(
+    message: string,
+    endpoint?: string,
+    status?: number,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
     return new ExternalServiceError('ZKILL', `zKillboard API error: ${message}`, endpoint, status, context, cause);
   }
 
   static wandererError(message: string, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
-    return new ExternalServiceError('WANDERER', `Wanderer WebSocket error: ${message}`, undefined, undefined, context, cause);
-  }
-
-  static mapApiError(message: string, endpoint?: string, status?: number, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
-    return new ExternalServiceError('MAP_API', `Map API error: ${message}`, endpoint, status, context, cause);
-  }
-
-  static redisError(message: string, operation?: string, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
     return new ExternalServiceError(
-      'REDIS',
-      `Redis error: ${message}`,
-      operation,
+      'WANDERER',
+      `Wanderer WebSocket error: ${message}`,
+      undefined,
       undefined,
       context,
       cause
     );
   }
 
-  static timeout(service: ExternalService, endpoint?: string, timeoutMs?: number, context?: ErrorDetails['context']): ExternalServiceError {
+  static mapApiError(
+    message: string,
+    endpoint?: string,
+    status?: number,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
+    return new ExternalServiceError('MAP_API', `Map API error: ${message}`, endpoint, status, context, cause);
+  }
+
+  static redisError(
+    message: string,
+    operation?: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
+    return new ExternalServiceError('REDIS', `Redis error: ${message}`, operation, undefined, context, cause);
+  }
+
+  static timeout(
+    service: ExternalService,
+    endpoint?: string,
+    timeoutMs?: number,
+    context?: ErrorDetails['context']
+  ): ExternalServiceError {
     return new ExternalServiceError(
       service,
       `${service} request timeout${timeoutMs ? ` (${timeoutMs}ms)` : ''}`,
@@ -72,18 +100,20 @@ export class ExternalServiceError extends BaseError {
     );
   }
 
-  static connectionFailed(service: ExternalService, endpoint?: string, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
-    return new ExternalServiceError(
-      service,
-      `Failed to connect to ${service}`,
-      endpoint,
-      503,
-      context,
-      cause
-    );
+  static connectionFailed(
+    service: ExternalService,
+    endpoint?: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
+    return new ExternalServiceError(service, `Failed to connect to ${service}`, endpoint, 503, context, cause);
   }
 
-  static rateLimited(service: ExternalService, retryAfter?: number, context?: ErrorDetails['context']): ExternalServiceError {
+  static rateLimited(
+    service: ExternalService,
+    retryAfter?: number,
+    context?: ErrorDetails['context']
+  ): ExternalServiceError {
     return new ExternalServiceError(
       service,
       `${service} rate limit exceeded${retryAfter ? `, retry after ${retryAfter}s` : ''}`,
@@ -93,17 +123,21 @@ export class ExternalServiceError extends BaseError {
     );
   }
 
-  static unauthorized(service: ExternalService, endpoint?: string, context?: ErrorDetails['context']): ExternalServiceError {
-    return new ExternalServiceError(
-      service,
-      `Unauthorized access to ${service}`,
-      endpoint,
-      401,
-      context
-    ).withSeverity('high').withRetryable(false);
+  static unauthorized(
+    service: ExternalService,
+    endpoint?: string,
+    context?: ErrorDetails['context']
+  ): ExternalServiceError {
+    return new ExternalServiceError(service, `Unauthorized access to ${service}`, endpoint, 401, context)
+      .withSeverity('high')
+      .withRetryable(false);
   }
 
-  static serviceUnavailable(service: ExternalService, context?: ErrorDetails['context'], cause?: Error): ExternalServiceError {
+  static serviceUnavailable(
+    service: ExternalService,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): ExternalServiceError {
     return new ExternalServiceError(
       service,
       `${service} service is currently unavailable`,
@@ -114,14 +148,21 @@ export class ExternalServiceError extends BaseError {
     );
   }
 
-  static invalidResponse(service: ExternalService, expected: string, received: string, context?: ErrorDetails['context']): ExternalServiceError {
+  static invalidResponse(
+    service: ExternalService,
+    expected: string,
+    received: string,
+    context?: ErrorDetails['context']
+  ): ExternalServiceError {
     return new ExternalServiceError(
       service,
       `Invalid response from ${service}: expected ${expected}, received ${received}`,
       undefined,
       502,
       context
-    ).withSeverity('medium').withRetryable(false);
+    )
+      .withSeverity('medium')
+      .withRetryable(false);
   }
 
   protected getDefaultUserMessage(): string {
@@ -147,7 +188,7 @@ export class ExternalServiceError extends BaseError {
 
   private static isRetryableStatus(status?: number): boolean {
     if (!status) return true; // Network errors are generally retryable
-    
+
     return [
       408, // Request Timeout
       429, // Too Many Requests
@@ -160,7 +201,7 @@ export class ExternalServiceError extends BaseError {
 
   private static getSeverityForStatus(status?: number): 'low' | 'medium' | 'high' | 'critical' {
     if (!status) return 'high'; // Network errors
-    
+
     if (status >= 500) return 'high';
     if (status === 429) return 'medium';
     if (status >= 400) return 'medium';
@@ -189,7 +230,7 @@ export class ExternalServiceError extends BaseError {
 
   toApiResponse(): Record<string, any> {
     const response = super.toApiResponse();
-    
+
     if (this.responseStatus === 429) {
       const retryAfter = this.context?.metadata?.retryAfter;
       if (retryAfter) {

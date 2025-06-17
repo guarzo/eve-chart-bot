@@ -16,7 +16,7 @@ export class MapActivityRepository extends BaseRepository {
    */
   async getActivityForCharacter(characterId: string, startDate: Date, endDate: Date): Promise<MapActivity[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching map activity for character', {
@@ -70,7 +70,7 @@ export class MapActivityRepository extends BaseRepository {
    */
   async getActivityForCharacters(characterIds: string[], startDate: Date, endDate: Date): Promise<MapActivity[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching map activity for characters', {
@@ -171,7 +171,7 @@ export class MapActivityRepository extends BaseRepository {
    */
   async getActivityForGroup(groupId: string, startDate: Date, endDate: Date): Promise<MapActivity[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching map activity for group', {
@@ -234,7 +234,7 @@ export class MapActivityRepository extends BaseRepository {
     averageSignaturesPerSystem: number;
   }> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Calculating activity stats for character', {
@@ -299,7 +299,7 @@ export class MapActivityRepository extends BaseRepository {
     averageSignaturesPerSystem: number;
   }> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     logger.info('Getting map activity stats for group', {
       correlationId,
       groupId,
@@ -406,7 +406,7 @@ export class MapActivityRepository extends BaseRepository {
     groupBy: 'hour' | 'day' | 'week' = 'day'
   ): Promise<Array<{ timestamp: Date; signatures: number; systems: number }>> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Fetching activity grouped by time', {
@@ -501,7 +501,7 @@ export class MapActivityRepository extends BaseRepository {
     corporationId: number | null
   ): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Upserting map activity', {
@@ -556,7 +556,7 @@ export class MapActivityRepository extends BaseRepository {
    */
   async deleteAllMapActivity(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Deleting all map activity records', { correlationId });
@@ -578,7 +578,7 @@ export class MapActivityRepository extends BaseRepository {
    */
   override async count(): Promise<number> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     return this.executeQuery(
       async () => {
         logger.debug('Counting total map activity records', { correlationId });

@@ -22,29 +22,23 @@ export class KillsHandler extends BaseChartHandler {
     if (!interaction.isChatInputCommand()) return;
 
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
-      
+
       // Validate time parameter
       const timeValue = parseInt(time, 10);
       if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
-        throw ValidationError.outOfRange(
-          'time',
-          1,
-          365,
-          time,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'kills_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.outOfRange('time', 1, 365, time, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'kills_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       const { startDate, endDate } = this.getTimeRange(time);
@@ -74,16 +68,12 @@ export class KillsHandler extends BaseChartHandler {
       });
 
       if (groups.length === 0) {
-        throw ChartError.noDataError(
-          'kills',
-          'No character groups found. Please add characters to groups first.',
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'kills_chart_generation',
-          }
-        );
+        throw ChartError.noDataError('kills', 'No character groups found. Please add characters to groups first.', {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'kills_chart_generation',
+        });
       }
 
       // Get the appropriate chart generator
@@ -91,7 +81,7 @@ export class KillsHandler extends BaseChartHandler {
 
       // Generate chart data with retry logic
       logger.info(`Generating chart data with ${groups.length} groups...`, { correlationId });
-      
+
       const chartData = await errorHandler.withRetry(
         async () => {
           return await generator.generateChart({
@@ -144,7 +134,6 @@ export class KillsHandler extends BaseChartHandler {
         correlationId,
         bufferSize: buffer.length,
       });
-
     } catch (error) {
       // Enhanced error handling with correlation ID context
       const enhancedError = errorHandler.handleError(error, {

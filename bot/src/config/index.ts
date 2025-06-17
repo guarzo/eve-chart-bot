@@ -1,6 +1,6 @@
 /**
  * Configuration module with compile-time validation
- * 
+ *
  * This module provides type-safe configuration with the following features:
  * - Compile-time validation using TypeScript's satisfies operator
  * - Runtime validation for environment variables

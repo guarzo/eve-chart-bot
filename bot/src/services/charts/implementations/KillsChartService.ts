@@ -24,14 +24,16 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
     limit: number
   ): Promise<ChartData> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Input validation
       this.validateKillsChartInput({ characterIds, startDate, groupBy, displayMetric, limit }, correlationId);
 
       const characterIdsBigInt = characterIds.map(id => BigInt(id));
 
-      logger.info(`Generating kills chart for ${characterIds.length} characters from ${startDate.toISOString()}`, { correlationId });
+      logger.info(`Generating kills chart for ${characterIds.length} characters from ${startDate.toISOString()}`, {
+        correlationId,
+      });
       logger.info(`Character IDs: ${characterIds.join(', ')}`, { correlationId });
       // Find all related characters via character groups with retry logic
       const allCharactersNested = await Promise.all(
@@ -53,16 +55,19 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
       const allCharacters = allCharactersNested.flat();
       const allCharacterIds = allCharacters.map((c: Character) => c.eveId);
 
-      logger.info(`Including all characters in same groups: ${allCharacters.length} characters total`, { correlationId });
+      logger.info(`Including all characters in same groups: ${allCharacters.length} characters total`, {
+        correlationId,
+      });
 
       // Get kills for characters with retry logic
       logger.info('Querying killFact table with expanded character list...', { correlationId });
       const killsQuery = await errorHandler.withRetry(
-        () => this.killRepository.getKillsForCharacters(
-          allCharacterIds.map((id: string) => BigInt(id)),
-          startDate,
-          new Date()
-        ),
+        () =>
+          this.killRepository.getKillsForCharacters(
+            allCharacterIds.map((id: string) => BigInt(id)),
+            startDate,
+            new Date()
+          ),
         3,
         1000,
         { operation: 'fetchKillsData', correlationId, metadata: { characterCount: allCharacterIds.length } }
@@ -106,26 +111,32 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
         displayType: 'line',
       };
     } catch (error) {
-      logger.error('Error generating kills chart', { 
-        error, 
+      logger.error('Error generating kills chart', {
+        error,
         correlationId,
-        context: { 
+        context: {
           operation: 'generateKillsChart',
           characterCount: characterIds?.length || 0,
           groupBy,
           displayMetric,
-          limit
-        }
+          limit,
+        },
       });
 
       if (error instanceof ChartError || error instanceof ValidationError) {
         throw error;
       }
 
-      throw new ChartError('CHART_GENERATION_ERROR', 'Failed to generate kills chart', 'kills', {
-        correlationId, 
-        operation: 'generateKillsChart'
-      }, error as Error);
+      throw new ChartError(
+        'CHART_GENERATION_ERROR',
+        'Failed to generate kills chart',
+        'kills',
+        {
+          correlationId,
+          operation: 'generateKillsChart',
+        },
+        error as Error
+      );
     }
   }
 
@@ -209,7 +220,12 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
     }
   }
 
-  private async createEmptyKillsChart(characterIds: bigint[], groupBy: string, limit: number, correlationId: string): Promise<ChartData> {
+  private async createEmptyKillsChart(
+    characterIds: bigint[],
+    groupBy: string,
+    limit: number,
+    correlationId: string
+  ): Promise<ChartData> {
     logger.warn('No kills found for the specified characters and time period', { correlationId });
 
     const emptyDatasets = await Promise.all(
@@ -453,31 +469,34 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
   /**
    * Validate kills chart input parameters
    */
-  private validateKillsChartInput(params: {
-    characterIds: string[];
-    startDate: Date;
-    groupBy: string;
-    displayMetric: ChartMetric;
-    limit: number;
-  }, correlationId: string): void {
+  private validateKillsChartInput(
+    params: {
+      characterIds: string[];
+      startDate: Date;
+      groupBy: string;
+      displayMetric: ChartMetric;
+      limit: number;
+    },
+    correlationId: string
+  ): void {
     const issues: ValidationIssue[] = [];
 
     // Validate character IDs
     if (!params.characterIds || !Array.isArray(params.characterIds) || params.characterIds.length === 0) {
-      issues.push({ 
-        field: 'characterIds', 
+      issues.push({
+        field: 'characterIds',
         value: params.characterIds,
         constraint: 'required',
-        message: 'At least one character ID is required' 
+        message: 'At least one character ID is required',
       });
     } else {
       params.characterIds.forEach((id, index) => {
         if (!id || typeof id !== 'string') {
-          issues.push({ 
-            field: `characterIds[${index}]`, 
+          issues.push({
+            field: `characterIds[${index}]`,
             value: id,
             constraint: 'format',
-            message: 'Character ID must be a non-empty string' 
+            message: 'Character ID must be a non-empty string',
           });
         }
       });
@@ -485,50 +504,50 @@ export class KillsChartService extends BaseChartService implements IKillsChartSe
 
     // Validate start date
     if (!params.startDate || !(params.startDate instanceof Date) || isNaN(params.startDate.getTime())) {
-      issues.push({ 
-        field: 'startDate', 
+      issues.push({
+        field: 'startDate',
         value: params.startDate,
         constraint: 'format',
-        message: 'Invalid start date' 
+        message: 'Invalid start date',
       });
     }
 
     // Validate groupBy
     const validGroupBy = ['hour', 'day', 'week'];
     if (!params.groupBy || !validGroupBy.includes(params.groupBy)) {
-      issues.push({ 
-        field: 'groupBy', 
+      issues.push({
+        field: 'groupBy',
         value: params.groupBy,
         constraint: 'enum',
-        message: `GroupBy must be one of: ${validGroupBy.join(', ')}` 
+        message: `GroupBy must be one of: ${validGroupBy.join(', ')}`,
       });
     }
 
     // Validate display metric
     const validMetrics = ['kills', 'value', 'points', 'attackers'];
     if (!params.displayMetric || !validMetrics.includes(params.displayMetric)) {
-      issues.push({ 
-        field: 'displayMetric', 
+      issues.push({
+        field: 'displayMetric',
         value: params.displayMetric,
         constraint: 'enum',
-        message: `Display metric must be one of: ${validMetrics.join(', ')}` 
+        message: `Display metric must be one of: ${validMetrics.join(', ')}`,
       });
     }
 
     // Validate limit
     if (typeof params.limit !== 'number' || params.limit < 1 || params.limit > 100) {
-      issues.push({ 
-        field: 'limit', 
+      issues.push({
+        field: 'limit',
         value: params.limit,
         constraint: 'range',
-        message: 'Limit must be a number between 1 and 100' 
+        message: 'Limit must be a number between 1 and 100',
       });
     }
 
     if (issues.length > 0) {
-      throw new ValidationError('Invalid kills chart input parameters', issues, { 
-        correlationId, 
-        operation: 'validateKillsChartInput'
+      throw new ValidationError('Invalid kills chart input parameters', issues, {
+        correlationId,
+        operation: 'validateKillsChartInput',
       });
     }
   }

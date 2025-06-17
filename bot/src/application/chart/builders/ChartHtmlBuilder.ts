@@ -11,10 +11,8 @@ export class ChartHtmlBuilder {
   static buildDatasetHeaders(chartData: ChartData, styling?: HtmlStyling): string {
     const headerStyle = styling?.table?.header;
     const styleAttr = headerStyle ? ` style="${headerStyle}"` : '';
-    
-    return chartData.datasets
-      .map(dataset => `<th${styleAttr}>${dataset.label}</th>`)
-      .join('');
+
+    return chartData.datasets.map(dataset => `<th${styleAttr}>${dataset.label}</th>`).join('');
   }
 
   /**
@@ -23,7 +21,7 @@ export class ChartHtmlBuilder {
   static buildDataRows(chartData: ChartData, styling?: HtmlStyling): string {
     const cellStyle = styling?.table?.cell;
     const labelStyle = styling?.table?.labelCell ?? cellStyle;
-    
+
     const cellStyleAttr = cellStyle ? ` style="${cellStyle}"` : '';
     const labelStyleAttr = labelStyle ? ` style="${labelStyle}"` : '';
 
@@ -56,11 +54,9 @@ export class ChartHtmlBuilder {
     let legendSection = `<div class="legend"${containerStyleAttr}><h3>Legend</h3>`;
 
     chartData.datasets.forEach(dataset => {
-      const colors = Array.isArray(dataset.backgroundColor) 
-        ? dataset.backgroundColor 
-        : [dataset.backgroundColor];
+      const colors = Array.isArray(dataset.backgroundColor) ? dataset.backgroundColor : [dataset.backgroundColor];
 
-      const colorBoxFullStyle = colorBoxBaseStyle 
+      const colorBoxFullStyle = colorBoxBaseStyle
         ? `background-color: ${colors[0]}; ${colorBoxBaseStyle}`
         : `background-color: ${colors[0]}`;
 

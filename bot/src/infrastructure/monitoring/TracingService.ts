@@ -52,7 +52,7 @@ export class TracingService {
   startTrace(operation: string, tags?: Record<string, any>): TraceContext {
     const traceId = randomUUID();
     const spanId = randomUUID();
-    
+
     const span: TraceContext = {
       traceId,
       spanId,
@@ -70,7 +70,7 @@ export class TracingService {
   startSpan(options: SpanOptions): TraceContext {
     const parentSpan = options.parentSpan || this.getCurrentSpan();
     const spanId = randomUUID();
-    
+
     const span: TraceContext = {
       traceId: parentSpan?.traceId || randomUUID(),
       spanId,
@@ -119,12 +119,9 @@ export class TracingService {
   }
 
   // Execute function within span context
-  async executeInSpan<T>(
-    options: SpanOptions,
-    fn: (span: TraceContext) => Promise<T>
-  ): Promise<T> {
+  async executeInSpan<T>(options: SpanOptions, fn: (span: TraceContext) => Promise<T>): Promise<T> {
     const span = this.startSpan(options);
-    
+
     return this.asyncLocalStorage.run(span, async () => {
       try {
         const result = await fn(span);
@@ -179,9 +176,8 @@ export class TracingService {
     const completedSpans = allSpans.filter(span => span.endTime);
     const errorSpans = allSpans.filter(span => span.error);
     const activeDurations = completedSpans.map(span => span.duration || 0);
-    const averageDuration = activeDurations.length > 0 
-      ? activeDurations.reduce((a, b) => a + b, 0) / activeDurations.length 
-      : 0;
+    const averageDuration =
+      activeDurations.length > 0 ? activeDurations.reduce((a, b) => a + b, 0) / activeDurations.length : 0;
 
     return {
       totalSpans: allSpans.length,
@@ -194,9 +190,7 @@ export class TracingService {
 
   // Export traces in Jaeger format
   exportJaegerTraces(traceId?: string): any[] {
-    const spans = traceId 
-      ? this.getTraceSpans(traceId)
-      : Array.from(this.spans.values());
+    const spans = traceId ? this.getTraceSpans(traceId) : Array.from(this.spans.values());
 
     return spans.map(span => ({
       traceID: span.traceId,
@@ -215,10 +209,12 @@ export class TracingService {
         fields: [
           { key: 'level', value: log.level },
           { key: 'message', value: log.message },
-          ...(log.fields ? Object.entries(log.fields).map(([key, value]) => ({
-            key,
-            value: String(value),
-          })) : []),
+          ...(log.fields
+            ? Object.entries(log.fields).map(([key, value]) => ({
+                key,
+                value: String(value),
+              }))
+            : []),
         ],
       })),
       process: {
@@ -244,31 +240,33 @@ export class TracingService {
     guildId: string,
     fn: (span: TraceContext) => Promise<T>
   ): Promise<T> {
-    return this.executeInSpan({
-      operation: `discord.command.${commandName}`,
-      tags: {
-        'discord.command': commandName,
-        'discord.user_id': userId,
-        'discord.guild_id': guildId,
-        'service.name': 'discord-bot',
+    return this.executeInSpan(
+      {
+        operation: `discord.command.${commandName}`,
+        tags: {
+          'discord.command': commandName,
+          'discord.user_id': userId,
+          'discord.guild_id': guildId,
+          'service.name': 'discord-bot',
+        },
       },
-    }, fn);
+      fn
+    );
   }
 
   // Instrument database operations
-  instrumentDatabaseOperation<T>(
-    operation: string,
-    table: string,
-    fn: (span: TraceContext) => Promise<T>
-  ): Promise<T> {
-    return this.executeInSpan({
-      operation: `db.${operation}`,
-      tags: {
-        'db.type': 'postgresql',
-        'db.table': table,
-        'db.operation': operation,
+  instrumentDatabaseOperation<T>(operation: string, table: string, fn: (span: TraceContext) => Promise<T>): Promise<T> {
+    return this.executeInSpan(
+      {
+        operation: `db.${operation}`,
+        tags: {
+          'db.type': 'postgresql',
+          'db.table': table,
+          'db.operation': operation,
+        },
       },
-    }, fn);
+      fn
+    );
   }
 
   // Instrument chart generation
@@ -277,30 +275,32 @@ export class TracingService {
     characterCount: number,
     fn: (span: TraceContext) => Promise<T>
   ): Promise<T> {
-    return this.executeInSpan({
-      operation: `chart.generate.${chartType}`,
-      tags: {
-        'chart.type': chartType,
-        'chart.character_count': characterCount,
-        'service.name': 'chart-service',
+    return this.executeInSpan(
+      {
+        operation: `chart.generate.${chartType}`,
+        tags: {
+          'chart.type': chartType,
+          'chart.character_count': characterCount,
+          'service.name': 'chart-service',
+        },
       },
-    }, fn);
+      fn
+    );
   }
 
   // Instrument HTTP requests
-  instrumentHttpRequest<T>(
-    method: string,
-    url: string,
-    fn: (span: TraceContext) => Promise<T>
-  ): Promise<T> {
-    return this.executeInSpan({
-      operation: `http.${method.toLowerCase()}`,
-      tags: {
-        'http.method': method,
-        'http.url': url,
-        'component': 'http-client',
+  instrumentHttpRequest<T>(method: string, url: string, fn: (span: TraceContext) => Promise<T>): Promise<T> {
+    return this.executeInSpan(
+      {
+        operation: `http.${method.toLowerCase()}`,
+        tags: {
+          'http.method': method,
+          'http.url': url,
+          component: 'http-client',
+        },
       },
-    }, fn);
+      fn
+    );
   }
 
   private emitTraceEvent(span: TraceContext): void {
@@ -343,9 +343,8 @@ export class TracingService {
 
     // If we still have too many spans, remove the oldest ones
     if (this.spans.size > this.maxSpans) {
-      const sortedSpans = Array.from(this.spans.entries())
-        .sort(([, a], [, b]) => a.startTime - b.startTime);
-      
+      const sortedSpans = Array.from(this.spans.entries()).sort(([, a], [, b]) => a.startTime - b.startTime);
+
       const excessCount = this.spans.size - this.maxSpans;
       for (let i = 0; i < excessCount; i++) {
         this.spans.delete(sortedSpans[i][0]);

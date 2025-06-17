@@ -235,9 +235,7 @@ export class ErrorHandler {
   }
 
   private isPrismaError(error: Error): boolean {
-    return error.name.includes('Prisma') || 
-           error.message.includes('Prisma') ||
-           'code' in error;
+    return error.name.includes('Prisma') || error.message.includes('Prisma') || 'code' in error;
   }
 
   private convertPrismaError(error: any, context: ErrorContext): DatabaseError {
@@ -259,9 +257,11 @@ export class ErrorHandler {
   }
 
   private isDiscordJSError(error: Error): boolean {
-    return error.name === 'DiscordAPIError' || 
-           error.message.includes('Discord') ||
-           'code' in error && typeof (error as any).code === 'number';
+    return (
+      error.name === 'DiscordAPIError' ||
+      error.message.includes('Discord') ||
+      ('code' in error && typeof (error as any).code === 'number')
+    );
   }
 
   private convertDiscordJSError(error: any, context: ErrorContext): DiscordError {
@@ -327,7 +327,7 @@ export class ErrorHandler {
 
   private logError(error: BaseError, includeStackTrace: boolean = false): void {
     const logData = error.toLogFormat();
-    
+
     if (!includeStackTrace) {
       delete logData.error.stack;
       delete logData.error.cause?.stack;
@@ -384,7 +384,7 @@ export class ErrorHandler {
 
   private createErrorTrace(error: BaseError): void {
     const currentSpan = tracingService.getCurrentSpan();
-    
+
     if (currentSpan) {
       tracingService.addTags(currentSpan, {
         'error.code': error.code,

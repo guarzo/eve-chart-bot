@@ -47,7 +47,7 @@ async function startServer() {
 
   // Load heavy dependencies and initialize services asynchronously
   logger.info('Loading application modules...');
-  
+
   const [
     { initSentry },
     cors,
@@ -70,7 +70,7 @@ async function startServer() {
     { metricsCollector },
     { tracingService },
     { memoryMonitor },
-    { disconnectRedis }
+    { disconnectRedis },
   ] = await Promise.all([
     import('./lib/sentry'),
     import('cors'),
@@ -93,7 +93,7 @@ async function startServer() {
     import('./infrastructure/monitoring/MetricsCollector'),
     import('./infrastructure/monitoring/TracingService'),
     import('./utils/memoryMonitor'),
-    import('./infrastructure/cache/redis-client')
+    import('./infrastructure/cache/redis-client'),
   ]);
 
   startupProfiler.checkpoint('After async imports');
@@ -163,7 +163,12 @@ async function startServer() {
   startupProfiler.checkpoint('After Discord client');
 
   // Import types for chart validation
-  const { ChartConfigInput, ChartSourceType: ChartSourceTypeType, ChartPeriod: ChartPeriodType, ChartGroupBy: ChartGroupByType } = await import('./types/chart');
+  const {
+    ChartConfigInput,
+    ChartSourceType: ChartSourceTypeType,
+    ChartPeriod: ChartPeriodType,
+    ChartGroupBy: ChartGroupByType,
+  } = await import('./types/chart');
 
   // Validation schemas
   const chartConfigSchema = z.object({
@@ -177,7 +182,7 @@ async function startServer() {
   app.get('/memory', (_req, res) => {
     const metrics = memoryMonitor.getMetrics();
     const memory = metrics.current;
-    
+
     res.json({
       current: {
         heapUsed: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
@@ -185,11 +190,11 @@ async function startServer() {
         rss: `${Math.round(memory.rss / 1024 / 1024)}MB`,
         external: `${Math.round(memory.external / 1024 / 1024)}MB`,
         arrayBuffers: `${Math.round(memory.arrayBuffers / 1024 / 1024)}MB`,
-        heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)  }%`
+        heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)}%`,
       },
       growthRate: `${metrics.heapGrowthRate.toFixed(2)}MB/min`,
       sampleCount: metrics.samples.length,
-      uptime: process.uptime()
+      uptime: process.uptime(),
     });
   });
 
@@ -245,7 +250,12 @@ async function startServer() {
           id: ChartSourceType.KILLS,
           name: 'Kill Chart',
           description: 'Generate a chart showing kill activity',
-          periods: [ChartPeriod.TWENTY_FOUR_HOURS, ChartPeriod.SEVEN_DAYS, ChartPeriod.THIRTY_DAYS, ChartPeriod.NINETY_DAYS],
+          periods: [
+            ChartPeriod.TWENTY_FOUR_HOURS,
+            ChartPeriod.SEVEN_DAYS,
+            ChartPeriod.THIRTY_DAYS,
+            ChartPeriod.NINETY_DAYS,
+          ],
           groupBy: [ChartGroupBy.HOUR, ChartGroupBy.DAY, ChartGroupBy.WEEK],
         },
         {
@@ -459,7 +469,7 @@ async function startServer() {
 
     // Clean up chart workers
     await destroyChartWorkerManager();
-    
+
     // Disconnect Redis
     await disconnectRedis();
 

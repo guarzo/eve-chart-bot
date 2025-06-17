@@ -24,37 +24,32 @@ export { ErrorHandler, errorHandler } from './ErrorHandler';
 export type { ErrorHandlerOptions } from './ErrorHandler';
 
 // Utility functions
-export { 
-  createCorrelationId, 
-  isRetryableError, 
+export {
+  createCorrelationId,
+  isRetryableError,
   getErrorSeverity,
   extractCorrelationId,
   sanitizeErrorMessage,
   isTemporaryError,
   getUserFriendlyMessage,
   formatErrorForLogging,
-  shouldAlert
+  shouldAlert,
 } from './utils';
 
 // Error middleware for Express
-export { 
+export {
   errorMiddleware,
   correlationMiddleware,
   asyncHandler,
   createDiscordErrorResponse,
   validateRequest,
   rateLimitErrorHandler,
-  notFoundHandler
+  notFoundHandler,
 } from './middleware';
 
 // Legacy compatibility - maintain existing exports for backward compatibility
 export class AppError extends BaseError {
-  constructor(
-    message: string,
-    statusCode: number = 500,
-    code: string = 'INTERNAL_SERVER_ERROR',
-    details?: any
-  ) {
+  constructor(message: string, statusCode: number = 500, code: string = 'INTERNAL_SERVER_ERROR', details?: any) {
     super({
       code,
       message,

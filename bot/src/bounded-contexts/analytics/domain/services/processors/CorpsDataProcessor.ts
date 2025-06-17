@@ -8,21 +8,16 @@ import { ChartType } from '../../../../../shared/types/common';
  * Contains pure business logic for corporation activity analysis
  */
 export class CorpsDataProcessor implements IChartDataProcessor {
-  
   private createMetadata(dataLength: number): ChartMetadata {
     return new ChartMetadata(new Date(), dataLength, 0, false);
   }
-  
+
   /**
    * Process corporation data based on configuration
    */
-  async processData(
-    config: ChartConfiguration,
-    rawData: any[]
-  ): Promise<ChartData> {
-    
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
     const analysisType = config.displayOptions?.analysisType || 'activity';
-    
+
     switch (analysisType) {
       case 'kills':
         return this.processCorpKillsData(rawData, config);
@@ -40,19 +35,15 @@ export class CorpsDataProcessor implements IChartDataProcessor {
   /**
    * Process general corporation activity data
    */
-  private processCorpActivityData(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processCorpActivityData(rawData: any[], config: ChartConfiguration): ChartData {
     const corpStats = this.aggregateCorpStats(rawData);
     const sortedCorps = Array.from(corpStats.entries())
-      .sort((a, b) => (b[1].kills + b[1].losses) - (a[1].kills + a[1].losses))
+      .sort((a, b) => b[1].kills + b[1].losses - (a[1].kills + a[1].losses))
       .slice(0, config.displayOptions?.limit || 15);
-    
+
     const labels = sortedCorps.map(([name]) => name);
     const totalActivity = sortedCorps.map(([, stats]) => stats.kills + stats.losses);
-    
+
     return new ChartData(
       ChartType.CORPS_ACTIVITY,
       labels,
@@ -62,40 +53,36 @@ export class CorpsDataProcessor implements IChartDataProcessor {
           data: totalActivity,
           backgroundColor: 'rgba(54, 162, 235, 0.6)',
           borderColor: 'rgba(54, 162, 235, 1)',
-          borderWidth: 1
-        }
+          borderWidth: 1,
+        },
       ],
-this.createMetadata(totalActivity.length)
+      this.createMetadata(totalActivity.length)
     );
   }
 
   /**
    * Process corporation kills data
    */
-  private processCorpKillsData(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processCorpKillsData(rawData: any[], config: ChartConfiguration): ChartData {
     const corpStats = this.aggregateCorpStats(rawData);
     const sortedCorps = Array.from(corpStats.entries())
       .sort((a, b) => b[1].kills - a[1].kills)
       .slice(0, config.displayOptions?.limit || 15);
-    
+
     const labels = sortedCorps.map(([name]) => name);
     const kills = sortedCorps.map(([, stats]) => stats.kills);
     const killValue = sortedCorps.map(([, stats]) => stats.killValue);
-    
+
     const datasets = [
       {
         label: 'Kills',
         data: kills,
         backgroundColor: 'rgba(75, 192, 192, 0.6)',
         borderColor: 'rgba(75, 192, 192, 1)',
-        borderWidth: 1
-      }
+        borderWidth: 1,
+      },
     ];
-    
+
     // Add value if meaningful
     if (killValue.some(v => v > 0)) {
       datasets.push({
@@ -103,45 +90,36 @@ this.createMetadata(totalActivity.length)
         data: killValue,
         backgroundColor: 'rgba(255, 159, 64, 0.6)',
         borderColor: 'rgba(255, 159, 64, 1)',
-        borderWidth: 1
+        borderWidth: 1,
       });
     }
-    
-    return new ChartData(
-      ChartType.CORPS_KILLS,
-      labels,
-      datasets,
-this.createMetadata(kills.length)
-    );
+
+    return new ChartData(ChartType.CORPS_KILLS, labels, datasets, this.createMetadata(kills.length));
   }
 
   /**
    * Process corporation losses data
    */
-  private processCorpLossesData(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processCorpLossesData(rawData: any[], config: ChartConfiguration): ChartData {
     const corpStats = this.aggregateCorpStats(rawData);
     const sortedCorps = Array.from(corpStats.entries())
       .sort((a, b) => b[1].losses - a[1].losses)
       .slice(0, config.displayOptions?.limit || 15);
-    
+
     const labels = sortedCorps.map(([name]) => name);
     const losses = sortedCorps.map(([, stats]) => stats.losses);
     const lossValue = sortedCorps.map(([, stats]) => stats.lossValue);
-    
+
     const datasets = [
       {
         label: 'Losses',
         data: losses,
         backgroundColor: 'rgba(255, 99, 132, 0.6)',
         borderColor: 'rgba(255, 99, 132, 1)',
-        borderWidth: 1
-      }
+        borderWidth: 1,
+      },
     ];
-    
+
     // Add value if meaningful
     if (lossValue.some(v => v > 0)) {
       datasets.push({
@@ -149,44 +127,35 @@ this.createMetadata(kills.length)
         data: lossValue,
         backgroundColor: 'rgba(255, 205, 86, 0.6)',
         borderColor: 'rgba(255, 205, 86, 1)',
-        borderWidth: 1
+        borderWidth: 1,
       });
     }
-    
-    return new ChartData(
-      ChartType.CORPS_LOSSES,
-      labels,
-      datasets,
-this.createMetadata(losses.length)
-    );
+
+    return new ChartData(ChartType.CORPS_LOSSES, labels, datasets, this.createMetadata(losses.length));
   }
 
   /**
    * Process corporation efficiency data
    */
-  private processCorpEfficiencyData(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processCorpEfficiencyData(rawData: any[], config: ChartConfiguration): ChartData {
     const corpStats = this.aggregateCorpStats(rawData);
-    
+
     // Filter corps with meaningful activity and calculate efficiency
     const corpsWithEfficiency = Array.from(corpStats.entries())
       .map(([name, stats]) => ({
         name,
         ...stats,
         efficiency: this.calculateEfficiency(stats.killValue, stats.lossValue),
-        ratio: stats.losses > 0 ? stats.kills / stats.losses : stats.kills
+        ratio: stats.losses > 0 ? stats.kills / stats.losses : stats.kills,
       }))
       .filter(corp => corp.kills + corp.losses >= 3) // Minimum activity threshold
       .sort((a, b) => b.efficiency - a.efficiency)
       .slice(0, config.displayOptions?.limit || 15);
-    
+
     const labels = corpsWithEfficiency.map(corp => corp.name);
     const efficiencies = corpsWithEfficiency.map(corp => corp.efficiency);
     const ratios = corpsWithEfficiency.map(corp => corp.ratio);
-    
+
     return new ChartData(
       ChartType.CORPS_EFFICIENCY,
       labels,
@@ -204,29 +173,25 @@ this.createMetadata(losses.length)
           backgroundColor: 'rgba(75, 192, 192, 0.6)',
           borderColor: 'rgba(75, 192, 192, 1)',
           borderWidth: 1,
-        }
+        },
       ],
-this.createMetadata(efficiencies.length)
+      this.createMetadata(efficiencies.length)
     );
   }
 
   /**
    * Process enemy corporations data (most common opponents)
    */
-  private processEnemyCorpsData(
-    rawData: any[], 
-    config: ChartConfiguration
-  ): ChartData {
-    
+  private processEnemyCorpsData(rawData: any[], config: ChartConfiguration): ChartData {
     const enemyCorps = new Map<string, number>();
-    
+
     // Count interactions with other corporations
     rawData.forEach(dataPoint => {
       if (dataPoint.enemyCorporation) {
         const corpName = dataPoint.enemyCorporation;
         enemyCorps.set(corpName, (enemyCorps.get(corpName) || 0) + 1);
       }
-      
+
       // Also check attackers for enemy corporations
       if (dataPoint.attackers && Array.isArray(dataPoint.attackers)) {
         dataPoint.attackers.forEach((attacker: any) => {
@@ -237,14 +202,14 @@ this.createMetadata(efficiencies.length)
         });
       }
     });
-    
+
     const sortedEnemies = Array.from(enemyCorps.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, config.displayOptions?.limit || 15);
-    
+
     const labels = sortedEnemies.map(([name]) => name);
     const encounters = sortedEnemies.map(([, count]) => count);
-    
+
     return new ChartData(
       ChartType.ENEMY_CORPS,
       labels,
@@ -254,46 +219,49 @@ this.createMetadata(efficiencies.length)
           data: encounters,
           backgroundColor: 'rgba(255, 99, 132, 0.6)',
           borderColor: 'rgba(255, 99, 132, 1)',
-          borderWidth: 1
-        }
+          borderWidth: 1,
+        },
       ],
-this.createMetadata(encounters.length)
+      this.createMetadata(encounters.length)
     );
   }
 
   /**
    * Aggregate corporation statistics from raw data
    */
-  private aggregateCorpStats(rawData: any[]): Map<string, {
-    kills: number;
-    losses: number;
-    killValue: number;
-    lossValue: number;
-  }> {
-    
-    const corpStats = new Map<string, {
+  private aggregateCorpStats(rawData: any[]): Map<
+    string,
+    {
       kills: number;
       losses: number;
       killValue: number;
       lossValue: number;
-    }>();
-    
+    }
+  > {
+    const corpStats = new Map<
+      string,
+      {
+        kills: number;
+        losses: number;
+        killValue: number;
+        lossValue: number;
+      }
+    >();
+
     rawData.forEach(dataPoint => {
-      const corpName = dataPoint.corporationName || 
-                      dataPoint.victim?.corporationName || 
-                      'Unknown Corporation';
-      
+      const corpName = dataPoint.corporationName || dataPoint.victim?.corporationName || 'Unknown Corporation';
+
       if (!corpStats.has(corpName)) {
         corpStats.set(corpName, {
           kills: 0,
           losses: 0,
           killValue: 0,
-          lossValue: 0
+          lossValue: 0,
         });
       }
-      
+
       const stats = corpStats.get(corpName)!;
-      
+
       if (dataPoint.type === 'kill' || dataPoint.isKill) {
         stats.kills++;
         stats.killValue += Number(dataPoint.totalValue || 0);
@@ -302,7 +270,7 @@ this.createMetadata(encounters.length)
         stats.lossValue += Number(dataPoint.totalValue || 0);
       }
     });
-    
+
     return corpStats;
   }
 

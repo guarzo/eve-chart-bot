@@ -13,7 +13,7 @@ function getRedisClient(): Redis {
   if (!redisClient) {
     const redisUrl = ValidatedConfiguration.redis.url;
     redisClient = new Redis(redisUrl);
-    
+
     // Set up event handlers
     redisClient.on('connect', () => {
       logger.info(`Redis client connected to ${redisUrl}`);
@@ -28,7 +28,6 @@ function getRedisClient(): Redis {
 
 // Extend Redis client with additional methods for chart caching
 class ExtendedRedisClient {
-  
   private get client(): Redis {
     return getRedisClient();
   }

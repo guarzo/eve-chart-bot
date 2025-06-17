@@ -35,7 +35,7 @@ export class MapActivityService {
    */
   public async start(): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.info('Starting map activity service...', {
         correlationId,
@@ -52,62 +52,46 @@ export class MapActivityService {
 
       // Validate map name
       if (typeof mapName !== 'string' || mapName.trim().length === 0) {
-        throw ValidationError.invalidFormat(
-          'mapName',
-          'non-empty string',
-          mapName,
-          {
-            correlationId,
-            operation: 'mapActivity.start',
-          }
-        );
+        throw ValidationError.invalidFormat('mapName', 'non-empty string', mapName, {
+          correlationId,
+          operation: 'mapActivity.start',
+        });
       }
 
       // Fetch map activity data for the entire map (not per character)
       await this.ingestMapActivity(mapName, 7); // Last 7 days
-      
+
       logger.info('Map activity service started successfully', {
         correlationId,
         mapName,
       });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'start',
-          metadata: { mapName: Configuration.apis.map.name },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'start',
+        metadata: { mapName: Configuration.apis.map.name },
+      });
     }
   }
 
   public async ingestMapActivity(slug: string, days = 7): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!slug || typeof slug !== 'string') {
-        throw ValidationError.fieldRequired(
-          'slug',
-          {
-            correlationId,
-            operation: 'mapActivity.ingestMapActivity',
-          }
-        );
+        throw ValidationError.fieldRequired('slug', {
+          correlationId,
+          operation: 'mapActivity.ingestMapActivity',
+        });
       }
 
       if (days <= 0 || days > 365) {
-        throw ValidationError.invalidFormat(
-          'days',
-          'number between 1 and 365',
-          days.toString(),
-          {
-            correlationId,
-            operation: 'mapActivity.ingestMapActivity',
-            metadata: { slug },
-          }
-        );
+        throw ValidationError.invalidFormat('days', 'number between 1 and 365', days.toString(), {
+          correlationId,
+          operation: 'mapActivity.ingestMapActivity',
+          metadata: { slug },
+        });
       }
 
       logger.info(`Ingesting map activity for ${slug} (last ${days} days)`, {
@@ -121,17 +105,11 @@ export class MapActivityService {
         async () => {
           const result = await this.map.getCharacterActivity(slug, days);
           if (!result) {
-            throw new ExternalServiceError(
-              'MAP_API',
-              'No data returned from Map API',
-              undefined,
-              undefined,
-              {
-                correlationId,
-                operation: 'getCharacterActivity',
-                metadata: { slug, days },
-              }
-            );
+            throw new ExternalServiceError('MAP_API', 'No data returned from Map API', undefined, undefined, {
+              correlationId,
+              operation: 'getCharacterActivity',
+              metadata: { slug, days },
+            });
           }
           return result;
         },
@@ -165,18 +143,14 @@ export class MapActivityService {
 
       // Process and store the data
       await this.processMapData(mapData);
-      
+
       logger.info(`Successfully ingested map activity for ${slug}`, {
         correlationId,
         slug,
         recordCount: mapData.data.length,
       });
     } catch (error) {
-      throw errorHandler.handleExternalServiceError(
-        error,
-        'MAP_API',
-        `ingestMapActivity/${slug}`
-      );
+      throw errorHandler.handleExternalServiceError(error, 'MAP_API', `ingestMapActivity/${slug}`);
     }
   }
 
@@ -210,7 +184,7 @@ export class MapActivityService {
 
   private async processMapData(mapData: any): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Processing map data', {
         correlationId,
@@ -237,7 +211,7 @@ export class MapActivityService {
       // Process each activity record
       let processedCount = 0;
       let errorCount = 0;
-      
+
       for (const activity of validatedData.data) {
         try {
           const mapActivity = new MapActivity({
@@ -267,13 +241,13 @@ export class MapActivityService {
             {
               correlationId,
               operation: 'mapActivity.upsertMapActivity',
-              metadata: { 
+              metadata: {
                 characterId: mapActivity.characterId.toString(),
                 timestamp: mapActivity.timestamp.toISOString(),
               },
             }
           );
-          
+
           processedCount++;
         } catch (error) {
           errorCount++;
@@ -293,17 +267,14 @@ export class MapActivityService {
         totalRecords: validatedData.data.length,
       });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'processMapData',
-          metadata: { 
-            hasMapData: !!mapData,
-            recordCount: mapData?.data?.length,
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'processMapData',
+        metadata: {
+          hasMapData: !!mapData,
+          recordCount: mapData?.data?.length,
+        },
+      });
     }
   }
 

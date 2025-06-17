@@ -1,6 +1,6 @@
 import { BaseError, ErrorDetails } from './BaseError';
 
-export type DiscordErrorType = 
+export type DiscordErrorType =
   | 'COMMAND_ERROR'
   | 'PERMISSION_ERROR'
   | 'RATE_LIMIT_ERROR'
@@ -40,7 +40,12 @@ export class DiscordError extends BaseError {
     this.interactionId = context?.metadata?.interactionId;
   }
 
-  static commandError(commandName: string, message: string, context?: ErrorDetails['context'], cause?: Error): DiscordError {
+  static commandError(
+    commandName: string,
+    message: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): DiscordError {
     return new DiscordError(
       'COMMAND_ERROR',
       `Command '${commandName}' failed: ${message}`,
@@ -60,25 +65,27 @@ export class DiscordError extends BaseError {
   }
 
   static rateLimitError(retryAfter: number, context?: ErrorDetails['context']): DiscordError {
-    return new DiscordError(
-      'RATE_LIMIT_ERROR',
-      `Rate limit exceeded, retry after ${retryAfter}ms`,
-      429,
-      { ...context, metadata: { ...context?.metadata, retryAfter } }
-    );
+    return new DiscordError('RATE_LIMIT_ERROR', `Rate limit exceeded, retry after ${retryAfter}ms`, 429, {
+      ...context,
+      metadata: { ...context?.metadata, retryAfter },
+    });
   }
 
-  static apiError(discordCode: number, message: string, context?: ErrorDetails['context'], cause?: Error): DiscordError {
-    return new DiscordError(
-      'API_ERROR',
-      `Discord API error (${discordCode}): ${message}`,
-      discordCode,
-      context,
-      cause
-    );
+  static apiError(
+    discordCode: number,
+    message: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): DiscordError {
+    return new DiscordError('API_ERROR', `Discord API error (${discordCode}): ${message}`, discordCode, context, cause);
   }
 
-  static interactionError(interactionId: string, message: string, context?: ErrorDetails['context'], cause?: Error): DiscordError {
+  static interactionError(
+    interactionId: string,
+    message: string,
+    context?: ErrorDetails['context'],
+    cause?: Error
+  ): DiscordError {
     return new DiscordError(
       'INTERACTION_ERROR',
       `Interaction error: ${message}`,
@@ -89,21 +96,11 @@ export class DiscordError extends BaseError {
   }
 
   static guildNotFound(guildId: string, context?: ErrorDetails['context']): DiscordError {
-    return new DiscordError(
-      'GUILD_ERROR',
-      `Guild not found: ${guildId}`,
-      undefined,
-      { ...context, guildId }
-    );
+    return new DiscordError('GUILD_ERROR', `Guild not found: ${guildId}`, undefined, { ...context, guildId });
   }
 
   static userNotFound(userId: string, context?: ErrorDetails['context']): DiscordError {
-    return new DiscordError(
-      'USER_ERROR',
-      `User not found: ${userId}`,
-      undefined,
-      { ...context, userId }
-    );
+    return new DiscordError('USER_ERROR', `User not found: ${userId}`, undefined, { ...context, userId });
   }
 
   static botMissingPermissions(permissions: string[], context?: ErrorDetails['context']): DiscordError {
@@ -116,12 +113,10 @@ export class DiscordError extends BaseError {
   }
 
   static interactionTimeout(interactionId: string, context?: ErrorDetails['context']): DiscordError {
-    return new DiscordError(
-      'INTERACTION_ERROR',
-      'Interaction timed out',
-      undefined,
-      { ...context, metadata: { ...context?.metadata, interactionId } }
-    );
+    return new DiscordError('INTERACTION_ERROR', 'Interaction timed out', undefined, {
+      ...context,
+      metadata: { ...context?.metadata, interactionId },
+    });
   }
 
   protected getDefaultUserMessage(): string {
@@ -211,7 +206,7 @@ export class DiscordError extends BaseError {
 
   toApiResponse(): Record<string, any> {
     const response = super.toApiResponse();
-    
+
     if (this.code === 'RATE_LIMIT_ERROR') {
       const retryAfter = this.context?.metadata?.retryAfter;
       if (retryAfter) {

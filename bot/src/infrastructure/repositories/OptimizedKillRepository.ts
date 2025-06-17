@@ -48,23 +48,23 @@ export class OptimizedKillRepository {
     }>
   ): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await errorHandler.withRetry(
         async () => {
           await this.prisma.$transaction(async tx => {
             // Upsert kill fact (no change needed - already optimized)
             await this.upsertKillFacts(killFact, tx, correlationId);
-            
+
             // Optimized victim processing with upsert
             await this.upsertVictimData(killFact.killmail_id, victim, tx, correlationId);
-            
+
             // Optimized attacker processing with diff-based updates
             await this.syncAttackerData(killFact.killmail_id, attackers, tx, correlationId);
-            
+
             // Optimized character relationships with diff-based updates
             await this.syncCharacterRelationships(killFact.killmail_id, involvedCharacters, tx, correlationId);
-            
+
             // Create loss fact (no change needed)
             await this.createLossFact(killFact, victim, attackers, tx, correlationId);
           });
@@ -87,32 +87,25 @@ export class OptimizedKillRepository {
         killmailId: killFact.killmail_id.toString(),
       });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'ingestKillmail.optimized',
-          correlationId,
-          metadata: {
-            service: 'OptimizedKillRepository',
-            killmailId: killFact.killmail_id.toString(),
-            characterCount: involvedCharacters.length,
-            attackerCount: attackers.length,
-            entityId: involvedCharacters[0]?.character_id?.toString(),
-            entityType: 'kill_fact',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'ingestKillmail.optimized',
+        correlationId,
+        metadata: {
+          service: 'OptimizedKillRepository',
+          killmailId: killFact.killmail_id.toString(),
+          characterCount: involvedCharacters.length,
+          attackerCount: attackers.length,
+          entityId: involvedCharacters[0]?.character_id?.toString(),
+          entityType: 'kill_fact',
+        },
+      });
     }
   }
 
   /**
    * Upsert kill facts (already optimized in original)
    */
-  private async upsertKillFacts(
-    killFact: any,
-    tx: any,
-    correlationId: string
-  ): Promise<void> {
+  private async upsertKillFacts(killFact: any, tx: any, correlationId: string): Promise<void> {
     try {
       await tx.killFact.upsert({
         where: { killmail_id: killFact.killmail_id },
@@ -143,18 +136,15 @@ export class OptimizedKillRepository {
 
       logger.debug(`Upserted kill fact ${killFact.killmail_id}`, { correlationId });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'upsertKillFacts',
-          correlationId,
-          metadata: {
-            service: 'OptimizedKillRepository',
-            killmailId: killFact.killmail_id.toString(),
-            entityType: 'kill_fact',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'upsertKillFacts',
+        correlationId,
+        metadata: {
+          service: 'OptimizedKillRepository',
+          killmailId: killFact.killmail_id.toString(),
+          entityType: 'kill_fact',
+        },
+      });
     }
   }
 
@@ -175,8 +165,8 @@ export class OptimizedKillRepository {
   ): Promise<void> {
     try {
       await tx.killVictim.upsert({
-        where: { 
-          killmail_id: killmailId 
+        where: {
+          killmail_id: killmailId,
         },
         update: {
           character_id: victim.character_id ?? null,
@@ -197,18 +187,15 @@ export class OptimizedKillRepository {
 
       logger.debug(`Upserted victim for killmail ${killmailId}`, { correlationId });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'upsertVictimData',
-          correlationId,
-          metadata: {
-            service: 'OptimizedKillRepository',
-            killmailId: killmailId.toString(),
-            entityType: 'kill_victim',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'upsertVictimData',
+        correlationId,
+        metadata: {
+          service: 'OptimizedKillRepository',
+          killmailId: killmailId.toString(),
+          entityType: 'kill_victim',
+        },
+      });
     }
   }
 
@@ -285,18 +272,15 @@ export class OptimizedKillRepository {
         logger.debug(`Created ${attackersToUpsert.length} attackers for killmail ${killmailId}`, { correlationId });
       }
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'syncAttackerData',
-          correlationId,
-          metadata: {
-            service: 'OptimizedKillRepository',
-            killmailId: killmailId.toString(),
-            entityType: 'kill_attacker',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'syncAttackerData',
+        correlationId,
+        metadata: {
+          service: 'OptimizedKillRepository',
+          killmailId: killmailId.toString(),
+          entityType: 'kill_attacker',
+        },
+      });
     }
   }
 
@@ -331,20 +315,20 @@ export class OptimizedKillRepository {
     try {
       // Get tracked characters in a single query
       const trackedCharacterIds = new Set(
-        (await tx.character.findMany({
-          where: { 
-            eveId: { 
-              in: newInvolvedCharacters.map((c: any) => c.character_id) 
-            } 
-          },
-          select: { eveId: true },
-        })).map((c: Character) => c.eveId)
+        (
+          await tx.character.findMany({
+            where: {
+              eveId: {
+                in: newInvolvedCharacters.map((c: any) => c.character_id),
+              },
+            },
+            select: { eveId: true },
+          })
+        ).map((c: Character) => c.eveId)
       );
 
       // Filter to only tracked characters
-      const trackedInvolvedCharacters = newInvolvedCharacters.filter(c => 
-        trackedCharacterIds.has(c.character_id)
-      );
+      const trackedInvolvedCharacters = newInvolvedCharacters.filter(c => trackedCharacterIds.has(c.character_id));
 
       // Get existing relationships
       const existingRelationships = await tx.killCharacter.findMany({
@@ -352,37 +336,27 @@ export class OptimizedKillRepository {
       });
 
       // Create sets for comparison
-      const existingSet = new Set(
-        existingRelationships.map((r: KillCharacter) => `${r.characterId}-${r.role}`)
-      );
-      const newSet = new Set(
-        trackedInvolvedCharacters.map((c: any) => `${c.character_id}-${c.role}`)
-      );
+      const existingSet = new Set(existingRelationships.map((r: KillCharacter) => `${r.characterId}-${r.role}`));
+      const newSet = new Set(trackedInvolvedCharacters.map((c: any) => `${c.character_id}-${c.role}`));
 
       // Find relationships to delete
-      const toDelete = existingRelationships.filter((r: KillCharacter) => 
-        !newSet.has(`${r.characterId}-${r.role}`)
-      );
+      const toDelete = existingRelationships.filter((r: KillCharacter) => !newSet.has(`${r.characterId}-${r.role}`));
 
       // Find relationships to create
-      const toCreate = trackedInvolvedCharacters.filter(c => 
-        !existingSet.has(`${c.character_id}-${c.role}`)
-      );
+      const toCreate = trackedInvolvedCharacters.filter(c => !existingSet.has(`${c.character_id}-${c.role}`));
 
       // Perform deletions
       if (toDelete.length > 0) {
         await tx.killCharacter.deleteMany({
           where: {
             OR: toDelete.map((r: KillCharacter) => ({
-              AND: [
-                { killmailId: r.killmailId },
-                { characterId: r.characterId },
-                { role: r.role }
-              ]
-            }))
+              AND: [{ killmailId: r.killmailId }, { characterId: r.characterId }, { role: r.role }],
+            })),
           },
         });
-        logger.debug(`Deleted ${toDelete.length} character relationships for killmail ${killmailId}`, { correlationId });
+        logger.debug(`Deleted ${toDelete.length} character relationships for killmail ${killmailId}`, {
+          correlationId,
+        });
       }
 
       // Perform batch creation
@@ -395,20 +369,19 @@ export class OptimizedKillRepository {
           })),
           skipDuplicates: true,
         });
-        logger.debug(`Created ${toCreate.length} character relationships for killmail ${killmailId}`, { correlationId });
+        logger.debug(`Created ${toCreate.length} character relationships for killmail ${killmailId}`, {
+          correlationId,
+        });
       }
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'syncCharacterRelationships',
-          correlationId,
-          metadata: {
-            killmailId: killmailId.toString(),
-            entityType: 'kill_character',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'syncCharacterRelationships',
+        correlationId,
+        metadata: {
+          killmailId: killmailId.toString(),
+          entityType: 'kill_character',
+        },
+      });
     }
   }
 
@@ -459,17 +432,14 @@ export class OptimizedKillRepository {
         }
       }
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          operation: 'createLossFact',
-          correlationId,
-          metadata: {
-            killmailId: killFact.killmail_id.toString(),
-            entityType: 'loss_fact',
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        operation: 'createLossFact',
+        correlationId,
+        metadata: {
+          killmailId: killFact.killmail_id.toString(),
+          entityType: 'loss_fact',
+        },
+      });
     }
   }
 
@@ -585,7 +555,7 @@ export class OptimizedKillRepository {
   ): Promise<Array<{ time: Date; count: number }>> {
     try {
       // For now, use raw SQL for time grouping as Prisma doesn't support it natively
-      
+
       const result = await this.prisma.$queryRaw<Array<{ time: Date; count: bigint }>>`
         SELECT 
           date_trunc(${groupBy}, kf.kill_time) as time,

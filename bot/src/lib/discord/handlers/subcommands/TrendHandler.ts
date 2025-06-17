@@ -21,48 +21,37 @@ export class TrendHandler extends BaseChartHandler {
     if (!interaction.isChatInputCommand()) return;
 
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       await interaction.deferReply();
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
-      
+
       // Validate time parameter
       const timeValue = parseInt(time, 10);
       if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
-        throw ValidationError.outOfRange(
-          'time',
-          1,
-          365,
-          time,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'trend_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.outOfRange('time', 1, 365, time, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'trend_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       // Check if view option is specified (line, area, or dual)
       const displayType = interaction.options.getString('view') ?? 'line';
       const validDisplayTypes = ['line', 'area', 'dual'];
-      
+
       if (!validDisplayTypes.includes(displayType)) {
-        throw ValidationError.invalidFormat(
-          'view',
-          'one of: line, area, dual',
-          displayType,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'trend_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.invalidFormat('view', 'one of: line, area, dual', displayType, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'trend_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       const { startDate, endDate } = this.getTimeRange(time);
@@ -79,16 +68,12 @@ export class TrendHandler extends BaseChartHandler {
       const groups = await this.getCharacterGroups();
 
       if (groups.length === 0) {
-        throw ChartError.noDataError(
-          'trend',
-          'No character groups found. Please add characters to groups first.',
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'trend_chart_generation',
-          }
-        );
+        throw ChartError.noDataError('trend', 'No character groups found. Please add characters to groups first.', {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'trend_chart_generation',
+        });
       }
 
       // Get the chart generator from the factory
@@ -133,7 +118,6 @@ export class TrendHandler extends BaseChartHandler {
         displayType,
         bufferSize: buffer.length,
       });
-
     } catch (error) {
       // Enhanced error handling with correlation ID context
       const enhancedError = errorHandler.handleError(error, {

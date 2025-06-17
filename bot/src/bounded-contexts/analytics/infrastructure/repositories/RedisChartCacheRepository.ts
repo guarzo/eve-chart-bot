@@ -57,27 +57,22 @@ export class RedisChartCacheRepository implements ChartCacheRepository {
         backgroundColor: dataset.backgroundColor,
         borderColor: dataset.borderColor,
         borderWidth: dataset.borderWidth,
-        fill: dataset.fill
+        fill: dataset.fill,
       })),
       metadata: {
         generatedAt: data.metadata.generatedAt.toISOString(),
         dataPointCount: data.metadata.dataPointCount,
         processingTimeMs: data.metadata.processingTimeMs,
         cacheHit: data.metadata.cacheHit,
-        correlationId: data.metadata.correlationId
-      }
+        correlationId: data.metadata.correlationId,
+      },
     };
   }
 
   private deserializeChartData(data: any): ChartData {
-    const datasets = data.datasets.map((ds: any) => new ChartDataset(
-      ds.label,
-      ds.data,
-      ds.backgroundColor,
-      ds.borderColor,
-      ds.borderWidth,
-      ds.fill
-    ));
+    const datasets = data.datasets.map(
+      (ds: any) => new ChartDataset(ds.label, ds.data, ds.backgroundColor, ds.borderColor, ds.borderWidth, ds.fill)
+    );
 
     const metadata = new ChartMetadata(
       new Date(data.metadata.generatedAt),
@@ -87,11 +82,6 @@ export class RedisChartCacheRepository implements ChartCacheRepository {
       data.metadata.correlationId
     );
 
-    return new ChartData(
-      data.type as ChartType,
-      data.labels,
-      datasets,
-      metadata
-    );
+    return new ChartData(data.type as ChartType, data.labels, datasets, metadata);
   }
 }

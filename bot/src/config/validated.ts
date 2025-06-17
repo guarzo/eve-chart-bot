@@ -4,13 +4,8 @@
  */
 
 import { Environment, LogLevel } from '../shared/enums';
-import type { 
-  ApplicationConfig, 
-  LegacyConfig
-} from './types';
-import { 
-  ConfigurationConstraints,
-} from './types';
+import type { ApplicationConfig, LegacyConfig } from './types';
+import { ConfigurationConstraints } from './types';
 
 /**
  * Parse environment variable as number with validation
@@ -21,19 +16,19 @@ function parseNumber(
   constraints?: { min: number; max: number }
 ): number {
   const value = envVar ? Number(envVar) : defaultValue;
-  
+
   if (isNaN(value)) {
     console.warn(`Invalid number value for environment variable: ${envVar}`);
     return defaultValue;
   }
-  
+
   if (constraints) {
     if (value < constraints.min || value > constraints.max) {
       console.warn(`Value ${value} is outside constraints [${constraints.min}, ${constraints.max}]`);
       return defaultValue;
     }
   }
-  
+
   return value;
 }
 
@@ -49,18 +44,12 @@ function parseBoolean(envVar: string | undefined, defaultValue: boolean): boolea
  * Validate log level
  */
 function validateLogLevel(level: string): `${LogLevel}` {
-  const validLevels: `${LogLevel}`[] = [
-    LogLevel.DEBUG,
-    LogLevel.INFO,
-    LogLevel.WARN,
-    LogLevel.ERROR,
-    LogLevel.FATAL
-  ];
-  
+  const validLevels: `${LogLevel}`[] = [LogLevel.DEBUG, LogLevel.INFO, LogLevel.WARN, LogLevel.ERROR, LogLevel.FATAL];
+
   if (validLevels.includes(level as `${LogLevel}`)) {
     return level as `${LogLevel}`;
   }
-  
+
   console.warn(`Invalid log level: ${level}, defaulting to 'info'`);
   return LogLevel.INFO;
 }
@@ -73,13 +62,13 @@ function validateEnvironment(env: string): `${Environment}` {
     Environment.DEVELOPMENT,
     Environment.STAGING,
     Environment.PRODUCTION,
-    Environment.TEST
+    Environment.TEST,
   ];
-  
+
   if (validEnvironments.includes(env as `${Environment}`)) {
     return env as `${Environment}`;
   }
-  
+
   console.warn(`Invalid environment: ${env}, defaulting to 'development'`);
   return Environment.DEVELOPMENT;
 }
@@ -107,11 +96,7 @@ export const config = {
  */
 export const ValidatedConfiguration = {
   server: {
-    port: parseNumber(
-      process.env.PORT,
-      3000,
-      ConfigurationConstraints.server.port
-    ),
+    port: parseNumber(process.env.PORT, 3000, ConfigurationConstraints.server.port),
     nodeEnv: validateEnvironment(process.env.NODE_ENV ?? 'development'),
   },
   database: {
@@ -119,11 +104,7 @@ export const ValidatedConfiguration = {
   },
   redis: {
     url: process.env.REDIS_URL ?? 'redis://localhost:6379',
-    cacheTtl: parseNumber(
-      process.env.CACHE_TTL,
-      300,
-      ConfigurationConstraints.redis.cacheTtl
-    ),
+    cacheTtl: parseNumber(process.env.CACHE_TTL, 300, ConfigurationConstraints.redis.cacheTtl),
   },
   apis: {
     wandererKills: {
@@ -142,38 +123,18 @@ export const ValidatedConfiguration = {
     },
   },
   http: {
-    timeout: parseNumber(
-      process.env.HTTP_TIMEOUT,
-      30000,
-      ConfigurationConstraints.http.timeout
-    ),
-    maxRetries: parseNumber(
-      process.env.HTTP_MAX_RETRIES,
-      3,
-      ConfigurationConstraints.http.maxRetries
-    ),
+    timeout: parseNumber(process.env.HTTP_TIMEOUT, 30000, ConfigurationConstraints.http.timeout),
+    maxRetries: parseNumber(process.env.HTTP_MAX_RETRIES, 3, ConfigurationConstraints.http.maxRetries),
     initialRetryDelay: parseNumber(
       process.env.HTTP_INITIAL_RETRY_DELAY,
       1000,
       ConfigurationConstraints.http.initialRetryDelay
     ),
-    maxRetryDelay: parseNumber(
-      process.env.HTTP_MAX_RETRY_DELAY,
-      45000,
-      ConfigurationConstraints.http.maxRetryDelay
-    ),
+    maxRetryDelay: parseNumber(process.env.HTTP_MAX_RETRY_DELAY, 45000, ConfigurationConstraints.http.maxRetryDelay),
   },
   rateLimit: {
-    minDelay: parseNumber(
-      process.env.RATE_LIMIT_MIN_DELAY,
-      1000,
-      ConfigurationConstraints.rateLimit.minDelay
-    ),
-    maxDelay: parseNumber(
-      process.env.RATE_LIMIT_MAX_DELAY,
-      10000,
-      ConfigurationConstraints.rateLimit.maxDelay
-    ),
+    minDelay: parseNumber(process.env.RATE_LIMIT_MIN_DELAY, 1000, ConfigurationConstraints.rateLimit.minDelay),
+    maxDelay: parseNumber(process.env.RATE_LIMIT_MAX_DELAY, 10000, ConfigurationConstraints.rateLimit.maxDelay),
   },
   features: {
     newChartRendering: parseBoolean(process.env.FEATURE_NEW_CHART_RENDERING, false),
@@ -199,11 +160,7 @@ export const ValidatedConfiguration = {
       10,
       ConfigurationConstraints.websocket.maxReconnectAttempts
     ),
-    timeout: parseNumber(
-      process.env.WEBSOCKET_TIMEOUT,
-      10000,
-      ConfigurationConstraints.websocket.timeout
-    ),
+    timeout: parseNumber(process.env.WEBSOCKET_TIMEOUT, 10000, ConfigurationConstraints.websocket.timeout),
     preload: {
       enabled: parseBoolean(process.env.WEBSOCKET_PRELOAD_ENABLED, true),
       limitPerSystem: parseNumber(
@@ -232,16 +189,8 @@ export const ValidatedConfiguration = {
     dsn: process.env.SENTRY_DSN,
   },
   charts: {
-    defaultWidth: parseNumber(
-      process.env.CHART_DEFAULT_WIDTH,
-      800,
-      ConfigurationConstraints.charts.defaultWidth
-    ),
-    defaultHeight: parseNumber(
-      process.env.CHART_DEFAULT_HEIGHT,
-      600,
-      ConfigurationConstraints.charts.defaultHeight
-    ),
+    defaultWidth: parseNumber(process.env.CHART_DEFAULT_WIDTH, 800, ConfigurationConstraints.charts.defaultWidth),
+    defaultHeight: parseNumber(process.env.CHART_DEFAULT_HEIGHT, 600, ConfigurationConstraints.charts.defaultHeight),
     defaultCacheTTLSeconds: parseNumber(
       process.env.CHART_DEFAULT_CACHE_TTL_SECONDS,
       3600,
@@ -257,11 +206,7 @@ export const ValidatedConfiguration = {
     zero: BigInt(0),
   },
   jitter: {
-    maxMs: parseNumber(
-      process.env.JITTER_MAX_MS,
-      1000,
-      ConfigurationConstraints.jitter.maxMs
-    ),
+    maxMs: parseNumber(process.env.JITTER_MAX_MS, 1000, ConfigurationConstraints.jitter.maxMs),
   },
 } as const satisfies ApplicationConfig;
 

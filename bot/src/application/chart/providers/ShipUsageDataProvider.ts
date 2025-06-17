@@ -44,7 +44,7 @@ export class ShipUsageDataProvider implements IChartDataProvider {
 
       // Generate ship data
       const shipData = await this.getShipData(characterId, groupId, days);
-      
+
       // Create chart data
       const chartData = this.createChartData(shipData);
 
@@ -151,10 +151,18 @@ export class ShipUsageDataProvider implements IChartDataProvider {
           label: 'Ship Usage',
           data: shipData.map(s => s.count),
           backgroundColor: [
-            '#FF6384', '#36A2EB', '#FFCE56', 
-            '#4BC0C0', '#9966FF', '#FF9F40',
-            '#FF6B6B', '#4ECDC4', '#45B7D1',
-            '#96CEB4', '#FFEAA7', '#DDA0DD'
+            '#FF6384',
+            '#36A2EB',
+            '#FFCE56',
+            '#4BC0C0',
+            '#9966FF',
+            '#FF9F40',
+            '#FF6B6B',
+            '#4ECDC4',
+            '#45B7D1',
+            '#96CEB4',
+            '#FFEAA7',
+            '#DDA0DD',
           ],
         },
       ],

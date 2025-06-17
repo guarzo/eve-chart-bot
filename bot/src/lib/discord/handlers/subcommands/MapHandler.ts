@@ -36,23 +36,17 @@ export class MapHandler extends BaseChartHandler {
 
       // Get time period from command options
       const time = interaction.options.getString('time') ?? '7';
-      
+
       // Validate time parameter
       const timeValue = parseInt(time, 10);
       if (isNaN(timeValue) || timeValue <= 0 || timeValue > 365) {
-        throw ValidationError.outOfRange(
-          'time',
-          1,
-          365,
-          time,
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'map_command',
-            metadata: { interactionId: interaction.id },
-          }
-        );
+        throw ValidationError.outOfRange('time', 1, 365, time, {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'map_command',
+          metadata: { interactionId: interaction.id },
+        });
       }
 
       const { startDate, endDate } = this.getTimeRange(time);
@@ -74,16 +68,12 @@ export class MapHandler extends BaseChartHandler {
       });
 
       if (groups.length === 0) {
-        throw ChartError.noDataError(
-          'map',
-          'No character groups found. Please add characters to groups first.',
-          {
-            correlationId,
-            userId: interaction.user.id,
-            guildId: interaction.guildId || undefined,
-            operation: 'map_chart_generation',
-          }
-        );
+        throw ChartError.noDataError('map', 'No character groups found. Please add characters to groups first.', {
+          correlationId,
+          userId: interaction.user.id,
+          guildId: interaction.guildId || undefined,
+          operation: 'map_chart_generation',
+        });
       }
 
       // Get the chart generator from the factory

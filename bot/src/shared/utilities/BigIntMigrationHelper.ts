@@ -44,22 +44,22 @@ export class BigIntMigrationHelper {
       {
         pattern: /BigInt\([^)]+\)/g,
         replacement: 'BigIntTransformer.toBigInt()',
-        description: 'Direct BigInt() calls should use transformer'
+        description: 'Direct BigInt() calls should use transformer',
       },
       {
         pattern: /\.toString\(\)/g,
         replacement: 'BigIntTransformer.forLogging()',
-        description: 'BigInt toString() for logging should use transformer'
+        description: 'BigInt toString() for logging should use transformer',
       },
       {
         pattern: /\.map\(.*BigInt\(/g,
         replacement: 'BigIntTransformer.arrayToBigIntArray()',
-        description: 'Array mapping with BigInt should use transformer'
+        description: 'Array mapping with BigInt should use transformer',
       },
       {
         pattern: /characters\.map\(.*eveId.*\)/g,
         replacement: 'BigIntTransformer.migrateCharacterIds()',
-        description: 'Character ID mapping should use transformer'
+        description: 'Character ID mapping should use transformer',
       },
     ];
 
@@ -80,7 +80,10 @@ export class BigIntMigrationHelper {
   /**
    * Generate migration report for a file
    */
-  static generateMigrationReport(filePath: string, codeContent: string): {
+  static generateMigrationReport(
+    filePath: string,
+    codeContent: string
+  ): {
     filePath: string;
     needsMigration: boolean;
     patterns: ReturnType<typeof BigIntMigrationHelper.analyzeCodePatterns>;
@@ -88,7 +91,7 @@ export class BigIntMigrationHelper {
   } {
     const patterns = this.analyzeCodePatterns(codeContent);
     const needsMigration = patterns.legacyPatterns.length > 0;
-    
+
     // Determine priority based on number and type of patterns
     let priority: 'high' | 'medium' | 'low' = 'low';
     if (patterns.legacyPatterns.length > 10) {

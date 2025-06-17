@@ -52,7 +52,7 @@ export class ChartPerformanceManager {
     process.on('SIGQUIT', () => shutdownHandler('SIGQUIT'));
 
     // Handle uncaught exceptions
-    process.on('uncaughtException', async (error) => {
+    process.on('uncaughtException', async error => {
       logger.error('Uncaught exception in chart performance manager:', error);
       await this.cleanup();
       process.exit(1);

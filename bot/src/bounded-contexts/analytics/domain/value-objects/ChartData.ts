@@ -19,11 +19,13 @@ export class ChartData {
     if (this.datasets.length === 0) {
       throw new Error('At least one dataset is required');
     }
-    
+
     // Validate that all datasets have the same number of data points as labels
     for (const dataset of this.datasets) {
       if (dataset.data.length !== this.labels.length) {
-        throw new Error(`Dataset '${dataset.label}' data length (${dataset.data.length}) does not match labels length (${this.labels.length})`);
+        throw new Error(
+          `Dataset '${dataset.label}' data length (${dataset.data.length}) does not match labels length (${this.labels.length})`
+        );
       }
     }
   }

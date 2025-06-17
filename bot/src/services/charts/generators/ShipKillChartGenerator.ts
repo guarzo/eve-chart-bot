@@ -76,7 +76,9 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
     if (shipTypesData.length === 0) {
       throw new Error('No ship type data found for the specified time period');
     }
-    const shipTypeNames = await Promise.all(shipTypesData.map(type => this.getShipTypeName(type.shipTypeId.toString())));
+    const shipTypeNames = await Promise.all(
+      shipTypesData.map(type => this.getShipTypeName(type.shipTypeId.toString()))
+    );
     const filtered = shipTypesData
       .map((type, i) => ({ ...type, name: shipTypeNames[i] }))
       .filter(entry => entry.name.toLowerCase() !== 'capsule');
@@ -136,10 +138,7 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
     if (characterIds.length === 0) {
       throw new Error('No characters found in the provided groups');
     }
-    const shipTypesTimeData = await this.killRepository.getShipTypesOverTime(
-      startDate,
-      endDate
-    );
+    const shipTypesTimeData = await this.killRepository.getShipTypesOverTime(startDate, endDate);
     if (shipTypesTimeData.length === 0) {
       throw new Error('No ship type time data found for the specified period');
     }

@@ -23,7 +23,7 @@ export class BigIntTransformer {
         // Handle empty or whitespace strings
         const trimmed = value.trim();
         if (!trimmed) return null;
-        
+
         // Handle decimal strings by truncating to integer part
         const integerPart = trimmed.split('.')[0];
         return BigInt(integerPart);
@@ -78,9 +78,7 @@ export class BigIntTransformer {
    * Convert array of BigInt values to string array (for logging)
    */
   static arrayToStringArray(values: (bigint | null | undefined)[]): string[] {
-    return values
-      .map(value => this.toString(value))
-      .filter((str): str is string => str !== null);
+    return values.map(value => this.toString(value)).filter((str): str is string => str !== null);
   }
 
   /**
@@ -159,9 +157,7 @@ export class BigIntTransformer {
    * BigInt array to string array transformer
    */
   static get stringArrayTransform() {
-    return Transform(({ value }) => 
-      Array.isArray(value) ? this.arrayToStringArray(value) : value
-    );
+    return Transform(({ value }) => (Array.isArray(value) ? this.arrayToStringArray(value) : value));
   }
 
   // ===== ZOD SCHEMAS =====
@@ -170,13 +166,15 @@ export class BigIntTransformer {
    * Zod schema for optional BigInt
    */
   static get zodSchema() {
-    return z.union([
-      z.bigint(),
-      z.string().transform(val => this.toBigInt(val)),
-      z.number().transform(val => this.toBigInt(val)),
-      z.null(),
-      z.undefined(),
-    ]).refine(val => val === null || val === undefined || typeof val === 'bigint');
+    return z
+      .union([
+        z.bigint(),
+        z.string().transform(val => this.toBigInt(val)),
+        z.number().transform(val => this.toBigInt(val)),
+        z.null(),
+        z.undefined(),
+      ])
+      .refine(val => val === null || val === undefined || typeof val === 'bigint');
   }
 
   /**
@@ -196,8 +194,15 @@ export class BigIntTransformer {
   static get zodEveIdSchema() {
     return z.union([
       z.bigint().positive(),
-      z.string().min(1).transform(val => this.toEveId(val)),
-      z.number().positive().int().transform(val => this.toEveId(val)),
+      z
+        .string()
+        .min(1)
+        .transform(val => this.toEveId(val)),
+      z
+        .number()
+        .positive()
+        .int()
+        .transform(val => this.toEveId(val)),
     ]);
   }
 
@@ -240,7 +245,7 @@ export class BigIntTransformer {
     if (value === null || value === undefined) {
       return '0 ISK';
     }
-    
+
     const num = Number(value);
     if (num >= 1e12) {
       return `${(num / 1e12).toFixed(2)}T ISK`;
@@ -271,8 +276,7 @@ export class BigIntTransformer {
    * Validate BigInt is within safe JavaScript number range
    */
   static isInSafeRange(value: bigint): boolean {
-    return value >= BigInt(Number.MIN_SAFE_INTEGER) && 
-           value <= BigInt(Number.MAX_SAFE_INTEGER);
+    return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER);
   }
 
   /**
@@ -309,8 +313,6 @@ export class BigIntTransformer {
    * Batch migrate character IDs (common pattern in chart generators)
    */
   static migrateCharacterIds(characters: { eveId: unknown }[]): bigint[] {
-    return characters
-      .map(char => this.migrateFromLegacyPattern(char.eveId))
-      .filter((id): id is bigint => id !== null);
+    return characters.map(char => this.migrateFromLegacyPattern(char.eveId)).filter((id): id is bigint => id !== null);
   }
 }

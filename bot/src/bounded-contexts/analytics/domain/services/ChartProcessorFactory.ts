@@ -39,7 +39,7 @@ export class ChartProcessorFactory {
     ['corp-kills', () => new CorpsDataProcessor()],
     ['corp-losses', () => new CorpsDataProcessor()],
     ['corp-efficiency', () => new CorpsDataProcessor()],
-    ['enemy-corps', () => new CorpsDataProcessor()]
+    ['enemy-corps', () => new CorpsDataProcessor()],
   ]);
 
   /**
@@ -48,11 +48,11 @@ export class ChartProcessorFactory {
   public static createProcessor(config: ChartConfiguration): IChartDataProcessor {
     const chartType = this.normalizeChartType(config.type);
     const processorFactory = this.processors.get(chartType);
-    
+
     if (!processorFactory) {
       throw new Error(`No processor found for chart type: ${config.type}`);
     }
-    
+
     return processorFactory();
   }
 
@@ -62,11 +62,11 @@ export class ChartProcessorFactory {
   public static getProcessor(chartType: string): IChartDataProcessor {
     const normalizedType = this.normalizeChartType(chartType);
     const processorFactory = this.processors.get(normalizedType);
-    
+
     if (!processorFactory) {
       throw new Error(`No processor found for chart type: ${chartType}`);
     }
-    
+
     return processorFactory();
   }
 
@@ -88,10 +88,7 @@ export class ChartProcessorFactory {
   /**
    * Register a new processor type
    */
-  public static registerProcessor(
-    chartType: string, 
-    processorFactory: () => IChartDataProcessor
-  ): void {
+  public static registerProcessor(chartType: string, processorFactory: () => IChartDataProcessor): void {
     const normalizedType = this.normalizeChartType(chartType);
     this.processors.set(normalizedType, processorFactory);
   }
@@ -106,15 +103,13 @@ export class ChartProcessorFactory {
   /**
    * Get processor with validation
    */
-  public static createValidatedProcessor(
-    config: ChartConfiguration
-  ): IChartDataProcessor {
+  public static createValidatedProcessor(config: ChartConfiguration): IChartDataProcessor {
     const processor = this.createProcessor(config);
-    
+
     if (!processor.validateConfiguration(config)) {
       throw new Error(`Invalid configuration for chart type: ${config.type}`);
     }
-    
+
     return processor;
   }
 
@@ -149,7 +144,7 @@ export class ChartProcessorFactory {
       ['corps', 'corps'],
       ['corp', 'corps'],
       ['corporations', 'corps'],
-      ['enemies', 'enemy-corps']
+      ['enemies', 'enemy-corps'],
     ]);
   }
 
@@ -159,7 +154,7 @@ export class ChartProcessorFactory {
   public static mapLegacyType(legacyType: string): string {
     const mapping = this.getLegacyTypeMapping();
     const normalizedLegacy = this.normalizeChartType(legacyType);
-    
+
     return mapping.get(normalizedLegacy) || normalizedLegacy;
   }
 }

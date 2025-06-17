@@ -38,7 +38,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
     displayType: string;
   }): Promise<ChartData> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Input validation
       this.validateChartOptions(options, correlationId);
@@ -58,7 +58,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
       for (const group of characterGroups) {
         const characterIds = group.characters.map(char => BigInt(char.eveId));
         if (characterIds.length === 0) continue;
-        
+
         // Compute stats manually with retry logic
         const [kills, lossesSummary] = await Promise.all([
           errorHandler.withRetry(
@@ -72,13 +72,13 @@ export class RatioChartGenerator extends BaseChartGenerator {
             3,
             1000,
             { operation: 'fetchLossesForRatio', metadata: { groupId: group.groupId }, correlationId }
-          )
+          ),
         ]);
         const totalKills = kills.length;
         const totalLosses = lossesSummary.totalLosses;
-        
+
         logger.debug(`Group ${group.name}: ${totalKills} kills, ${totalLosses} losses`, { correlationId });
-        
+
         // Only include groups with at least one kill or death
         if (totalKills > 0 || totalLosses > 0) {
           // Use main character name if available
@@ -110,7 +110,7 @@ export class RatioChartGenerator extends BaseChartGenerator {
         logger.warn('No groups with kills or losses found for ratio calculation', { correlationId });
         throw ChartError.noDataError('ratio', 'No kills or losses found in the specified time period', {
           metadata: { startDate, endDate, characterGroupCount: characterGroups.length },
-          correlationId
+          correlationId,
         });
       }
 
@@ -149,24 +149,29 @@ export class RatioChartGenerator extends BaseChartGenerator {
         displayType: 'bar',
       };
     } catch (error) {
-      logger.error('Error generating ratio chart', { 
-        error, 
+      logger.error('Error generating ratio chart', {
+        error,
         correlationId,
-        context: { 
+        context: {
           operation: 'generateRatioChart',
           hasOptions: !!options,
-          characterGroupCount: options?.characterGroups?.length || 0
-        }
+          characterGroupCount: options?.characterGroups?.length || 0,
+        },
       });
 
       if (error instanceof ChartError || error instanceof ValidationError) {
         throw error;
       }
 
-      throw ChartError.generationError('ratio', 'Failed to generate ratio chart', {
-        correlationId,
-        operation: 'generateRatioChart'
-      }, error as Error);
+      throw ChartError.generationError(
+        'ratio',
+        'Failed to generate ratio chart',
+        {
+          correlationId,
+          operation: 'generateRatioChart',
+        },
+        error as Error
+      );
     }
   }
 
@@ -190,22 +195,30 @@ export class RatioChartGenerator extends BaseChartGenerator {
   /**
    * Validate chart generation options
    */
-  private validateChartOptions(options: {
-    startDate: Date;
-    endDate: Date;
-    characterGroups: Array<{
-      groupId: string;
-      name: string;
-      characters: Array<{ eveId: string; name: string }>;
-      mainCharacterId?: string;
-    }>;
-    displayType: string;
-  }, correlationId: string): void {
+  private validateChartOptions(
+    options: {
+      startDate: Date;
+      endDate: Date;
+      characterGroups: Array<{
+        groupId: string;
+        name: string;
+        characters: Array<{ eveId: string; name: string }>;
+        mainCharacterId?: string;
+      }>;
+      displayType: string;
+    },
+    correlationId: string
+  ): void {
     const issues: ValidationIssue[] = [];
 
     // Validate dates
     if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
-      issues.push({ field: 'startDate', message: 'Invalid start date', value: options.startDate, constraint: 'required' });
+      issues.push({
+        field: 'startDate',
+        message: 'Invalid start date',
+        value: options.startDate,
+        constraint: 'required',
+      });
     }
 
     if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
@@ -213,44 +226,74 @@ export class RatioChartGenerator extends BaseChartGenerator {
     }
 
     if (options.startDate && options.endDate && options.startDate >= options.endDate) {
-      issues.push({ field: 'dateRange', message: 'Start date must be before end date', value: { startDate: options.startDate, endDate: options.endDate }, constraint: 'dateRange' });
+      issues.push({
+        field: 'dateRange',
+        message: 'Start date must be before end date',
+        value: { startDate: options.startDate, endDate: options.endDate },
+        constraint: 'dateRange',
+      });
     }
 
     // Validate character groups
     if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
-      issues.push({ field: 'characterGroups', message: 'Character groups must be an array', value: options.characterGroups, constraint: 'type' });
+      issues.push({
+        field: 'characterGroups',
+        message: 'Character groups must be an array',
+        value: options.characterGroups,
+        constraint: 'type',
+      });
     } else {
       if (options.characterGroups.length === 0) {
-        issues.push({ field: 'characterGroups', message: 'At least one character group is required', value: options.characterGroups, constraint: 'minLength' });
+        issues.push({
+          field: 'characterGroups',
+          message: 'At least one character group is required',
+          value: options.characterGroups,
+          constraint: 'minLength',
+        });
       }
 
       options.characterGroups.forEach((group, index) => {
         if (!group.groupId || typeof group.groupId !== 'string') {
-          issues.push({ field: `characterGroups[${index}].groupId`, message: 'Group ID is required', value: group.groupId, constraint: 'required' });
+          issues.push({
+            field: `characterGroups[${index}].groupId`,
+            message: 'Group ID is required',
+            value: group.groupId,
+            constraint: 'required',
+          });
         }
 
         if (!group.name || typeof group.name !== 'string') {
-          issues.push({ field: `characterGroups[${index}].name`, message: 'Group name is required', value: group.name, constraint: 'required' });
+          issues.push({
+            field: `characterGroups[${index}].name`,
+            message: 'Group name is required',
+            value: group.name,
+            constraint: 'required',
+          });
         }
 
         if (!group.characters || !Array.isArray(group.characters)) {
-          issues.push({ field: `characterGroups[${index}].characters`, message: 'Characters must be an array', value: group.characters, constraint: 'type' });
+          issues.push({
+            field: `characterGroups[${index}].characters`,
+            message: 'Characters must be an array',
+            value: group.characters,
+            constraint: 'type',
+          });
         } else {
           group.characters.forEach((char, charIndex) => {
             if (!char.eveId || typeof char.eveId !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].eveId`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`,
                 message: 'Character eveId is required',
                 value: char.eveId,
-                constraint: 'required'
+                constraint: 'required',
               });
             }
             if (!char.name || typeof char.name !== 'string') {
-              issues.push({ 
-                field: `characterGroups[${index}].characters[${charIndex}].name`, 
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].name`,
                 message: 'Character name is required',
                 value: char.name,
-                constraint: 'required'
+                constraint: 'required',
               });
             }
           });
@@ -259,9 +302,9 @@ export class RatioChartGenerator extends BaseChartGenerator {
     }
 
     if (issues.length > 0) {
-      throw new ValidationError('Invalid chart generation options', issues, { 
-        correlationId, 
-        operation: 'validateRatioChartOptions' 
+      throw new ValidationError('Invalid chart generation options', issues, {
+        correlationId,
+        operation: 'validateRatioChartOptions',
       });
     }
   }

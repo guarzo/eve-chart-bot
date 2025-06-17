@@ -9,22 +9,17 @@ import { format } from 'date-fns';
  * Contains pure business logic for activity time analysis
  */
 export class HeatmapDataProcessor implements IChartDataProcessor {
-  
   /**
    * Create basic chart metadata
    */
   private createMetadata(dataLength: number): ChartMetadata {
     return new ChartMetadata(new Date(), dataLength, 0, false);
   }
-  
+
   /**
    * Process heatmap data based on configuration
    */
-  async processData(
-    config: ChartConfiguration,
-    rawData: any[]
-  ): Promise<ChartData> {
-    
+  async processData(config: ChartConfiguration, rawData: any[]): Promise<ChartData> {
     // Determine heatmap type
     if (config.displayOptions?.heatmapType === 'calendar') {
       return this.processCalendarHeatmapData(rawData, config);
@@ -36,18 +31,14 @@ export class HeatmapDataProcessor implements IChartDataProcessor {
   /**
    * Process time-of-day heatmap data
    */
-  private processTimeOfDayHeatmapData(
-    rawData: any[], 
-    _config: ChartConfiguration
-  ): ChartData {
-    
+  private processTimeOfDayHeatmapData(rawData: any[], _config: ChartConfiguration): ChartData {
     const hourlyData = new Map<number, number>();
-    
+
     // Initialize hours 0-23
     for (let hour = 0; hour < 24; hour++) {
       hourlyData.set(hour, 0);
     }
-    
+
     // Process raw kill data
     rawData.forEach(kill => {
       const killTime = new Date(kill.killTime);
@@ -55,11 +46,11 @@ export class HeatmapDataProcessor implements IChartDataProcessor {
       const currentCount = hourlyData.get(hour) || 0;
       hourlyData.set(hour, currentCount + 1);
     });
-    
+
     // Convert to chart data format
     const labels = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
     const data = Array.from({ length: 24 }, (_, i) => hourlyData.get(i) || 0);
-    
+
     return new ChartData(
       ChartType.TIME_OF_DAY_HEATMAP,
       labels,
@@ -68,33 +59,29 @@ export class HeatmapDataProcessor implements IChartDataProcessor {
           label: 'Activity Count',
           data,
           backgroundColor: this.generateHeatmapColors(data),
-          borderWidth: 1
-        }
+          borderWidth: 1,
+        },
       ],
-this.createMetadata(rawData.length)
+      this.createMetadata(rawData.length)
     );
   }
 
   /**
    * Process calendar heatmap data
    */
-  private processCalendarHeatmapData(
-    rawData: any[], 
-    _config: ChartConfiguration
-  ): ChartData {
-    
+  private processCalendarHeatmapData(rawData: any[], _config: ChartConfiguration): ChartData {
     const dailyData = new Map<string, number>();
-    
+
     // Initialize date range
     const currentDate = new Date(_config.startDate);
     const endDate = new Date(_config.endDate);
-    
+
     while (currentDate <= endDate) {
       const dateKey = format(currentDate, 'yyyy-MM-dd');
       dailyData.set(dateKey, 0);
       currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     // Process raw kill data
     rawData.forEach(kill => {
       const killDate = format(new Date(kill.killTime), 'yyyy-MM-dd');
@@ -103,11 +90,11 @@ this.createMetadata(rawData.length)
         dailyData.set(killDate, currentCount + 1);
       }
     });
-    
+
     // Convert to chart data format
     const labels = Array.from(dailyData.keys()).sort();
     const data = labels.map(date => dailyData.get(date) || 0);
-    
+
     return new ChartData(
       ChartType.CALENDAR_HEATMAP,
       labels,
@@ -116,10 +103,10 @@ this.createMetadata(rawData.length)
           label: 'Daily Activity',
           data,
           backgroundColor: this.generateHeatmapColors(data),
-          borderWidth: 1
-        }
+          borderWidth: 1,
+        },
       ],
-this.createMetadata(rawData.length)
+      this.createMetadata(rawData.length)
     );
   }
 
@@ -152,10 +139,8 @@ this.createMetadata(rawData.length)
     }
 
     // Validate date range is reasonable for heatmap
-    const daysDiff = Math.ceil(
-      (config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    
+    const daysDiff = Math.ceil((config.endDate.getTime() - config.startDate.getTime()) / (1000 * 60 * 60 * 24));
+
     // For calendar heatmap, limit to reasonable range
     if (config.displayOptions?.heatmapType === 'calendar' && daysDiff > 365) {
       return false;

@@ -24,17 +24,14 @@ export class CharacterService {
    */
   async getCharacter(characterId: string): Promise<Character | null> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'characterId',
-          {
-            correlationId,
-            operation: 'character.getCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('characterId', {
+          correlationId,
+          operation: 'character.getCharacter',
+        });
       }
 
       logger.debug('Getting character by ID', {
@@ -64,14 +61,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCharacter',
-          metadata: { characterId, entityType: 'character' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCharacter',
+        metadata: { characterId, entityType: 'character' },
+      });
     }
   }
 
@@ -80,7 +74,7 @@ export class CharacterService {
    */
   async getAllCharacters(): Promise<Character[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Getting all characters', {
         correlationId,
@@ -105,13 +99,10 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getAllCharacters',
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getAllCharacters',
+      });
     }
   }
 
@@ -120,17 +111,14 @@ export class CharacterService {
    */
   async getCharactersByGroup(groupId: string): Promise<Character[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!groupId || typeof groupId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'groupId',
-          {
-            correlationId,
-            operation: 'character.getCharactersByGroup',
-          }
-        );
+        throw ValidationError.fieldRequired('groupId', {
+          correlationId,
+          operation: 'character.getCharactersByGroup',
+        });
       }
 
       logger.debug('Getting characters by group ID', {
@@ -159,14 +147,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCharactersByGroup',
-          metadata: { groupId, entityType: 'character' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCharactersByGroup',
+        metadata: { groupId, entityType: 'character' },
+      });
     }
   }
 
@@ -175,17 +160,14 @@ export class CharacterService {
    */
   async getCharacterGroup(groupId: string): Promise<CharacterGroup | null> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!groupId || typeof groupId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'groupId',
-          {
-            correlationId,
-            operation: 'character.getCharacterGroup',
-          }
-        );
+        throw ValidationError.fieldRequired('groupId', {
+          correlationId,
+          operation: 'character.getCharacterGroup',
+        });
       }
 
       logger.debug('Getting character group by ID', {
@@ -215,14 +197,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getCharacterGroup',
-          metadata: { groupId, entityType: 'characterGroup' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getCharacterGroup',
+        metadata: { groupId, entityType: 'characterGroup' },
+      });
     }
   }
 
@@ -231,7 +210,7 @@ export class CharacterService {
    */
   async getAllCharacterGroups(): Promise<CharacterGroup[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.debug('Getting all character groups', {
         correlationId,
@@ -256,14 +235,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'getAllCharacterGroups',
-          metadata: { entityType: 'characterGroup' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'getAllCharacterGroups',
+        metadata: { entityType: 'characterGroup' },
+      });
     }
   }
 
@@ -272,27 +248,21 @@ export class CharacterService {
    */
   async saveCharacter(character: Character): Promise<Character> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!character) {
-        throw ValidationError.fieldRequired(
-          'character',
-          {
-            correlationId,
-            operation: 'character.saveCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('character', {
+          correlationId,
+          operation: 'character.saveCharacter',
+        });
       }
 
       if (!character.eveId) {
-        throw ValidationError.fieldRequired(
-          'character.eveId',
-          {
-            correlationId,
-            operation: 'character.saveCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('character.eveId', {
+          correlationId,
+          operation: 'character.saveCharacter',
+        });
       }
 
       logger.debug('Saving character', {
@@ -330,14 +300,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'saveCharacter',
-          metadata: { characterId: character?.eveId, entityType: 'character' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'saveCharacter',
+        metadata: { characterId: character?.eveId, entityType: 'character' },
+      });
     }
   }
 
@@ -346,27 +313,21 @@ export class CharacterService {
    */
   async saveCharacterGroup(group: CharacterGroup): Promise<CharacterGroup> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!group) {
-        throw ValidationError.fieldRequired(
-          'group',
-          {
-            correlationId,
-            operation: 'character.saveCharacterGroup',
-          }
-        );
+        throw ValidationError.fieldRequired('group', {
+          correlationId,
+          operation: 'character.saveCharacterGroup',
+        });
       }
 
       if (!group.map_name) {
-        throw ValidationError.fieldRequired(
-          'group.map_name',
-          {
-            correlationId,
-            operation: 'character.saveCharacterGroup',
-          }
-        );
+        throw ValidationError.fieldRequired('group.map_name', {
+          correlationId,
+          operation: 'character.saveCharacterGroup',
+        });
       }
 
       logger.debug('Saving character group', {
@@ -387,7 +348,7 @@ export class CharacterService {
         {
           correlationId,
           operation: 'character.service.saveCharacterGroup',
-          metadata: { 
+          metadata: {
             mapName: group.map_name,
             mainCharacterId: group.mainCharacterId,
           },
@@ -402,14 +363,11 @@ export class CharacterService {
 
       return result;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'saveCharacterGroup',
-          metadata: { mapName: group?.map_name, entityType: 'characterGroup' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'saveCharacterGroup',
+        metadata: { mapName: group?.map_name, entityType: 'characterGroup' },
+      });
     }
   }
 
@@ -418,17 +376,14 @@ export class CharacterService {
    */
   async deleteCharacter(characterId: string): Promise<void> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'characterId',
-          {
-            correlationId,
-            operation: 'character.deleteCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('characterId', {
+          correlationId,
+          operation: 'character.deleteCharacter',
+        });
       }
 
       logger.debug('Deleting character', {
@@ -454,14 +409,11 @@ export class CharacterService {
         characterId,
       });
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'deleteCharacter',
-          metadata: { characterId, entityType: 'character' },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'deleteCharacter',
+        metadata: { characterId, entityType: 'character' },
+      });
     }
   }
 
@@ -507,39 +459,30 @@ export class CharacterService {
     }
   ): Promise<Character> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!characterId || typeof characterId !== 'string') {
-        throw ValidationError.fieldRequired(
-          'characterId',
-          {
-            correlationId,
-            operation: 'character.syncCharacter',
-          }
-        );
+        throw ValidationError.fieldRequired('characterId', {
+          correlationId,
+          operation: 'character.syncCharacter',
+        });
       }
 
       if (!mapData) {
-        throw ValidationError.fieldRequired(
-          'mapData',
-          {
-            correlationId,
-            operation: 'character.syncCharacter',
-            metadata: { characterId },
-          }
-        );
+        throw ValidationError.fieldRequired('mapData', {
+          correlationId,
+          operation: 'character.syncCharacter',
+          metadata: { characterId },
+        });
       }
 
       if (!mapData.corporationTicker) {
-        throw ValidationError.fieldRequired(
-          'mapData.corporationTicker',
-          {
-            correlationId,
-            operation: 'character.syncCharacter',
-            metadata: { characterId },
-          }
-        );
+        throw ValidationError.fieldRequired('mapData.corporationTicker', {
+          correlationId,
+          operation: 'character.syncCharacter',
+          metadata: { characterId },
+        });
       }
 
       logger.info(`Syncing character ${characterId} from Map API data...`, {
@@ -574,20 +517,17 @@ export class CharacterService {
         characterId,
         savedName: saved.name,
       });
-      
+
       return saved;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'syncCharacter',
-          metadata: { 
-            characterId,
-            corporationId: mapData?.corporationId,
-          },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'syncCharacter',
+        metadata: {
+          characterId,
+          corporationId: mapData?.corporationId,
+        },
+      });
     }
   }
 
@@ -596,17 +536,14 @@ export class CharacterService {
    */
   async syncCharacters(characterIds: string[]): Promise<Character[]> {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       // Validate input parameters
       if (!characterIds || !Array.isArray(characterIds)) {
-        throw ValidationError.fieldRequired(
-          'characterIds',
-          {
-            correlationId,
-            operation: 'character.syncCharacters',
-          }
-        );
+        throw ValidationError.fieldRequired('characterIds', {
+          correlationId,
+          operation: 'character.syncCharacters',
+        });
       }
 
       if (characterIds.length === 0) {
@@ -686,14 +623,11 @@ export class CharacterService {
 
       return results;
     } catch (error) {
-      throw errorHandler.handleError(
-        error,
-        {
-          correlationId,
-          operation: 'syncCharacters',
-          metadata: { characterCount: characterIds?.length },
-        }
-      );
+      throw errorHandler.handleError(error, {
+        correlationId,
+        operation: 'syncCharacters',
+        metadata: { characterCount: characterIds?.length },
+      });
     }
   }
 }

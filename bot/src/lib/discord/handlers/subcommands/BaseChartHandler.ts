@@ -58,7 +58,7 @@ export abstract class BaseChartHandler {
     }>
   > {
     const correlationId = errorHandler.createCorrelationId();
-    
+
     try {
       logger.info('BaseChartHandler.getCharacterGroups() - calling characterRepository.getAllCharacterGroups()', {
         correlationId,
@@ -98,16 +98,10 @@ export abstract class BaseChartHandler {
         correlationId,
         filteredGroupCount: result.length,
       });
-      
+
       return result;
     } catch (error) {
-      const dbError = errorHandler.handleDatabaseError(
-        error,
-        'read',
-        'character_group',
-        undefined,
-        {}
-      );
+      const dbError = errorHandler.handleDatabaseError(error, 'read', 'character_group', undefined, {});
 
       logger.warn('Error fetching character groups, returning empty array', dbError.toLogFormat());
       return [];
@@ -119,7 +113,7 @@ export abstract class BaseChartHandler {
    */
   protected async handleError(interaction: CommandInteraction, error: any): Promise<void> {
     const subcommand = interaction.isChatInputCommand() ? interaction.options.getSubcommand(false) : 'unknown';
-    
+
     // Handle the error with full context using the new error handling system
     const standardizedError = errorHandler.handleDiscordError(
       error,

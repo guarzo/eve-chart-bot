@@ -25,11 +25,14 @@ export interface ChartWorkerResponse {
 class ChartWorkerManager {
   private workers: Worker[] = [];
   private availableWorkers: Worker[] = [];
-  private pendingTasks = new Map<string, {
-    resolve: (value: Buffer) => void;
-    reject: (error: Error) => void;
-    timeout: NodeJS.Timeout;
-  }>();
+  private pendingTasks = new Map<
+    string,
+    {
+      resolve: (value: Buffer) => void;
+      reject: (error: Error) => void;
+      timeout: NodeJS.Timeout;
+    }
+  >();
   private workerCount: number;
   private maxWorkers = process.env.CHART_WORKER_COUNT ? parseInt(process.env.CHART_WORKER_COUNT) : 2;
 
@@ -46,7 +49,7 @@ class ChartWorkerManager {
 
   private createWorker(): Worker {
     const worker = new Worker(__filename);
-    
+
     worker.on('message', (response: ChartWorkerResponse) => {
       const task = this.pendingTasks.get(response.id);
       if (!task) return;
@@ -64,12 +67,12 @@ class ChartWorkerManager {
       }
     });
 
-    worker.on('error', (error) => {
+    worker.on('error', error => {
       logger.error('Chart worker error:', error);
       this.handleWorkerError(worker);
     });
 
-    worker.on('exit', (code) => {
+    worker.on('exit', code => {
       if (code !== 0) {
         logger.error(`Chart worker exited with code ${code}`);
         this.handleWorkerError(worker);

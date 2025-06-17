@@ -26,7 +26,7 @@ export class KillRepository {
 
     try {
       // Use transaction for consistency
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async tx => {
         // 1. Upsert kill fact
         await this.upsertKillFacts(tx, killFact, correlationId);
 
@@ -50,33 +50,23 @@ export class KillRepository {
         duration,
         involvedCount: involvedCharacters.length,
         attackerCount: attackers.length,
-        correlationId
+        correlationId,
       });
     } catch (error) {
       logger.error('Failed to ingest killmail', {
         error,
         killmailId: killFact.killmailId?.toString(),
-        correlationId
+        correlationId,
       });
-      
-      throw new DatabaseError(
-        'Failed to ingest killmail',
-        'create',
-        'killFact',
-        { correlationId },
-        error as Error
-      );
+
+      throw new DatabaseError('Failed to ingest killmail', 'create', 'killFact', { correlationId }, error as Error);
     }
   }
 
   /**
    * Upsert kill fact data
    */
-  private async upsertKillFacts(
-    tx: any,
-    killFact: KillFactData,
-    correlationId: string
-  ): Promise<void> {
+  private async upsertKillFacts(tx: any, killFact: KillFactData, correlationId: string): Promise<void> {
     await tx.killFact.upsert({
       where: { killmailId: killFact.killmailId },
       update: {
@@ -95,7 +85,7 @@ export class KillRepository {
 
     logger.debug('Kill fact upserted', {
       killmailId: killFact.killmailId.toString(),
-      correlationId
+      correlationId,
     });
   }
 
@@ -110,7 +100,7 @@ export class KillRepository {
   ): Promise<void> {
     // Delete existing victims for this killmail (should be only one)
     await tx.killVictim.deleteMany({
-      where: { killmailId }
+      where: { killmailId },
     });
 
     // Create victim record
@@ -122,13 +112,13 @@ export class KillRepository {
         allianceId: victim.allianceId,
         shipTypeId: victim.shipTypeId,
         damageTaken: victim.damageTaken,
-      }
+      },
     });
 
     logger.debug('Victim data processed', {
       killmailId: killmailId.toString(),
       hasCharacter: !!victim.characterId,
-      correlationId
+      correlationId,
     });
   }
 
@@ -143,7 +133,7 @@ export class KillRepository {
   ): Promise<void> {
     // Delete existing attackers
     await tx.killAttacker.deleteMany({
-      where: { killmailId }
+      where: { killmailId },
     });
 
     // Create attackers in parallel for performance
@@ -160,7 +150,7 @@ export class KillRepository {
             securityStatus: attacker.securityStatus,
             shipTypeId: attacker.shipTypeId,
             weaponTypeId: attacker.weaponTypeId,
-          }
+          },
         })
       )
     );
@@ -168,7 +158,7 @@ export class KillRepository {
     logger.debug('Attacker data processed', {
       killmailId: killmailId.toString(),
       attackerCount: attackers.length,
-      correlationId
+      correlationId,
     });
   }
 
@@ -183,7 +173,7 @@ export class KillRepository {
   ): Promise<void> {
     // Delete existing relationships
     await tx.killCharacter.deleteMany({
-      where: { killmailId }
+      where: { killmailId },
     });
 
     // Create new relationships
@@ -192,15 +182,15 @@ export class KillRepository {
         data: involvedCharacters.map(char => ({
           killmailId,
           characterId: char.characterId,
-          role: char.role
-        }))
+          role: char.role,
+        })),
       });
     }
 
     logger.debug('Character relationships updated', {
       killmailId: killmailId.toString(),
       relationshipCount: involvedCharacters.length,
-      correlationId
+      correlationId,
     });
   }
 
@@ -225,14 +215,14 @@ export class KillRepository {
     if (!victim.characterId) return;
 
     const character = await tx.character.findUnique({
-      where: { eveId: victim.characterId }
+      where: { eveId: victim.characterId },
     });
 
     if (!character) {
       logger.debug('Victim character not tracked, skipping loss fact', {
         killmailId: killFact.killmailId.toString(),
         victimId: victim.characterId.toString(),
-        correlationId
+        correlationId,
       });
       return;
     }
@@ -255,24 +245,20 @@ export class KillRepository {
         totalValue: killFact.totalValue,
         attackerCount: attackers.length,
         labels: [],
-      }
+      },
     });
 
     logger.debug('Loss fact created', {
       killmailId: killFact.killmailId.toString(),
       victimId: victim.characterId.toString(),
-      correlationId
+      correlationId,
     });
   }
 
   /**
    * Get kills for specific characters in a time range
    */
-  async getKillsForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
+  async getKillsForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<any[]> {
     return this.prisma.killFact.findMany({
       where: {
         killTime: {
@@ -301,11 +287,7 @@ export class KillRepository {
   /**
    * Get all kills where characters appear as either attacker or victim
    */
-  async getAllKillsForCharacters(
-    characterIds: bigint[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
+  async getAllKillsForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<any[]> {
     return this.prisma.killFact.findMany({
       where: {
         killTime: {
@@ -504,7 +486,7 @@ export class KillRepository {
   ): Promise<Array<{ time: Date; count: number }>> {
     try {
       // For now, use raw SQL for time grouping as Prisma doesn't support it natively
-      
+
       const result = await this.prisma.$queryRaw<Array<{ time: Date; count: bigint }>>`
         SELECT 
           date_trunc(${groupBy}, kf."killTime") as time,
