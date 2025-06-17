@@ -16,7 +16,7 @@ export async function handleKillsCommand(interaction: CommandInteraction) {
     logger.info('Handling kills command with default values');
 
     // Get chart type option if provided
-    const chartType = (interaction.options.get('type')?.value as string) ?? 'line';
+    const chartType = interaction.isChatInputCommand() ? (interaction.options.get('type')?.value as string) ?? 'line' : 'line';
     logger.info(`Using chart type: ${chartType}`);
 
     // Defer reply since chart generation might take a while
@@ -135,7 +135,7 @@ export async function handleMapCommand(interaction: CommandInteraction) {
     logger.info('Handling map command with default values');
 
     // Get chart type option if provided
-    const chartType = (interaction.options.get('type')?.value as string) ?? 'line';
+    const chartType = interaction.isChatInputCommand() ? (interaction.options.get('type')?.value as string) ?? 'line' : 'line';
     logger.info(`Using chart type: ${chartType}`);
 
     // Defer reply since chart generation might take a while

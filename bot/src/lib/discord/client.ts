@@ -63,7 +63,7 @@ export class DiscordClient {
         user: interaction.user.tag,
         guild: interaction.guild?.name,
         channel: interaction.channel?.id,
-        options: interaction.isCommand() ? interaction.options.data : undefined,
+        options: interaction.isChatInputCommand() ? interaction.options.data : undefined,
         interactionId: interaction.id,
         applicationId: interaction.applicationId,
         token: interaction.token,
