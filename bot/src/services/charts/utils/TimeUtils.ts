@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format } from 'date-fns';
 
 /**
  * Utilities for time-related chart operations
@@ -9,14 +9,14 @@ export class TimeUtils {
    * @param groupBy The time grouping
    * @returns A date-fns format string
    */
-  static getGroupByFormat(groupBy: "hour" | "day" | "week"): string {
+  static getGroupByFormat(groupBy: 'hour' | 'day' | 'week'): string {
     switch (groupBy) {
-      case "hour":
-        return "HH:mm";
-      case "week":
-        return "MMM dd";
+      case 'hour':
+        return 'HH:mm';
+      case 'week':
+        return 'MMM dd';
       default:
-        return "MMM dd";
+        return 'MMM dd';
     }
   }
 
@@ -27,7 +27,7 @@ export class TimeUtils {
    * @returns Formatted date range string
    */
   static formatTimeRange(start: Date, end: Date): string {
-    return `${format(start, "yyyy-MM-dd")} to ${format(end, "yyyy-MM-dd")}`;
+    return `${format(start, 'yyyy-MM-dd')} to ${format(end, 'yyyy-MM-dd')}`;
   }
 
   /**
@@ -40,7 +40,7 @@ export class TimeUtils {
   static createTimeBuckets(
     startDate: Date,
     endDate: Date,
-    groupBy: "hour" | "day" | "week" = "day"
+    groupBy: 'hour' | 'day' | 'week' = 'day'
   ): Array<{ date: Date; label: string }> {
     const result: Array<{ date: Date; label: string }> = [];
     const formatStr = this.getGroupByFormat(groupBy);
@@ -50,13 +50,13 @@ export class TimeUtils {
     const getNextDate = (date: Date): Date => {
       const next = new Date(date);
       switch (groupBy) {
-        case "hour":
+        case 'hour':
           next.setHours(next.getHours() + 1);
           break;
-        case "week":
+        case 'week':
           next.setDate(next.getDate() + 7);
           break;
-        case "day":
+        case 'day':
         default:
           next.setDate(next.getDate() + 1);
           break;

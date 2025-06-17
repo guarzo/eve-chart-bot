@@ -38,6 +38,66 @@ jest.mock("../src/infrastructure/persistence/client", () => ({
   prisma: prismaMock,
 }));
 
+// Mock monitoring services to prevent timer issues in tests
+jest.mock("../src/infrastructure/monitoring/MetricsCollector", () => ({
+  MetricsCollector: class MockMetricsCollector {
+    getInstance() { return this; }
+    incrementCounter() {}
+    setGauge() {}
+    recordTiming() {}
+    recordHistogram() {}
+    getMetrics() { return {}; }
+    clearMetrics() {}
+  },
+}));
+
+jest.mock("../src/infrastructure/monitoring/TracingService", () => ({
+  TracingService: class MockTracingService {
+    static getInstance() { return new this(); }
+    startSpan() { return { end: jest.fn(), setError: jest.fn() }; }
+    getActiveSpan() { return null; }
+    withSpan() { return Promise.resolve(); }
+    createSpan() { return { end: jest.fn(), setError: jest.fn() }; }
+  },
+}));
+
+
+// Mock the entire shared/errors module to fix import issues
+jest.mock("../src/shared/errors", () => {
+  class MockValidationError extends Error {
+    static fieldRequired(field, context) {
+      const error = new this(`Missing required field: ${field}`);
+      error.field = field;
+      error.context = context;
+      return error;
+    }
+    
+    static fromZodError(zodError, context) {
+      return new this('Validation failed');
+    }
+    
+    constructor(message) {
+      super(message);
+      this.name = 'ValidationError';
+      this.issues = [];
+    }
+  }
+
+  return {
+    ValidationError: MockValidationError,
+    errorHandler: {
+      handleError: jest.fn(),
+      handleValidationError: jest.fn(),
+      handleDatabaseError: jest.fn(),
+      handleExternalServiceError: jest.fn(),
+    },
+    BaseError: class MockBaseError extends Error {},
+    DatabaseError: class MockDatabaseError extends Error {},
+    ChartError: class MockChartError extends Error {},
+    ExternalServiceError: class MockExternalServiceError extends Error {},
+  };
+});
+
 // Reset all mocks before each test
 beforeEach(() => {
   mockReset(prismaMock);
@@ -56,6 +116,7 @@ process.env.DATABASE_URL =
   "postgresql://postgres:postgres@localhost:5432/eve_test";
 process.env.MAP_API_URL = "https://example.com/map-api";
 process.env.MAP_API_KEY = "test-api-key";
+process.env.MAP_NAME = "mock-map";
 
 // Mock Chart.js to avoid issues with Node.js canvas
 jest.mock("chart.js", () => {
@@ -186,7 +247,6 @@ process.env.DISCORD_BOT_TOKEN = "mock-token";
 process.env.ZKILLBOARD_API_URL = "http://mock-zkill-api.test";
 process.env.MAP_API_URL = "http://mock-map-api.test";
 process.env.MAP_API_KEY = "mock-map-key";
-process.env.MAP_NAME = "mock-map";
 process.env.REDIS_URL = "redis://mock";
 process.env.CACHE_TTL = "300";
 
@@ -201,3 +261,34 @@ global.console = {
   warn: console.warn,
   info: jest.fn(),
 };
+
+// Simple in-memory test double for CacheAdapter
+export class TestMemoryCache {
+  private store = new Map<string, any>();
+
+  async get<T>(key: string): Promise<T | null> {
+    return this.store.has(key) ? this.store.get(key) : null;
+  }
+
+  async set<T>(key: string, value: T, ttlSeconds?: number): Promise<void> {
+    this.store.set(key, value);
+  }
+
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  async clear(): Promise<void> {
+    this.store.clear();
+  }
+
+  // Optional: for compatibility with some tests
+  async del(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
+  // Optional: for compatibility with some tests
+  dispose() {
+    this.store.clear();
+  }
+}

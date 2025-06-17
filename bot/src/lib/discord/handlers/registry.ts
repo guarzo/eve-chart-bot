@@ -1,15 +1,15 @@
-import { BaseChartHandler } from "./subcommands/BaseChartHandler";
-import { KillsHandler } from "./subcommands/KillsHandler";
-import { MapHandler } from "./subcommands/MapHandler";
-import { LossHandler } from "./subcommands/LossHandler";
-import { RatioHandler } from "./subcommands/RatioHandler";
-import { ListHandler } from "./subcommands/ListHandler";
-import { ShipKillHandler } from "./subcommands/ShipKillHandler";
-import { ShipLossHandler } from "./subcommands/ShipLossHandler";
-import { DistributionHandler } from "./subcommands/DistributionHandler";
-import { CorpsHandler } from "./subcommands/CorpsHandler";
-import { HeatmapHandler } from "./subcommands/HeatmapHandler";
-import { EfficiencyHandler } from "./subcommands/EfficiencyHandler";
+import { BaseChartHandler } from './subcommands/BaseChartHandler';
+import { KillsHandler } from './subcommands/KillsHandler';
+import { MapHandler } from './subcommands/MapHandler';
+import { LossHandler } from './subcommands/LossHandler';
+import { RatioHandler } from './subcommands/RatioHandler';
+import { ListHandler } from './subcommands/ListHandler';
+import { ShipKillHandler } from './subcommands/ShipKillHandler';
+import { ShipLossHandler } from './subcommands/ShipLossHandler';
+import { DistributionHandler } from './subcommands/DistributionHandler';
+import { CorpsHandler } from './subcommands/CorpsHandler';
+import { HeatmapHandler } from './subcommands/HeatmapHandler';
+import { EfficiencyHandler } from './subcommands/EfficiencyHandler';
 
 /**
  * Registry for chart command handlers
@@ -26,17 +26,17 @@ export class ChartCommandRegistry {
    * Register all chart command handlers
    */
   private registerHandlers(): void {
-    this.handlers.set("list", new ListHandler());
-    this.handlers.set("kills", new KillsHandler());
-    this.handlers.set("map", new MapHandler());
-    this.handlers.set("loss", new LossHandler());
-    this.handlers.set("ratio", new RatioHandler());
-    this.handlers.set("shipkill", new ShipKillHandler());
-    this.handlers.set("shiploss", new ShipLossHandler());
-    this.handlers.set("distribution", new DistributionHandler());
-    this.handlers.set("corps", new CorpsHandler());
-    this.handlers.set("heatmap", new HeatmapHandler());
-    this.handlers.set("efficiency", new EfficiencyHandler());
+    this.handlers.set('list', new ListHandler());
+    this.handlers.set('kills', new KillsHandler());
+    this.handlers.set('map', new MapHandler());
+    this.handlers.set('loss', new LossHandler());
+    this.handlers.set('ratio', new RatioHandler());
+    this.handlers.set('shipkill', new ShipKillHandler());
+    this.handlers.set('shiploss', new ShipLossHandler());
+    this.handlers.set('distribution', new DistributionHandler());
+    this.handlers.set('corps', new CorpsHandler());
+    this.handlers.set('heatmap', new HeatmapHandler());
+    this.handlers.set('efficiency', new EfficiencyHandler());
   }
 
   /**

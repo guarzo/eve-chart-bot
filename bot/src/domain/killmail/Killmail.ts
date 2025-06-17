@@ -1,4 +1,5 @@
-import { Exclude, Expose, Transform } from "class-transformer";
+import { Exclude, Expose, Transform } from 'class-transformer';
+import { BigIntTransformer } from '../../shared/utilities/BigIntTransformer';
 
 /**
  * Killmail victim domain entity
@@ -6,15 +7,15 @@ import { Exclude, Expose, Transform } from "class-transformer";
 @Exclude()
 export class KillmailVictim {
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly characterId?: bigint;
 
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly corporationId?: bigint;
 
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly allianceId?: bigint;
 
   @Expose()
@@ -32,9 +33,9 @@ export class KillmailVictim {
    */
   toJSON(): Record<string, any> {
     return {
-      characterId: this.characterId?.toString(),
-      corporationId: this.corporationId?.toString(),
-      allianceId: this.allianceId?.toString(),
+      characterId: BigIntTransformer.forJson(this.characterId),
+      corporationId: BigIntTransformer.forJson(this.corporationId),
+      allianceId: BigIntTransformer.forJson(this.allianceId),
       shipTypeId: this.shipTypeId,
       damageTaken: this.damageTaken,
     };
@@ -47,15 +48,15 @@ export class KillmailVictim {
 @Exclude()
 export class KillmailAttacker {
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly characterId?: bigint;
 
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly corporationId?: bigint;
 
   @Expose()
-  @Transform(({ value }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly allianceId?: bigint;
 
   @Expose()
@@ -82,9 +83,9 @@ export class KillmailAttacker {
    */
   toJSON(): Record<string, any> {
     return {
-      characterId: this.characterId?.toString(),
-      corporationId: this.corporationId?.toString(),
-      allianceId: this.allianceId?.toString(),
+      characterId: BigIntTransformer.forJson(this.characterId),
+      corporationId: BigIntTransformer.forJson(this.corporationId),
+      allianceId: BigIntTransformer.forJson(this.allianceId),
       damageDone: this.damageDone,
       finalBlow: this.finalBlow,
       securityStatus: this.securityStatus,
@@ -101,11 +102,11 @@ export class KillmailAttacker {
 @Exclude()
 export class Killmail {
   @Expose()
-  @Transform(({ value }) => value.toString())
+  @BigIntTransformer.requiredStringTransform
   readonly killmailId!: bigint;
 
   @Expose()
-  @Transform(({ value }) => value.toISOString())
+  @Transform(({ value }) => value?.toISOString())
   readonly killTime!: Date;
 
   @Expose()
@@ -127,7 +128,7 @@ export class Killmail {
   readonly labels!: string[];
 
   @Expose()
-  @Transform(({ value }) => value.toString())
+  @BigIntTransformer.requiredStringTransform
   readonly totalValue!: bigint;
 
   @Expose()
@@ -148,17 +149,17 @@ export class Killmail {
    */
   toJSON(): Record<string, any> {
     return {
-      killmailId: this.killmailId.toString(),
-      killTime: this.killTime.toISOString(),
+      killmailId: this.killmailId?.toString() ?? '',
+      killTime: this.killTime?.toISOString() ?? new Date().toISOString(),
       npc: this.npc,
       solo: this.solo,
       awox: this.awox,
       shipTypeId: this.shipTypeId,
       systemId: this.systemId,
       labels: this.labels,
-      totalValue: this.totalValue.toString(),
+      totalValue: this.totalValue?.toString() ?? '0',
       points: this.points,
-      attackers: this.attackers?.map((a) => a.toJSON()),
+      attackers: this.attackers?.map(a => a.toJSON()),
       victim: this.victim?.toJSON(),
     };
   }

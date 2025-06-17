@@ -1,16 +1,17 @@
-import * as Sentry from "@sentry/node";
-import { httpIntegration } from "@sentry/node";
-import { logger } from "./logger";
+import * as Sentry from '@sentry/node';
+import { httpIntegration } from '@sentry/node';
+import { logger } from './logger';
+import { ValidatedConfiguration } from '../config/validated';
 
 /**
  * Initialize Sentry error monitoring
  */
 export function initSentry() {
-  const dsn = process.env.SENTRY_DSN;
-  const environment = process.env.NODE_ENV || "development";
+  const dsn = ValidatedConfiguration.sentry.dsn;
+  const environment = ValidatedConfiguration.server.nodeEnv;
 
   if (!dsn) {
-    logger.warn("SENTRY_DSN not set, error monitoring disabled");
+    logger.debug('SENTRY_DSN not set, error monitoring disabled');
     return;
   }
 
@@ -25,12 +26,12 @@ export function initSentry() {
         }),
       ],
       // Performance Monitoring
-      tracesSampleRate: environment === "production" ? 0.1 : 1.0,
+      tracesSampleRate: environment === 'production' ? 0.1 : 1.0,
     });
 
-    logger.info("Sentry initialized successfully");
+    logger.info('Sentry initialized successfully');
   } catch (error) {
-    logger.error("Failed to initialize Sentry:", error);
+    logger.error('Failed to initialize Sentry:', error);
   }
 }
 
@@ -39,7 +40,7 @@ export function initSentry() {
  */
 export function captureError(error: Error, context?: Record<string, any>) {
   if (error instanceof Error) {
-    Sentry.withScope((scope) => {
+    Sentry.withScope(scope => {
       if (context) {
         scope.setExtras(context);
       }
@@ -47,7 +48,7 @@ export function captureError(error: Error, context?: Record<string, any>) {
     });
   } else {
     Sentry.captureMessage(String(error), {
-      level: "error",
+      level: 'error',
       extra: context,
     });
   }
@@ -56,12 +57,8 @@ export function captureError(error: Error, context?: Record<string, any>) {
 /**
  * Capture a message in Sentry
  */
-export function captureMessage(
-  message: string,
-  level: Sentry.SeverityLevel = "info",
-  context?: Record<string, any>
-) {
-  Sentry.withScope((scope) => {
+export function captureMessage(message: string, level: Sentry.SeverityLevel = 'info', context?: Record<string, any>) {
+  Sentry.withScope(scope => {
     if (context) {
       scope.setExtras(context);
     }

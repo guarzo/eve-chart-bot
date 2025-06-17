@@ -1,5 +1,5 @@
-import { Exclude, Expose, Transform } from "class-transformer";
-import { Character } from "./Character";
+import { Exclude, Expose, Transform } from 'class-transformer';
+import { Character } from './Character';
 
 /**
  * CharacterGroup domain entity
@@ -11,10 +11,7 @@ export class CharacterGroup {
   readonly id!: string;
 
   @Expose()
-  readonly name!: string;
-
-  @Expose()
-  readonly slug!: string;
+  readonly map_name!: string;
 
   @Expose()
   @Transform(({ value }) => value?.toString())
@@ -39,6 +36,11 @@ export class CharacterGroup {
   })
   readonly updatedAt!: Date;
 
+  // Computed property for name - use map_name as the display name
+  get name(): string {
+    return this.map_name;
+  }
+
   constructor(data: Partial<CharacterGroup>) {
     Object.assign(this, data);
   }
@@ -50,9 +52,9 @@ export class CharacterGroup {
     return {
       id: this.id,
       name: this.name,
-      slug: this.slug,
+      map_name: this.map_name,
       mainCharacterId: this.mainCharacterId,
-      characters: this.characters.map((char) => char.toJSON()),
+      characters: this.characters.map(char => char.toJSON()),
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
     };
@@ -62,16 +64,14 @@ export class CharacterGroup {
    * Gets the main character of the group
    */
   getMainCharacter(): Character | undefined {
-    return this.characters?.find((c) => c.eveId === this.mainCharacterId);
+    return this.characters?.find(c => c.eveId === this.mainCharacterId);
   }
 
   /**
    * Gets all alt characters in the group
    */
   getAltCharacters(): Character[] {
-    return (
-      this.characters?.filter((c) => c.eveId !== this.mainCharacterId) || []
-    );
+    return this.characters?.filter(c => c.eveId !== this.mainCharacterId) || [];
   }
 
   /**
@@ -85,10 +85,6 @@ export class CharacterGroup {
    * Checks if a character is an alt in the group
    */
   isAltCharacter(characterId: string): boolean {
-    return (
-      (this.mainCharacterId !== characterId &&
-        this.characters?.some((c) => c.eveId === characterId)) ||
-      false
-    );
+    return (this.mainCharacterId !== characterId && this.characters?.some(c => c.eveId === characterId)) || false;
   }
 }

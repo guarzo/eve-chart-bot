@@ -1,7 +1,9 @@
-import { ChartData, ChartOptions } from "../../types/chart";
-import { RepositoryManager } from "../../infrastructure/repositories/RepositoryManager";
-import { FormatUtils } from "./utils/FormatUtils";
-import { TimeUtils } from "./utils/TimeUtils";
+import { ChartData, ChartOptions } from '../../types/chart';
+import { RepositoryManager } from '../../infrastructure/repositories/RepositoryManager';
+import { FormatUtils } from './utils/FormatUtils';
+import { TimeUtils } from './utils/TimeUtils';
+import { logger } from '../../lib/logger';
+// import { errorHandler, ChartError, ValidationError } from '../../shared/errors'; // Not currently used
 
 /**
  * Base class for all chart generators
@@ -18,17 +20,17 @@ export abstract class BaseChartGenerator {
    */
   constructor(repoManager: RepositoryManager, colors?: string[]) {
     this.repoManager = repoManager;
-    this.colors = colors || [
-      "#3366CC",
-      "#DC3912",
-      "#FF9900",
-      "#109618",
-      "#990099",
-      "#0099C6",
-      "#DD4477",
-      "#66AA00",
-      "#B82E2E",
-      "#316395",
+    this.colors = colors ?? [
+      '#3366CC',
+      '#DC3912',
+      '#FF9900',
+      '#109618',
+      '#990099',
+      '#0099C6',
+      '#DD4477',
+      '#66AA00',
+      '#B82E2E',
+      '#316395',
     ];
   }
 
@@ -65,7 +67,7 @@ export abstract class BaseChartGenerator {
    * @param percent Percentage to adjust (-100 to 100)
    */
   protected adjustColorBrightness(hexColor: string, percent: number): string {
-    const hex = hexColor.replace("#", "");
+    const hex = hexColor.replace('#', '');
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
@@ -75,9 +77,9 @@ export abstract class BaseChartGenerator {
       return Math.min(255, Math.max(0, Math.round(adjustedValue)));
     };
 
-    const rr = adjustValue(r).toString(16).padStart(2, "0");
-    const gg = adjustValue(g).toString(16).padStart(2, "0");
-    const bb = adjustValue(b).toString(16).padStart(2, "0");
+    const rr = adjustValue(r).toString(16).padStart(2, '0');
+    const gg = adjustValue(g).toString(16).padStart(2, '0');
+    const bb = adjustValue(b).toString(16).padStart(2, '0');
 
     return `#${rr}${gg}${bb}`;
   }
@@ -102,22 +104,22 @@ export abstract class BaseChartGenerator {
    * Get format string for a time group (hour, day, week)
    * @deprecated Use TimeUtils.getGroupByFormat instead
    */
-  protected getGroupByFormat(groupBy: "hour" | "day" | "week"): string {
+  protected getGroupByFormat(groupBy: 'hour' | 'day' | 'week'): string {
     return TimeUtils.getGroupByFormat(groupBy);
   }
 
   /**
    * Get a date format based on the group by setting
    */
-  protected getDateFormat(groupBy: "hour" | "day" | "week"): string {
+  protected getDateFormat(groupBy: 'hour' | 'day' | 'week'): string {
     switch (groupBy) {
-      case "hour":
-        return "yyyy-MM-dd HH:mm";
-      case "week":
+      case 'hour':
+        return 'yyyy-MM-dd HH:mm';
+      case 'week':
         return "yyyy-MM-dd 'week'";
-      case "day":
+      case 'day':
       default:
-        return "yyyy-MM-dd";
+        return 'yyyy-MM-dd';
     }
   }
 
@@ -125,8 +127,8 @@ export abstract class BaseChartGenerator {
    * Generate a random color
    */
   protected getRandomColor(): string {
-    const letters = "0123456789ABCDEF";
-    let color = "#";
+    const letters = '0123456789ABCDEF';
+    let color = '#';
     for (let i = 0; i < 6; i++) {
       color += letters[Math.floor(Math.random() * 16)];
     }
@@ -155,39 +157,34 @@ export abstract class BaseChartGenerator {
     mainCharacterId?: string;
   }): string {
     // Debug log: print group info
-    const charList = group.characters
-      .map((c) => `${c.eveId}:${c.name}`)
-      .join(", ");
-    // eslint-disable-next-line no-console
-    console.log(
-      `[getGroupDisplayName] group: ${group.name}, mainCharacterId: ${group.mainCharacterId}, characters: [${charList}]`
-    );
+    const charList = group.characters.map(c => `${c.eveId}:${c.name}`).join(', ');
+    logger.debug('getGroupDisplayName called', {
+      groupName: group.name,
+      mainCharacterId: group.mainCharacterId,
+      characters: charList,
+    });
     if (group.mainCharacterId) {
-      const main = group.characters.find(
-        (c) => c.eveId === group.mainCharacterId
-      );
+      const main = group.characters.find(c => c.eveId === group.mainCharacterId);
       if (main) {
-        // eslint-disable-next-line no-console
-        console.log(
-          `[getGroupDisplayName] Returning main character name: ${main.name}`
-        );
+        logger.debug('Returning main character name', {
+          mainCharacterName: main.name,
+        });
         return main.name;
       } else {
-        // eslint-disable-next-line no-console
-        console.log(
-          `[getGroupDisplayName] mainCharacterId ${group.mainCharacterId} not found in characters.`
-        );
+        logger.debug('Main character ID not found in characters', {
+          mainCharacterId: group.mainCharacterId,
+        });
       }
     }
     if (group.characters.length > 0) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[getGroupDisplayName] Returning first character name: ${group.characters[0].name}`
-      );
+      logger.debug('Returning first character name', {
+        firstCharacterName: group.characters[0].name,
+      });
       return group.characters[0].name;
     }
-    // eslint-disable-next-line no-console
-    console.log(`[getGroupDisplayName] Returning group name: ${group.name}`);
+    logger.debug('Returning group name', {
+      groupName: group.name,
+    });
     return group.name;
   }
 
@@ -199,17 +196,17 @@ export abstract class BaseChartGenerator {
     secondary: string;
   } {
     switch (type) {
-      case "kills":
+      case 'kills':
         return {
           primary: this.colors[0],
           secondary: this.colors[1],
         };
-      case "loss":
+      case 'loss':
         return {
           primary: this.colors[2],
           secondary: this.colors[3],
         };
-      case "map":
+      case 'map':
         return {
           primary: this.colors[4],
           secondary: this.colors[5],
@@ -246,21 +243,18 @@ export abstract class BaseChartGenerator {
           text: title,
           font: {
             size: 16,
-            weight: "bold",
+            weight: 'bold',
           },
         },
         legend: {
           display: true,
-          position: "top",
+          position: 'top',
         },
         tooltip: {
           callbacks: {
             label: function (context: any) {
-              const label = context.dataset.label || "";
-              const value =
-                context.parsed.y !== undefined
-                  ? context.parsed.y
-                  : context.parsed;
+              const label = context.dataset.label ?? '';
+              const value = context.parsed.y !== undefined ? context.parsed.y : context.parsed;
               return `${label}: ${value.toLocaleString()}`;
             },
           },
@@ -271,14 +265,14 @@ export abstract class BaseChartGenerator {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Time",
+            text: 'Time',
           },
         },
         y: {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Value",
+            text: 'Value',
           },
         },
       },

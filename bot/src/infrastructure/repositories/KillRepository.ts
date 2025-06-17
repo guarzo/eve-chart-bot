@@ -1,399 +1,278 @@
-import { Prisma } from "@prisma/client";
-import { Killmail } from "../../domain/killmail/Killmail";
-import { PrismaMapper } from "../mapper/PrismaMapper";
-import { BaseRepository } from "./BaseRepository";
+import { PrismaClient } from '@prisma/client';
+/* eslint-disable max-lines */
+import { logger } from '../../lib/logger';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
+import { DatabaseError } from '../../shared/errors';
+import { KillFactData, VictimData, AttackerData, InvolvedCharacterData } from '../../shared/types/database';
 
 /**
- * Repository for accessing kill-related data
+ * Simplified Kill Repository for WebSocket-based ingestion
+ * No longer handles partial killmails since WebSocket provides complete data
+ * Updated to use camelCase properties matching the new Prisma schema
  */
-export class KillRepository extends BaseRepository {
-  constructor() {
-    super("KillFact");
-  }
+export class KillRepository {
+  constructor(private prisma: PrismaClient) {}
 
   /**
-   * Get a killmail by its ID
+   * Ingest a complete killmail from WebSocket data
    */
-  async getKillmail(killmailId: string | bigint): Promise<Killmail | null> {
-    return this.executeQuery(async () => {
-      const killmail = await this.prisma.killFact.findUnique({
-        where: {
-          killmail_id:
-            typeof killmailId === "string" ? BigInt(killmailId) : killmailId,
-        },
-        include: {
-          attackers: true,
-          victims: true,
-        },
-      });
-      return killmail ? PrismaMapper.map(killmail, Killmail) : null;
-    });
-  }
+  async ingestKillmail(
+    killFact: KillFactData,
+    victim: VictimData,
+    attackers: AttackerData[],
+    involvedCharacters: InvolvedCharacterData[]
+  ): Promise<void> {
+    const correlationId = errorHandler.createCorrelationId();
+    const startTime = Date.now();
 
-  /**
-   * Get killmails for a character
-   */
-  async getCharacterKillmails(
-    characterId: string,
-    options: {
-      startDate?: Date;
-      endDate?: Date;
-      limit?: number;
-    } = {}
-  ): Promise<Killmail[]> {
-    return this.executeQuery(async () => {
-      const { startDate, endDate, limit } = options;
+    try {
+      // Use transaction for consistency
+      await this.prisma.$transaction(async tx => {
+        // 1. Upsert kill fact
+        await this.upsertKillFacts(tx, killFact, correlationId);
 
-      const where: Prisma.KillFactWhereInput = {
-        OR: [
-          { victims: { some: { character_id: BigInt(characterId) } } },
-          { attackers: { some: { character_id: BigInt(characterId) } } },
-        ],
-      };
+        // 2. Process victim data
+        await this.processVictimData(tx, killFact.killmailId, victim, correlationId);
 
-      if (startDate) {
-        where.kill_time = { gte: startDate };
-      }
+        // 3. Process attacker data
+        await this.processAttackerData(tx, killFact.killmailId, attackers, correlationId);
 
-      if (endDate) {
-        where.kill_time = { lte: endDate };
-      }
+        // 4. Manage character relationships
+        await this.manageCharacterRelationships(tx, killFact.killmailId, involvedCharacters, correlationId);
 
-      const killmails = await this.prisma.killFact.findMany({
-        where,
-        include: {
-          attackers: true,
-          victims: true,
-        },
-        orderBy: {
-          kill_time: "desc",
-        },
-        take: limit,
+        // 5. Create loss fact if victim is tracked
+        if (victim.characterId) {
+          await this.createLossFact(tx, killFact, victim, attackers, correlationId);
+        }
       });
 
-      return PrismaMapper.mapArray(killmails, Killmail);
-    });
-  }
-
-  /**
-   * Get killmails for a group of characters
-   */
-  async getGroupKillmails(
-    characterIds: string[],
-    options: {
-      startDate?: Date;
-      endDate?: Date;
-      limit?: number;
-    } = {}
-  ): Promise<Killmail[]> {
-    return this.executeQuery(async () => {
-      const { startDate, endDate, limit } = options;
-
-      const where: Prisma.KillFactWhereInput = {
-        OR: [
-          {
-            victims: {
-              some: { character_id: { in: characterIds.map(BigInt) } },
-            },
-          },
-          {
-            attackers: {
-              some: { character_id: { in: characterIds.map(BigInt) } },
-            },
-          },
-        ],
-      };
-
-      if (startDate) {
-        where.kill_time = { gte: startDate };
-      }
-
-      if (endDate) {
-        where.kill_time = { lte: endDate };
-      }
-
-      const killmails = await this.prisma.killFact.findMany({
-        where,
-        include: {
-          attackers: true,
-          victims: true,
-        },
-        orderBy: {
-          kill_time: "desc",
-        },
-        take: limit,
+      const duration = Date.now() - startTime;
+      logger.info(`Killmail ${killFact.killmailId} ingested successfully`, {
+        duration,
+        involvedCount: involvedCharacters.length,
+        attackerCount: attackers.length,
+        correlationId,
+      });
+    } catch (error) {
+      logger.error('Failed to ingest killmail', {
+        error,
+        killmailId: killFact.killmailId?.toString(),
+        correlationId,
       });
 
-      return PrismaMapper.mapArray(killmails, Killmail);
+      throw new DatabaseError('Failed to ingest killmail', 'create', 'killFact', { correlationId }, error as Error);
+    }
+  }
+
+  /**
+   * Upsert kill fact data
+   */
+  private async upsertKillFacts(tx: any, killFact: KillFactData, correlationId: string): Promise<void> {
+    await tx.killFact.upsert({
+      where: { killmailId: killFact.killmailId },
+      update: {
+        killTime: killFact.killTime,
+        npc: killFact.npc,
+        solo: killFact.solo,
+        awox: killFact.awox,
+        shipTypeId: killFact.shipTypeId,
+        systemId: killFact.systemId,
+        labels: killFact.labels,
+        totalValue: killFact.totalValue,
+        points: killFact.points,
+      },
+      create: killFact,
+    });
+
+    logger.debug('Kill fact upserted', {
+      killmailId: killFact.killmailId.toString(),
+      correlationId,
     });
   }
 
   /**
-   * Save a killmail
+   * Process victim data for a killmail
    */
-  async saveKillmail(killmail: Killmail): Promise<Killmail> {
-    return this.executeQuery(async () => {
-      const killmailId =
-        typeof killmail.killmailId === "string"
-          ? BigInt(killmail.killmailId || "0")
-          : killmail.killmailId || BigInt(0);
-      const saved = await this.prisma.killFact.upsert({
-        where: {
-          killmail_id: killmailId,
-        },
-        create: {
-          killmail_id: killmailId,
-          kill_time: killmail.killTime || new Date(),
-          npc: killmail.npc || false,
-          solo: killmail.solo || false,
-          awox: killmail.awox || false,
-          ship_type_id: killmail.shipTypeId || 0,
-          system_id: killmail.systemId || 0,
-          labels: killmail.labels || [],
-          total_value:
-            typeof killmail.totalValue === "string"
-              ? BigInt(killmail.totalValue)
-              : killmail.totalValue || BigInt(0),
-          points: killmail.points || 0,
-          attackers: {
-            create:
-              killmail.attackers?.map((a) => ({
-                character_id: a.characterId
-                  ? typeof a.characterId === "string"
-                    ? BigInt(a.characterId)
-                    : a.characterId
-                  : null,
-                corporation_id: a.corporationId
-                  ? typeof a.corporationId === "string"
-                    ? BigInt(a.corporationId)
-                    : a.corporationId
-                  : null,
-                alliance_id: a.allianceId
-                  ? typeof a.allianceId === "string"
-                    ? BigInt(a.allianceId)
-                    : a.allianceId
-                  : null,
-                damage_done: a.damageDone || 0,
-                final_blow: a.finalBlow || false,
-                security_status: a.securityStatus || 0,
-                ship_type_id: a.shipTypeId || 0,
-                weapon_type_id: a.weaponTypeId || 0,
-              })) || [],
+  private async processVictimData(
+    tx: any,
+    killmailId: bigint,
+    victim: VictimData,
+    correlationId: string
+  ): Promise<void> {
+    // Delete existing victims for this killmail (should be only one)
+    await tx.killVictim.deleteMany({
+      where: { killmailId },
+    });
+
+    // Create victim record
+    await tx.killVictim.create({
+      data: {
+        killmailId,
+        characterId: victim.characterId,
+        corporationId: victim.corporationId,
+        allianceId: victim.allianceId,
+        shipTypeId: victim.shipTypeId,
+        damageTaken: victim.damageTaken,
+      },
+    });
+
+    logger.debug('Victim data processed', {
+      killmailId: killmailId.toString(),
+      hasCharacter: !!victim.characterId,
+      correlationId,
+    });
+  }
+
+  /**
+   * Process attacker data for a killmail
+   */
+  private async processAttackerData(
+    tx: any,
+    killmailId: bigint,
+    attackers: AttackerData[],
+    correlationId: string
+  ): Promise<void> {
+    // Delete existing attackers
+    await tx.killAttacker.deleteMany({
+      where: { killmailId },
+    });
+
+    // Create attackers in parallel for performance
+    await Promise.all(
+      attackers.map(attacker =>
+        tx.killAttacker.create({
+          data: {
+            killmailId,
+            characterId: attacker.characterId,
+            corporationId: attacker.corporationId,
+            allianceId: attacker.allianceId,
+            damageDone: attacker.damageDone,
+            finalBlow: attacker.finalBlow,
+            securityStatus: attacker.securityStatus,
+            shipTypeId: attacker.shipTypeId,
+            weaponTypeId: attacker.weaponTypeId,
           },
-          victims: killmail.victim
-            ? {
-                create: {
-                  character_id: killmail.victim.characterId
-                    ? typeof killmail.victim.characterId === "string"
-                      ? BigInt(killmail.victim.characterId)
-                      : killmail.victim.characterId
-                    : null,
-                  corporation_id: killmail.victim.corporationId
-                    ? typeof killmail.victim.corporationId === "string"
-                      ? BigInt(killmail.victim.corporationId)
-                      : killmail.victim.corporationId
-                    : null,
-                  alliance_id: killmail.victim.allianceId
-                    ? typeof killmail.victim.allianceId === "string"
-                      ? BigInt(killmail.victim.allianceId)
-                      : killmail.victim.allianceId
-                    : null,
-                  ship_type_id: killmail.victim.shipTypeId || 0,
-                  damage_taken: killmail.victim.damageTaken || 0,
-                },
-              }
-            : undefined,
-          characters: {
-            create: [
-              // Add victim if present and tracked
-              ...(killmail.victim?.characterId
-                ? [
-                    {
-                      character_id:
-                        typeof killmail.victim.characterId === "string"
-                          ? BigInt(killmail.victim.characterId)
-                          : killmail.victim.characterId,
-                      role: "victim",
-                    },
-                  ]
-                : []),
-              // Add all attackers that are tracked
-              ...(killmail.attackers?.map((a) => ({
-                character_id: a.characterId
-                  ? typeof a.characterId === "string"
-                    ? BigInt(a.characterId)
-                    : a.characterId
-                  : BigInt(0),
-                role: "attacker",
-              })) || []),
-            ].filter((rel) => rel.character_id !== BigInt(0)),
-          },
-        },
-        update: {
-          kill_time: killmail.killTime || new Date(),
-          npc: killmail.npc || false,
-          solo: killmail.solo || false,
-          awox: killmail.awox || false,
-          ship_type_id: killmail.shipTypeId || 0,
-          system_id: killmail.systemId || 0,
-          labels: killmail.labels || [],
-          total_value:
-            typeof killmail.totalValue === "string"
-              ? BigInt(killmail.totalValue)
-              : killmail.totalValue || BigInt(0),
-          points: killmail.points || 0,
-          attackers: {
-            deleteMany: {},
-            create:
-              killmail.attackers?.map((a) => ({
-                character_id: a.characterId
-                  ? typeof a.characterId === "string"
-                    ? BigInt(a.characterId)
-                    : a.characterId
-                  : null,
-                corporation_id: a.corporationId
-                  ? typeof a.corporationId === "string"
-                    ? BigInt(a.corporationId)
-                    : a.corporationId
-                  : null,
-                alliance_id: a.allianceId
-                  ? typeof a.allianceId === "string"
-                    ? BigInt(a.allianceId)
-                    : a.allianceId
-                  : null,
-                damage_done: a.damageDone || 0,
-                final_blow: a.finalBlow || false,
-                security_status: a.securityStatus || 0,
-                ship_type_id: a.shipTypeId || 0,
-                weapon_type_id: a.weaponTypeId || 0,
-              })) || [],
-          },
-          victims: killmail.victim
-            ? {
-                deleteMany: {},
-                create: {
-                  character_id: killmail.victim.characterId
-                    ? typeof killmail.victim.characterId === "string"
-                      ? BigInt(killmail.victim.characterId)
-                      : killmail.victim.characterId
-                    : null,
-                  corporation_id: killmail.victim.corporationId
-                    ? typeof killmail.victim.corporationId === "string"
-                      ? BigInt(killmail.victim.corporationId)
-                      : killmail.victim.corporationId
-                    : null,
-                  alliance_id: killmail.victim.allianceId
-                    ? typeof killmail.victim.allianceId === "string"
-                      ? BigInt(killmail.victim.allianceId)
-                      : killmail.victim.allianceId
-                    : null,
-                  ship_type_id: killmail.victim.shipTypeId || 0,
-                  damage_taken: killmail.victim.damageTaken || 0,
-                },
-              }
-            : undefined,
-        },
+        })
+      )
+    );
+
+    logger.debug('Attacker data processed', {
+      killmailId: killmailId.toString(),
+      attackerCount: attackers.length,
+      correlationId,
+    });
+  }
+
+  /**
+   * Manage character relationships for tracking
+   */
+  private async manageCharacterRelationships(
+    tx: any,
+    killmailId: bigint,
+    involvedCharacters: InvolvedCharacterData[],
+    correlationId: string
+  ): Promise<void> {
+    // Delete existing relationships
+    await tx.killCharacter.deleteMany({
+      where: { killmailId },
+    });
+
+    // Create new relationships
+    if (involvedCharacters.length > 0) {
+      await tx.killCharacter.createMany({
+        data: involvedCharacters.map(char => ({
+          killmailId,
+          characterId: char.characterId,
+          role: char.role,
+        })),
       });
-      return PrismaMapper.map(saved, Killmail);
-    });
-  }
-
-  /**
-   * Delete a killmail
-   */
-  async deleteKillmail(killmailId: string): Promise<void> {
-    await this.prisma.killFact.delete({
-      where: { killmail_id: BigInt(killmailId) },
-    });
-  }
-
-  /**
-   * Get killmail statistics for a character
-   */
-  async getCharacterStats(
-    characterId: string,
-    options: {
-      startDate?: Date;
-      endDate?: Date;
-    } = {}
-  ): Promise<{
-    totalKills: number;
-    totalLosses: number;
-    soloKills: number;
-    awoxKills: number;
-    totalValue: number;
-    totalPoints: number;
-  }> {
-    const { startDate, endDate } = options;
-
-    const where: Prisma.KillFactWhereInput = {
-      OR: [
-        { victims: { some: { character_id: BigInt(characterId) } } },
-        { attackers: { some: { character_id: BigInt(characterId) } } },
-      ],
-    };
-
-    if (startDate) {
-      where.kill_time = { gte: startDate };
     }
 
-    if (endDate) {
-      where.kill_time = { lte: endDate };
-    }
-
-    const [kills, losses] = await Promise.all([
-      this.prisma.killFact.findMany({
-        where,
-        select: {
-          solo: true,
-          awox: true,
-          total_value: true,
-          points: true,
-        },
-      }),
-      this.prisma.lossFact.findMany({
-        where: {
-          character_id: BigInt(characterId),
-          kill_time: {
-            gte: startDate || new Date(0),
-            lte: endDate || new Date(),
-          },
-        },
-      }),
-    ]);
-
-    return {
-      totalKills: kills.length,
-      totalLosses: losses.length,
-      soloKills: kills.filter((k) => k.solo).length,
-      awoxKills: kills.filter((k) => k.awox).length,
-      totalValue: Number(
-        kills.reduce((sum, k) => sum + k.total_value, BigInt(0))
-      ),
-      totalPoints: kills.reduce((sum, k) => sum + k.points, 0),
-    };
+    logger.debug('Character relationships updated', {
+      killmailId: killmailId.toString(),
+      relationshipCount: involvedCharacters.length,
+      correlationId,
+    });
   }
 
   /**
-   * Get kills for a list of characters within a date range
+   * Create loss fact for tracked victim
    */
-  async getKillsForCharacters(
-    characterIds: string | bigint | (string | bigint)[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
-    const ids = Array.isArray(characterIds) ? characterIds : [characterIds];
-    const bigIntIds = ids.map((id) => BigInt(id));
+  private async createLossFact(
+    tx: any,
+    killFact: {
+      killmailId: bigint;
+      killTime: Date;
+      systemId: number;
+      totalValue: bigint;
+    },
+    victim: {
+      characterId?: bigint;
+      shipTypeId: number;
+    },
+    attackers: Array<any>,
+    correlationId: string
+  ): Promise<void> {
+    if (!victim.characterId) return;
 
-    const kills = await this.prisma.killFact.findMany({
+    const character = await tx.character.findUnique({
+      where: { eveId: victim.characterId },
+    });
+
+    if (!character) {
+      logger.debug('Victim character not tracked, skipping loss fact', {
+        killmailId: killFact.killmailId.toString(),
+        victimId: victim.characterId.toString(),
+        correlationId,
+      });
+      return;
+    }
+
+    await tx.lossFact.upsert({
+      where: { killmailId: killFact.killmailId },
+      update: {
+        killTime: killFact.killTime,
+        systemId: killFact.systemId,
+        totalValue: killFact.totalValue,
+        attackerCount: attackers.length,
+        labels: [],
+      },
+      create: {
+        killmailId: killFact.killmailId,
+        characterId: victim.characterId,
+        killTime: killFact.killTime,
+        shipTypeId: victim.shipTypeId,
+        systemId: killFact.systemId,
+        totalValue: killFact.totalValue,
+        attackerCount: attackers.length,
+        labels: [],
+      },
+    });
+
+    logger.debug('Loss fact created', {
+      killmailId: killFact.killmailId.toString(),
+      victimId: victim.characterId.toString(),
+      correlationId,
+    });
+  }
+
+  /**
+   * Get kills for specific characters in a time range
+   */
+  async getKillsForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<any[]> {
+    return this.prisma.killFact.findMany({
       where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
+        killTime: {
           gte: startDate,
           lte: endDate,
+        },
+        characters: {
+          some: {
+            characterId: {
+              in: characterIds,
+            },
+            role: 'attacker',
+          },
         },
       },
       include: {
@@ -401,860 +280,241 @@ export class KillRepository extends BaseRepository {
         victims: true,
       },
       orderBy: {
-        kill_time: "desc",
+        killTime: 'desc',
       },
     });
-
-    return PrismaMapper.mapArray(kills, Killmail);
   }
 
   /**
-   * Get kills for a character group within a date range
+   * Get all kills where characters appear as either attacker or victim
    */
-  async getKillsForGroup(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
-    const group = await this.prisma.characterGroup.findUnique({
-      where: { id: groupId },
-      include: { characters: true },
-    });
-
-    if (!group) {
-      return [];
-    }
-
-    const characterIds = group.characters.map((c) => BigInt(c.eveId));
-
-    return this.getKillsForCharacters(characterIds, startDate, endDate);
-  }
-
-  /**
-   * Get kill statistics for a character
-   */
-  async getKillStats(
-    characterId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<{
-    totalKills: number;
-    soloKills: number;
-    totalValue: bigint;
-    averageValue: bigint;
-  }> {
-    const kills = await this.prisma.killFact.findMany({
+  async getAllKillsForCharacters(characterIds: bigint[], startDate: Date, endDate: Date): Promise<any[]> {
+    return this.prisma.killFact.findMany({
       where: {
-        OR: [
-          { victims: { some: { character_id: BigInt(characterId) } } },
-          { attackers: { some: { character_id: BigInt(characterId) } } },
-        ],
-        kill_time: {
+        killTime: {
           gte: startDate,
           lte: endDate,
         },
-      },
-      select: {
-        solo: true,
-        total_value: true,
-      },
-    });
-
-    const totalKills = kills.length;
-    const soloKills = kills.filter((k) => k.solo).length;
-    const totalValue = kills.reduce((sum, k) => sum + k.total_value, BigInt(0));
-    const averageValue =
-      totalKills > 0 ? totalValue / BigInt(totalKills) : BigInt(0);
-
-    return {
-      totalKills,
-      soloKills,
-      totalValue,
-      averageValue,
-    };
-  }
-
-  /**
-   * Get kill statistics for a character group
-   */
-  async getGroupKillStats(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<{
-    totalKills: number;
-    soloKills: number;
-    totalValue: bigint;
-    averageValue: bigint;
-  }> {
-    const group = await this.prisma.characterGroup.findUnique({
-      where: { id: groupId },
-      include: { characters: true },
-    });
-
-    if (!group) {
-      return {
-        totalKills: 0,
-        soloKills: 0,
-        totalValue: BigInt(0),
-        averageValue: BigInt(0),
-      };
-    }
-
-    const characterIds = group.characters.map((c) => BigInt(c.eveId));
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: characterIds } } } },
-          { attackers: { some: { character_id: { in: characterIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        solo: true,
-        total_value: true,
-      },
-    });
-
-    const totalKills = kills.length;
-    const soloKills = kills.filter((k) => k.solo).length;
-    const totalValue = kills.reduce((sum, k) => sum + k.total_value, BigInt(0));
-    const averageValue =
-      totalKills > 0 ? totalValue / BigInt(totalKills) : BigInt(0);
-
-    return {
-      totalKills,
-      soloKills,
-      totalValue,
-      averageValue,
-    };
-  }
-
-  /**
-   * Get kill statistics for a character group with enhanced solo kill detection
-   *
-   * This considers a kill "solo" if:
-   * 1. It's marked as solo in the database (one attacker), OR
-   * 2. All attackers are from the same character group (group solo)
-   */
-  async getGroupKillStatsEnhanced(
-    groupId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<{
-    totalKills: number;
-    soloKills: number;
-    groupSoloKills: number;
-    totalValue: bigint;
-    averageValue: bigint;
-  }> {
-    const group = await this.prisma.characterGroup.findUnique({
-      where: { id: groupId },
-      include: { characters: true },
-    });
-
-    if (!group) {
-      return {
-        totalKills: 0,
-        soloKills: 0,
-        groupSoloKills: 0,
-        totalValue: BigInt(0),
-        averageValue: BigInt(0),
-      };
-    }
-
-    const characterIds = group.characters.map((c) => BigInt(c.eveId));
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: characterIds } } } },
-          { attackers: { some: { character_id: { in: characterIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
+        characters: {
+          some: {
+            characterId: {
+              in: characterIds,
+            },
+          },
         },
       },
       include: {
         attackers: true,
-      },
-    });
-
-    const totalKills = kills.length;
-    const soloKills = kills.filter((k) => k.solo).length;
-    const groupSoloKills = kills.filter((k) => {
-      if (!k.solo) return false;
-      return k.attackers.every(
-        (a) => a.character_id && characterIds.includes(a.character_id)
-      );
-    }).length;
-
-    const totalValue = kills.reduce((sum, k) => sum + k.total_value, BigInt(0));
-    const averageValue =
-      totalKills > 0 ? totalValue / BigInt(totalKills) : BigInt(0);
-
-    return {
-      totalKills,
-      soloKills,
-      groupSoloKills,
-      totalValue,
-      averageValue,
-    };
-  }
-
-  /**
-   * Get kills grouped by time period for chart data
-   */
-  async getKillsGroupedByTime(
-    characterIds: string[],
-    startDate: Date,
-    endDate: Date,
-    groupBy: "hour" | "day" | "week" = "day"
-  ): Promise<Array<{ timestamp: Date; kills: number; value: bigint }>> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        kill_time: true,
-        total_value: true,
+        victims: true,
       },
       orderBy: {
-        kill_time: "asc",
+        killTime: 'desc',
       },
     });
-
-    const grouped = new Map<string, { kills: number; value: bigint }>();
-
-    for (const kill of kills) {
-      const key = this.getTimeKey(kill.kill_time, groupBy);
-      const current = grouped.get(key) || { kills: 0, value: BigInt(0) };
-      grouped.set(key, {
-        kills: current.kills + 1,
-        value: current.value + kill.total_value,
-      });
-    }
-
-    return Array.from(grouped.entries()).map(([key, data]) => ({
-      timestamp: new Date(key),
-      kills: data.kills,
-      value: data.value,
-    }));
   }
 
   /**
-   * Get the top ship types destroyed within a date range
+   * Check if a killmail already exists
    */
-  async getTopShipTypesDestroyed(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date,
-    limit: number = 10
-  ): Promise<Array<{ shipTypeId: string; count: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
+  async killmailExists(killmailId: bigint): Promise<boolean> {
+    const count = await this.prisma.killFact.count({
+      where: { killmailId },
+    });
+    return count > 0;
+  }
 
-    const kills = await this.prisma.killFact.findMany({
+  /**
+   * Get kill count for a character
+   */
+  async getKillCount(characterId: bigint, startDate?: Date, endDate?: Date): Promise<number> {
+    return this.prisma.killCharacter.count({
       where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
+        characterId,
+        role: 'attacker',
+        kill: {
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
       },
-      select: {
-        ship_type_id: true,
-      },
     });
-
-    const counts = new Map<number, number>();
-    for (const kill of kills) {
-      counts.set(kill.ship_type_id, (counts.get(kill.ship_type_id) || 0) + 1);
-    }
-
-    return Array.from(counts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([shipTypeId, count]) => ({
-        shipTypeId: shipTypeId.toString(),
-        count,
-      }));
   }
 
   /**
-   * Get ship types destroyed over time within a date range
+   * Get loss count for a character
    */
-  async getShipTypesOverTime(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date,
-    limit: number = 5
-  ): Promise<Record<string, Record<string, { count: number }>>> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
+  async getLossCount(characterId: bigint, startDate?: Date, endDate?: Date): Promise<number> {
+    return this.prisma.killCharacter.count({
       where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
+        characterId,
+        role: 'victim',
+        kill: {
+          killTime: {
+            gte: startDate,
+            lte: endDate,
+          },
         },
       },
-      select: {
-        kill_time: true,
-        ship_type_id: true,
-      },
-      orderBy: {
-        kill_time: "asc",
-      },
-    });
-
-    const result: Record<string, Record<string, { count: number }>> = {};
-    const shipTypeCounts = new Map<number, number>();
-
-    for (const kill of kills) {
-      const dateKey = this.getTimeKey(kill.kill_time, "day");
-      if (!result[dateKey]) {
-        result[dateKey] = {};
-      }
-
-      const shipTypeId = kill.ship_type_id.toString();
-      if (!result[dateKey][shipTypeId]) {
-        result[dateKey][shipTypeId] = { count: 0 };
-      }
-
-      result[dateKey][shipTypeId].count++;
-      shipTypeCounts.set(
-        kill.ship_type_id,
-        (shipTypeCounts.get(kill.ship_type_id) || 0) + 1
-      );
-    }
-
-    // Get top N ship types
-    const topShipTypes = Array.from(shipTypeCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([id]) => id.toString());
-
-    // Filter result to only include top ship types
-    for (const dateKey in result) {
-      const filtered: Record<string, { count: number }> = {};
-      for (const shipTypeId of topShipTypes) {
-        if (result[dateKey][shipTypeId]) {
-          filtered[shipTypeId] = result[dateKey][shipTypeId];
-        }
-      }
-      result[dateKey] = filtered;
-    }
-
-    return result;
-  }
-
-  /**
-   * Get kills with attacker count for distribution analysis
-   */
-  async getKillsWithAttackerCount(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map((id) =>
-      typeof id === "string" ? BigInt(id) : id
-    );
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        attackers: true,
-      },
-    });
-
-    return kills.map((kill) => ({
-      killmailId: kill.killmail_id.toString(),
-      attackerCount: kill.attackers.length,
-    }));
-  }
-
-  /**
-   * Get top enemy corporations
-   */
-  async getTopEnemyCorporations(
-    characterIds: string[],
-    startDate: Date,
-    endDate: Date,
-    limit: number = 10
-  ): Promise<Array<{ corpId: string; corpName: string; killCount: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        attackers: true,
-      },
-    });
-
-    const corpCounts = new Map<string, { name: string; count: number }>();
-
-    for (const kill of kills) {
-      for (const attacker of kill.attackers) {
-        if (attacker.corporation_id) {
-          const corpId = attacker.corporation_id.toString();
-          const current = corpCounts.get(corpId) || { name: corpId, count: 0 };
-          corpCounts.set(corpId, {
-            name: current.name,
-            count: current.count + 1,
-          });
-        }
-      }
-    }
-
-    return Array.from(corpCounts.entries())
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, limit)
-      .map(([corpId, data]) => ({
-        corpId,
-        corpName: data.name,
-        killCount: data.count,
-      }));
-  }
-
-  /**
-   * Get the total number of kills by corporation
-   */
-  async getTotalEnemyCorporationKills(
-    characterIds: string[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<number> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        attackers: true,
-      },
-    });
-
-    const uniqueCorps = new Set<string>();
-    for (const kill of kills) {
-      for (const attacker of kill.attackers) {
-        if (attacker.corporation_id) {
-          uniqueCorps.add(attacker.corporation_id.toString());
-        }
-      }
-    }
-
-    return uniqueCorps.size;
-  }
-
-  /**
-   * Get kill activity grouped by hour and day of week for heatmap
-   */
-  async getKillActivityByTimeOfDay(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{ dayOfWeek: number; hourOfDay: number; kills: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      select: {
-        kill_time: true,
-      },
-    });
-
-    const activity = new Map<string, number>();
-
-    for (const kill of kills) {
-      const date = kill.kill_time;
-      const key = `${date.getDay()}-${date.getHours()}`;
-      activity.set(key, (activity.get(key) || 0) + 1);
-    }
-
-    return Array.from(activity.entries()).map(([key, kills]) => {
-      const [dayOfWeek, hourOfDay] = key.split("-").map(Number);
-      return { dayOfWeek, hourOfDay, kills };
     });
   }
 
-  /**
-   * Get distribution data for a character
-   */
-  async getDistributionData(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<Array<{ killmailId: string; attackerCount: number }>> {
-    const bigIntIds = characterIds.map((id) =>
-      typeof id === "string" ? BigInt(id) : id
-    );
+  // Placeholder methods that return empty results with warning logs
+  async getTopKillers(_limit = 10): Promise<any[]> {
+    logger.warn('Method not yet implemented: getTopKillers');
+    return [];
+  }
 
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        attackers: true,
-      },
-    });
+  async getKillsInDateRange(_start: Date, _end: Date): Promise<any[]> {
+    logger.warn('Method not yet implemented: getKillsInDateRange');
+    return [];
+  }
 
-    return kills.map((kill) => ({
-      killmailId: kill.killmail_id.toString(),
-      attackerCount: kill.attackers.length,
-    }));
+  async getShipTypesOverTime(_startDate: Date, _endDate: Date, _limit = 10): Promise<any[]> {
+    logger.warn('Method not yet implemented: getShipTypesOverTime');
+    return [];
   }
 
   /**
-   * Get the top ship types used by characters within a date range
+   * Get top ship types used by characters
    */
   async getTopShipTypesUsed(
-    characterIds: (string | bigint)[],
+    characterIds: bigint[],
     startDate: Date,
     endDate: Date,
-    limit: number = 10
-  ): Promise<Array<{ shipTypeId: string; count: number }>> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
+    limit: number
+  ): Promise<Array<{ shipTypeId: number; count: number }>> {
+    try {
+      const result = await this.prisma.killAttacker.groupBy({
+        by: ['shipTypeId'],
+        where: {
+          characterId: { in: characterIds },
+          shipTypeId: { not: null },
+          kill: {
+            killTime: {
+              gte: startDate,
+              lte: endDate,
+            },
+          },
         },
-      },
-      include: {
-        attackers: true,
-      },
-    });
+        _count: {
+          shipTypeId: true,
+        },
+        orderBy: {
+          _count: {
+            shipTypeId: 'desc',
+          },
+        },
+        take: limit,
+      });
 
-    const shipTypeCounts = new Map<number, number>();
-
-    for (const kill of kills) {
-      for (const attacker of kill.attackers) {
-        if (attacker.ship_type_id) {
-          shipTypeCounts.set(
-            attacker.ship_type_id,
-            (shipTypeCounts.get(attacker.ship_type_id) || 0) + 1
-          );
-        }
-      }
-    }
-
-    return Array.from(shipTypeCounts.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit)
-      .map(([shipTypeId, count]) => ({
-        shipTypeId: shipTypeId.toString(),
-        count,
+      return result.map(r => ({
+        shipTypeId: r.shipTypeId!,
+        count: r._count.shipTypeId,
       }));
-  }
-
-  /**
-   * Get all kills where a character participated (either as the main killer or as an attacker)
-   * This ensures we don't miss kills where the character participated but wasn't the main character
-   */
-  async getAllKillsForCharacters(
-    characterIds: (string | bigint)[],
-    startDate: Date,
-    endDate: Date
-  ): Promise<any[]> {
-    const bigIntIds = characterIds.map(BigInt);
-
-    const kills = await this.prisma.killFact.findMany({
-      where: {
-        OR: [
-          { victims: { some: { character_id: { in: bigIntIds } } } },
-          { attackers: { some: { character_id: { in: bigIntIds } } } },
-        ],
-        kill_time: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      include: {
-        attackers: true,
-        victims: true,
-      },
-      orderBy: {
-        kill_time: "desc",
-      },
-    });
-
-    return PrismaMapper.mapArray(kills, Killmail);
-  }
-
-  /**
-   * Count kills for a character
-   */
-  async countKills(): Promise<number> {
-    return this.prisma.killFact.count();
-  }
-
-  /**
-   * Count losses for a character
-   */
-  async countLosses(): Promise<number> {
-    return this.prisma.lossFact.count();
-  }
-
-  /**
-   * Get a loss by killmail ID
-   */
-  async getLoss(killmailId: bigint): Promise<any> {
-    return this.prisma.lossFact.findUnique({
-      where: { killmail_id: killmailId },
-    });
-  }
-
-  /**
-   * Save a loss record
-   */
-  async saveLoss(
-    killmailId: bigint,
-    killTime: Date,
-    systemId: number,
-    totalValue: number,
-    attackerCount: number,
-    labels: string[],
-    characterId: bigint,
-    shipTypeId: number
-  ): Promise<void> {
-    await this.prisma.lossFact.upsert({
-      where: { killmail_id: killmailId },
-      create: {
-        killmail_id: killmailId,
-        kill_time: killTime,
-        system_id: systemId,
-        total_value: BigInt(totalValue),
-        attacker_count: attackerCount,
-        labels,
-        character_id: characterId,
-        ship_type_id: shipTypeId,
-      },
-      update: {
-        kill_time: killTime,
-        system_id: systemId,
-        total_value: BigInt(totalValue),
-        attacker_count: attackerCount,
-        labels,
-        character_id: characterId,
-        ship_type_id: shipTypeId,
-      },
-    });
-  }
-
-  /**
-   * Delete all losses
-   */
-  async deleteAllLosses(): Promise<{ count: number }> {
-    return this.prisma.lossFact.deleteMany();
-  }
-
-  /**
-   * Delete all loss checkpoints
-   */
-  async deleteAllLossCheckpoints(): Promise<{ count: number }> {
-    return this.prisma.ingestionCheckpoint.deleteMany({
-      where: {
-        streamName: {
-          startsWith: "losses:",
-        },
-      },
-    });
-  }
-
-  /**
-   * Get time key
-   */
-  private getTimeKey(date: Date, groupBy: "hour" | "day" | "week"): string {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const hour = date.getHours();
-
-    switch (groupBy) {
-      case "hour":
-        return `${year}-${month.toString().padStart(2, "0")}-${day
-          .toString()
-          .padStart(2, "0")}T${hour.toString().padStart(2, "0")}:00:00Z`;
-      case "day":
-        return `${year}-${month.toString().padStart(2, "0")}-${day
-          .toString()
-          .padStart(2, "0")}T00:00:00Z`;
-      case "week":
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - date.getDay());
-        return `${weekStart.getFullYear()}-${(weekStart.getMonth() + 1)
-          .toString()
-          .padStart(2, "0")}-${weekStart
-          .getDate()
-          .toString()
-          .padStart(2, "0")}T00:00:00Z`;
+    } catch (error) {
+      logger.error('Failed to get top ship types used', error);
+      throw new DatabaseError(
+        'Failed to get top ship types used',
+        'query',
+        'killAttacker',
+        { metadata: { startDate, endDate, limit } },
+        error as Error
+      );
     }
   }
 
   /**
-   * Get all kills for a character within a date range
+   * Get top ship types destroyed by characters
    */
-  async getKillsForCharacter(
-    characterId: string | bigint,
+  async getTopShipTypesDestroyed(
+    characterIds: bigint[],
     startDate: Date,
-    endDate: Date
-  ): Promise<Killmail[]> {
-    return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
+    endDate: Date,
+    limit: number
+  ): Promise<Array<{ shipTypeId: number; count: number }>> {
+    try {
+      const result = await this.prisma.killVictim.groupBy({
+        by: ['shipTypeId'],
         where: {
-          OR: [
-            { victims: { some: { character_id: BigInt(characterId) } } },
-            { attackers: { some: { character_id: BigInt(characterId) } } },
-          ],
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
+          kill: {
+            killTime: {
+              gte: startDate,
+              lte: endDate,
+            },
+            attackers: {
+              some: {
+                characterId: { in: characterIds },
+              },
+            },
           },
         },
-        include: {
-          attackers: true,
-          victims: true,
+        _count: {
+          shipTypeId: true,
         },
         orderBy: {
-          kill_time: "desc",
+          _count: {
+            shipTypeId: 'desc',
+          },
         },
+        take: limit,
       });
 
-      return PrismaMapper.mapArray(kills, Killmail);
-    });
+      return result.map(r => ({
+        shipTypeId: r.shipTypeId,
+        count: r._count.shipTypeId,
+      }));
+    } catch (error) {
+      logger.error('Failed to get top ship types destroyed', error);
+      throw new DatabaseError(
+        'Failed to get top ship types destroyed',
+        'query',
+        'killVictim',
+        { metadata: { startDate, endDate, limit } },
+        error as Error
+      );
+    }
   }
 
   /**
-   * Get all kills in a system within a date range
+   * Get kills grouped by time for trend analysis
    */
-  async getKillsInSystem(
-    systemId: string | number,
+  async getKillsGroupedByTime(
+    characterIds: bigint[],
     startDate: Date,
-    endDate: Date
-  ): Promise<Killmail[]> {
-    return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          system_id: Number(systemId),
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        include: {
-          attackers: true,
-          victims: true,
-        },
-        orderBy: {
-          kill_time: "desc",
-        },
-      });
+    endDate: Date,
+    groupBy: 'hour' | 'day' | 'week'
+  ): Promise<Array<{ time: Date; count: number }>> {
+    try {
+      // For now, use raw SQL for time grouping as Prisma doesn't support it natively
 
-      return PrismaMapper.mapArray(kills, Killmail);
-    });
-  }
+      const result = await this.prisma.$queryRaw<Array<{ time: Date; count: bigint }>>`
+        SELECT 
+          date_trunc(${groupBy}, kf."killTime") as time,
+          COUNT(DISTINCT kf."killmailId")::bigint as count
+        FROM "KillFact" kf
+        INNER JOIN "KillCharacter" kc ON kc."killmailId" = kf."killmailId"
+        WHERE kc."characterId" = ANY(${characterIds})
+          AND kc."role" = 'attacker'
+          AND kf."killTime" >= ${startDate}
+          AND kf."killTime" <= ${endDate}
+        GROUP BY date_trunc(${groupBy}, kf."killTime")
+        ORDER BY time ASC
+      `;
 
-  /**
-   * Get all kills within a date range
-   */
-  async getKillsInDateRange(
-    startDate: Date,
-    endDate: Date
-  ): Promise<Killmail[]> {
-    return this.executeQuery(async () => {
-      const kills = await this.prisma.killFact.findMany({
-        where: {
-          kill_time: {
-            gte: startDate,
-            lte: endDate,
-          },
-        },
-        include: {
-          attackers: true,
-          victims: true,
-        },
-        orderBy: {
-          kill_time: "desc",
-        },
-      });
-
-      return PrismaMapper.mapArray(kills, Killmail);
-    });
-  }
-
-  /**
-   * Deletes all killmails from the database
-   */
-  async deleteAllKillmails(): Promise<void> {
-    await this.prisma.killFact.deleteMany();
+      return result.map(r => ({
+        time: r.time,
+        count: Number(r.count),
+      }));
+    } catch (error) {
+      logger.error('Failed to get kills grouped by time', error);
+      throw new DatabaseError(
+        'Failed to get kills grouped by time',
+        'query',
+        'killFact',
+        { metadata: { startDate, endDate, groupBy } },
+        error as Error
+      );
+    }
   }
 }

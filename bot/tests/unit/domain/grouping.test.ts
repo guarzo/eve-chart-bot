@@ -1,22 +1,19 @@
 import { prismaMock } from "../../setup";
-import {
-  createCharacterGroupSafely,
-  upsertCharacterGroupSafely,
-  cleanupEmptyCharacterGroups,
-} from "../../../src/domain/character/grouping";
+import { CharacterGroupUtils } from "../../../src/shared/utilities/CharacterGroupUtils";
 
 describe("Character Grouping", () => {
   describe("createCharacterGroupSafely", () => {
     it("should return null when no slug is provided", async () => {
-      const result = await createCharacterGroupSafely(prismaMock, "", [
-        "123",
-        "456",
-      ]);
+      const result = await CharacterGroupUtils.createCharacterGroupSafely(
+        prismaMock,
+        "",
+        [123n, 456n]
+      );
       expect(result).toBeNull();
     });
 
     it("should return null when no characters are provided", async () => {
-      const result = await createCharacterGroupSafely(
+      const result = await CharacterGroupUtils.createCharacterGroupSafely(
         prismaMock,
         "test-group",
         []
@@ -27,17 +24,17 @@ describe("Character Grouping", () => {
     it("should return null when characters don't exist in database", async () => {
       prismaMock.character.findMany.mockResolvedValue([]);
 
-      const result = await createCharacterGroupSafely(
+      const result = await CharacterGroupUtils.createCharacterGroupSafely(
         prismaMock,
         "test-group",
-        ["123", "456"]
+        [123n, 456n]
       );
 
       expect(result).toBeNull();
       expect(prismaMock.character.findMany).toHaveBeenCalledWith({
         where: {
           eveId: {
-            in: ["123", "456"],
+            in: [123n, 456n],
           },
         },
       });
@@ -50,8 +47,8 @@ describe("Character Grouping", () => {
           return Promise.resolve([]);
         } else {
           return Promise.resolve([
-            { eveId: "123", name: "Char1" },
-            { eveId: "456", name: "Char2" },
+            { eveId: 123n, name: "Char1" },
+            { eveId: 456n, name: "Char2" },
           ]);
         }
       });
@@ -60,7 +57,7 @@ describe("Character Grouping", () => {
       prismaMock.$transaction.mockImplementation(async (callback) => {
         const mockGroup = {
           id: "new-group-id",
-          slug: "test-group",
+          map_name: "test-group",
           mainCharacterId: null,
         };
         return callback(prismaMock).then(() => mockGroup);
@@ -69,20 +66,20 @@ describe("Character Grouping", () => {
       // Mock group creation
       prismaMock.characterGroup.create.mockResolvedValue({
         id: "new-group-id",
-        slug: "test-group",
+        map_name: "test-group",
         mainCharacterId: null,
       });
 
-      const result = await createCharacterGroupSafely(
+      const result = await CharacterGroupUtils.createCharacterGroupSafely(
         prismaMock,
         "test-group",
-        ["123", "456"]
+        [123n, 456n]
       );
 
       expect(result).toBe("new-group-id");
       expect(prismaMock.characterGroup.create).toHaveBeenCalledWith({
         data: {
-          slug: "test-group",
+          mapName: "test-group",
           mainCharacterId: null,
         },
       });
@@ -92,21 +89,21 @@ describe("Character Grouping", () => {
       // Mock characters with existing group
       prismaMock.character.findMany.mockResolvedValue([
         {
-          eveId: "123",
+          eveId: 123n,
           name: "Char1",
           characterGroupId: "existing-group-id",
           characterGroup: {
             id: "existing-group-id",
-            slug: "existing-group",
+            map_name: "existing-group",
             mainCharacterId: null,
           },
         },
       ]);
 
-      const result = await createCharacterGroupSafely(
+      const result = await CharacterGroupUtils.createCharacterGroupSafely(
         prismaMock,
         "test-group",
-        ["123", "456", "789"]
+        [123n, 456n, 789n]
       );
 
       expect(result).toBe("existing-group-id");
@@ -118,21 +115,26 @@ describe("Character Grouping", () => {
     it("should return 0 when no empty groups exist", async () => {
       prismaMock.characterGroup.findMany.mockResolvedValue([]);
 
-      const result = await cleanupEmptyCharacterGroups(prismaMock);
+      const result = await CharacterGroupUtils.cleanupEmptyCharacterGroups(
+        prismaMock
+      );
 
       expect(result).toBe(0);
     });
 
     it("should delete empty groups", async () => {
       prismaMock.characterGroup.findMany.mockResolvedValue([
-        { id: "empty-group-1", slug: "empty1", _count: { characters: 0 } },
-        { id: "empty-group-2", slug: "empty2", _count: { characters: 0 } },
+        { id: "empty-group-1", map_name: "empty1", _count: { characters: 0 } },
+        { id: "empty-group-2", map_name: "empty2", _count: { characters: 0 } },
       ]);
+      prismaMock.characterGroup.deleteMany.mockResolvedValue({ count: 2 });
 
-      const result = await cleanupEmptyCharacterGroups(prismaMock);
+      const result = await CharacterGroupUtils.cleanupEmptyCharacterGroups(
+        prismaMock
+      );
 
       expect(result).toBe(2);
-      expect(prismaMock.characterGroup.delete).toHaveBeenCalledTimes(2);
+      expect(prismaMock.characterGroup.deleteMany).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -1,5 +1,5 @@
-import { ChartOptions } from "../../../types/chart";
-import { theme } from "./theme";
+import { ChartOptions } from '../../../types/chart';
+import { theme } from './theme';
 
 /**
  * Configuration for Map Activity charts
@@ -12,7 +12,7 @@ export const MapChartConfig: ChartOptions = {
       stacked: true,
       title: {
         display: true,
-        text: "Count",
+        text: 'Count',
       },
       grid: {
         color: theme.grid.color,
@@ -22,7 +22,7 @@ export const MapChartConfig: ChartOptions = {
       stacked: true,
       title: {
         display: true,
-        text: "Character Group",
+        text: 'Character Group',
       },
       grid: {
         color: theme.grid.color,
@@ -32,7 +32,7 @@ export const MapChartConfig: ChartOptions = {
   plugins: {
     title: {
       display: true,
-      text: "Map Activity by Group",
+      text: 'Map Activity by Group',
       font: {
         size: theme.text.font.size.large,
         weight: theme.text.font.weight.bold,
@@ -40,7 +40,7 @@ export const MapChartConfig: ChartOptions = {
     },
     legend: {
       display: true,
-      position: "top",
+      position: 'top',
       labels: {
         color: theme.text.primary,
         usePointStyle: true,

@@ -1,5 +1,5 @@
 import type { ChartConfiguration, Point } from "chart.js";
-import { theme, chartPalette } from "./theme.js";
+import { theme } from "./theme.js";
 
 interface MatrixDataPoint extends Point {
   v: number;

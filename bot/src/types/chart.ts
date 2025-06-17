@@ -1,32 +1,36 @@
+import { ChartType, ChartOptions as ChartJSOptions, ScriptableContext, Tick, Scale, TooltipItem } from 'chart.js';
 import {
-  ChartType,
-  ChartDataset as ChartJSDataset,
-  ChartOptions as ChartJSOptions,
-} from "chart.js";
+  ChartPeriod as ChartPeriodEnum,
+  ChartSourceType as ChartSourceTypeEnum,
+  ChartDisplayType as ChartDisplayTypeEnum,
+  ChartMetric as ChartMetricEnum,
+  ChartGroupBy as ChartGroupByEnum,
+  LegendPosition as LegendPositionEnum,
+} from '../shared/enums';
 
-export type ChartPeriod = "24h" | "7d" | "30d" | "90d";
-export type ChartSourceType = "kills" | "map_activity";
-export type ChartDisplayType =
-  | "bar"
-  | "line"
-  | "pie"
-  | "boxplot"
-  | "violin"
-  | "heatmap"
-  | "calendar"
-  | "doughnut"
-  | "radar"
-  | "polarArea"
-  | "bubble"
-  | "scatter"
-  | "gauge";
-export type ChartMetric = "value" | "kills" | "points" | "attackers";
+// Export the enum values as types for backward compatibility
+export type ChartPeriod = `${ChartPeriodEnum}`;
+export type ChartSourceType = `${ChartSourceTypeEnum}`;
+export type ChartDisplayType = `${ChartDisplayTypeEnum}`;
+export type ChartMetric = `${ChartMetricEnum}`;
+export type ChartGroupBy = `${ChartGroupByEnum}`;
+export type LegendPosition = `${LegendPositionEnum}`;
+
+// Re-export enums for direct usage
+export {
+  ChartPeriodEnum,
+  ChartSourceTypeEnum,
+  ChartDisplayTypeEnum,
+  ChartMetricEnum,
+  ChartGroupByEnum,
+  LegendPositionEnum,
+};
 
 export interface ChartConfig {
   type: ChartSourceType;
   characterIds: bigint[];
   period: ChartPeriod;
-  groupBy?: "hour" | "day" | "week";
+  groupBy?: ChartGroupBy;
   displayType?: ChartDisplayType;
   displayMetric?: ChartMetric;
   limit?: number;
@@ -34,7 +38,7 @@ export interface ChartConfig {
   options?: ChartJSOptions;
 }
 
-export type ChartConfigInput = Omit<ChartConfig, "data">;
+export type ChartConfigInput = Omit<ChartConfig, 'data'>;
 
 // Define complex data point type for charts like heatmaps
 export interface ComplexDataPoint {
@@ -53,7 +57,7 @@ export interface ComplexDataPoint {
 export interface ChartDataset {
   label: string;
   data: (number | ComplexDataPoint)[];
-  backgroundColor?: string | string[] | ((context: any) => string);
+  backgroundColor?: string | string[] | ((context: ScriptableContext<ChartType>) => string);
   borderColor?: string | string[];
   borderWidth?: number;
   fill?: boolean;
@@ -76,7 +80,7 @@ export interface ScaleOptions {
   stacked?: boolean;
   beginAtZero?: boolean;
   type?: string;
-  position?: "left" | "right";
+  position?: 'left' | 'right';
   display?: boolean;
   suggestedMin?: number;
   suggestedMax?: number;
@@ -86,7 +90,7 @@ export interface ScaleOptions {
     text: string;
     font?: {
       size?: number;
-      weight?: "bold" | "normal" | "lighter" | "bolder";
+      weight?: 'bold' | 'normal' | 'lighter' | 'bolder';
     };
   };
   grid?: {
@@ -97,7 +101,7 @@ export interface ScaleOptions {
   ticks?: {
     font?: {
       size?: number;
-      weight?: "bold" | "normal" | "lighter" | "bolder";
+      weight?: 'bold' | 'normal' | 'lighter' | 'bolder';
     };
     color?: string;
     padding?: number;
@@ -105,7 +109,12 @@ export interface ScaleOptions {
     minRotation?: number;
     autoSkip?: boolean;
     maxTicksLimit?: number;
-    callback?: (value: any) => string;
+    callback?: (
+      this: Scale,
+      value: number | string,
+      index: number,
+      ticks: Tick[]
+    ) => string | string[] | number | number[] | null | undefined;
   };
   time?: {
     unit: string;
@@ -116,17 +125,17 @@ export interface ScaleOptions {
 export interface ChartOptions {
   width?: number;
   height?: number;
-  format?: "png" | "jpg" | "jpeg" | "webp";
+  format?: 'png' | 'jpg' | 'jpeg' | 'webp';
   quality?: number;
   background?: string;
   devicePixelRatio?: number;
   responsive?: boolean;
   maintainAspectRatio?: boolean;
-  indexAxis?: "x" | "y";
+  indexAxis?: 'x' | 'y';
   plugins?: {
     legend?: {
       display?: boolean;
-      position?: "top" | "bottom" | "left" | "right";
+      position?: LegendPosition;
       labels?: {
         color?: string;
         font?: {
@@ -146,7 +155,7 @@ export interface ChartOptions {
       };
     };
     tooltip?: {
-      mode?: "index" | "dataset" | "point" | "nearest" | "x" | "y";
+      mode?: 'index' | 'dataset' | 'point' | 'nearest' | 'x' | 'y';
       intersect?: boolean;
       backgroundColor?: string;
       titleColor?: string;
@@ -156,7 +165,7 @@ export interface ChartOptions {
       padding?: number;
       displayColors?: boolean;
       callbacks?: {
-        label?: (context: any) => string;
+        label?: (context: TooltipItem<ChartType>) => string | string[] | void;
       };
     };
   };
@@ -171,13 +180,18 @@ export interface ChartOptions {
         font?: {
           size?: number;
         };
-        callback?: (value: any) => string;
+        callback?: (
+          this: Scale,
+          value: number | string,
+          index: number,
+          ticks: Tick[]
+        ) => string | string[] | number | number[] | null | undefined;
       };
       beginAtZero?: boolean;
       stacked?: boolean;
       type?: string;
       display?: boolean;
-      position?: "top" | "bottom" | "left" | "right";
+      position?: 'top' | 'bottom' | 'left' | 'right';
       time?: {
         unit?: string;
         displayFormats?: Record<string, string>;
@@ -204,13 +218,18 @@ export interface ChartOptions {
         font?: {
           size?: number;
         };
-        callback?: (value: any) => string;
+        callback?: (
+          this: Scale,
+          value: number | string,
+          index: number,
+          ticks: Tick[]
+        ) => string | string[] | number | number[] | null | undefined;
       };
       beginAtZero?: boolean;
       stacked?: boolean;
       type?: string;
       display?: boolean;
-      position?: "top" | "bottom" | "left" | "right";
+      position?: 'top' | 'bottom' | 'left' | 'right';
       time?: {
         unit?: string;
         displayFormats?: Record<string, string>;
@@ -237,13 +256,18 @@ export interface ChartOptions {
         font?: {
           size?: number;
         };
-        callback?: (value: any) => string;
+        callback?: (
+          this: Scale,
+          value: number | string,
+          index: number,
+          ticks: Tick[]
+        ) => string | string[] | number | number[] | null | undefined;
       };
       beginAtZero?: boolean;
       stacked?: boolean;
       type?: string;
       display?: boolean;
-      position?: "top" | "bottom" | "left" | "right";
+      position?: 'top' | 'bottom' | 'left' | 'right';
       time?: {
         unit?: string;
         displayFormats?: Record<string, string>;

@@ -1,8 +1,12 @@
+import { BaseEntity } from '../BaseEntity';
+import { ensureRequiredBigInt, ensureBigInt } from '../../shared/utilities/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../shared/validation/validation';
+
 /**
  * KillFact domain entity
  * Represents a character's kill in EVE Online
  */
-export class KillFact {
+export class KillFact extends BaseEntity {
   /** Killmail ID from EVE Online */
   readonly killmailId: bigint;
 
@@ -27,8 +31,7 @@ export class KillFact {
   /** Solar system ID where the kill occurred */
   systemId: number;
 
-  /** Labels or tags applied to this kill */
-  labels: string[];
+  // Labels are inherited from BaseEntity
 
   /** Total ISK value of the kill */
   totalValue: bigint;
@@ -54,22 +57,17 @@ export class KillFact {
     awox: boolean;
     shipTypeId: number;
     systemId: number;
-    labels: string[];
+    labels?: string[];
     totalValue: bigint | string;
     points: number;
     attackers?: KillAttacker[];
     victim?: KillVictim;
   }) {
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
+    super();
 
-    this.characterId =
-      typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureRequiredBigInt(props.characterId);
 
     this.killTime = props.killTime;
     this.npc = props.npc;
@@ -77,13 +75,9 @@ export class KillFact {
     this.awox = props.awox;
     this.shipTypeId = props.shipTypeId;
     this.systemId = props.systemId;
-    this.labels = props.labels || [];
-
-    this.totalValue =
-      typeof props.totalValue === "string"
-        ? BigInt(props.totalValue)
-        : props.totalValue;
-
+    // Set labels using the inherited property from BaseEntity
+    this.labels = props.labels ?? [];
+    this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.points = props.points;
 
     if (props.attackers) {
@@ -98,41 +92,41 @@ export class KillFact {
   }
 
   /**
-   * Validate the kill fact data
+   * Validate the kill fact data using shared validation utilities
    * @throws Error if data is invalid
    */
   private validate(): void {
-    if (!this.killmailId) {
-      throw new Error("KillFact must have a killmail ID");
-    }
-
-    if (!this.characterId) {
-      throw new Error("KillFact must have a character ID");
-    }
-
-    if (!this.killTime) {
-      throw new Error("KillFact must have a kill time");
-    }
-
-    if (this.shipTypeId <= 0) {
-      throw new Error("KillFact must have a valid ship type ID");
-    }
-
-    if (this.systemId <= 0) {
-      throw new Error("KillFact must have a valid system ID");
-    }
-
-    if (this.points < 0) {
-      throw new Error("KillFact points cannot be negative");
-    }
+    validateRequired('killmailId', this.killmailId);
+    validateRequired('characterId', this.characterId);
+    validateRequired('killTime', this.killTime);
+    validatePositive('shipTypeId', this.shipTypeId);
+    validatePositive('systemId', this.systemId);
+    validateNonNegative('points', this.points);
   }
 
   /**
-   * Get the attackers for this kill
+   * Get the attackers for this kill (nullable return)
+   * Returns null if attackers are not loaded
    */
-  get attackers(): KillAttacker[] {
+  get attackers(): KillAttacker[] | null {
+    return this._attackers;
+  }
+
+  /**
+   * Get the attackers for this kill with safe access
+   * Returns empty array if attackers are not loaded
+   */
+  getAttackersSafe(): KillAttacker[] {
+    return this._attackers || [];
+  }
+
+  /**
+   * Get loaded attackers or throw error if not loaded
+   * Use this only when you're certain attackers should be loaded
+   */
+  getAttackersRequired(): KillAttacker[] {
     if (!this._attackers) {
-      throw new Error("Attackers not loaded for this kill");
+      throw new Error('Attackers not loaded for this kill - ensure relations are included in query');
     }
     return this._attackers;
   }
@@ -145,11 +139,20 @@ export class KillFact {
   }
 
   /**
-   * Get the victim for this kill
+   * Get the victim for this kill (nullable return)
+   * Returns null if victim is not loaded
    */
-  get victim(): KillVictim {
+  get victim(): KillVictim | null {
+    return this._victim;
+  }
+
+  /**
+   * Get loaded victim or throw error if not loaded
+   * Use this only when you're certain victim should be loaded
+   */
+  getVictimRequired(): KillVictim {
     if (!this._victim) {
-      throw new Error("Victim not loaded for this kill");
+      throw new Error('Victim not loaded for this kill - ensure relations are included in query');
     }
     return this._victim;
   }
@@ -177,11 +180,19 @@ export class KillFact {
 
   /**
    * Get the number of attackers on the killmail
-   * @throws Error if attackers are not loaded
+   * Returns 0 if attackers are not loaded
    */
   get attackerCount(): number {
+    return this._attackers?.length || 0;
+  }
+
+  /**
+   * Get the exact number of attackers (requires attackers to be loaded)
+   * @throws Error if attackers are not loaded
+   */
+  getAttackerCountRequired(): number {
     if (!this._attackers) {
-      throw new Error("Attackers not loaded for this kill");
+      throw new Error('Attackers not loaded for this kill - ensure relations are included in query');
     }
     return this._attackers.length;
   }
@@ -197,10 +208,7 @@ export class KillFact {
     }
 
     // Solo means only one attacker (the character)
-    return (
-      this._attackers.length === 1 &&
-      this._attackers[0].characterId === this.characterId
-    );
+    return this._attackers.length === 1 && this._attackers[0].characterId === this.characterId;
   }
 
   /**
@@ -211,48 +219,34 @@ export class KillFact {
   }
 
   /**
-   * Add a label to this kill
+   * Explicitly load attackers for this kill
+   * This method should be used by repository layer to safely load relations
    */
-  addLabel(label: string): void {
-    if (!this.labels.includes(label)) {
-      this.labels.push(label);
-    }
+  loadAttackers(attackers: KillAttacker[]): void {
+    this._attackers = attackers;
   }
 
   /**
-   * Remove a label from this kill
+   * Explicitly load victim for this kill
+   * This method should be used by repository layer to safely load relations
    */
-  removeLabel(label: string): void {
-    const index = this.labels.indexOf(label);
-    if (index >= 0) {
-      this.labels.splice(index, 1);
-    }
+  loadVictim(victim: KillVictim): void {
+    this._victim = victim;
   }
 
   /**
-   * Check if this kill has a specific label
+   * Clear loaded relations (useful for memory management)
    */
-  hasLabel(label: string): boolean {
-    return this.labels.includes(label);
+  clearRelations(): void {
+    this._attackers = null;
+    this._victim = null;
   }
 
   /**
-   * Convert to a plain object for persistence
+   * Check if all relations are loaded
    */
-  toObject() {
-    return {
-      killmailId: this.killmailId,
-      characterId: this.characterId,
-      killTime: this.killTime,
-      npc: this.npc,
-      solo: this.solo,
-      awox: this.awox,
-      shipTypeId: this.shipTypeId,
-      systemId: this.systemId,
-      labels: this.labels,
-      totalValue: this.totalValue,
-      points: this.points,
-    };
+  areRelationsLoaded(): boolean {
+    return this._attackers !== null && this._victim !== null;
   }
 
   /**
@@ -260,25 +254,25 @@ export class KillFact {
    */
   static fromModel(model: any, attackers?: any[], victim?: any): KillFact {
     const killFact = new KillFact({
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      killTime: model.kill_time,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      killTime: model.killTime,
       npc: model.npc,
       solo: model.solo,
       awox: model.awox,
-      shipTypeId: model.ship_type_id,
-      systemId: model.system_id,
-      labels: model.labels || [],
-      totalValue: model.total_value,
+      shipTypeId: model.shipTypeId,
+      systemId: model.systemId,
+      labels: model.labels ?? [],
+      totalValue: model.totalValue,
       points: model.points,
     });
 
     if (attackers) {
-      killFact.attackers = attackers.map((a) => KillAttacker.fromModel(a));
+      killFact.loadAttackers(attackers.map(a => KillAttacker.fromModel(a)));
     }
 
     if (victim) {
-      killFact.victim = KillVictim.fromModel(victim);
+      killFact.loadVictim(KillVictim.fromModel(victim));
     }
 
     return killFact;
@@ -334,32 +328,11 @@ export class KillAttacker {
   }) {
     this.id = props.id;
 
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
-
-    this.characterId =
-      props.characterId === null || props.characterId === undefined
-        ? null
-        : typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
-
-    this.corporationId =
-      props.corporationId === null || props.corporationId === undefined
-        ? null
-        : typeof props.corporationId === "string"
-        ? BigInt(props.corporationId)
-        : props.corporationId;
-
-    this.allianceId =
-      props.allianceId === null || props.allianceId === undefined
-        ? null
-        : typeof props.allianceId === "string"
-        ? BigInt(props.allianceId)
-        : props.allianceId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureBigInt(props.characterId);
+    this.corporationId = ensureBigInt(props.corporationId);
+    this.allianceId = ensureBigInt(props.allianceId);
 
     this.damageDone = props.damageDone;
     this.finalBlow = props.finalBlow;
@@ -399,15 +372,15 @@ export class KillAttacker {
   static fromModel(model: any): KillAttacker {
     return new KillAttacker({
       id: model.id,
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      corporationId: model.corporation_id,
-      allianceId: model.alliance_id,
-      damageDone: model.damage_done,
-      finalBlow: model.final_blow,
-      securityStatus: model.security_status,
-      shipTypeId: model.ship_type_id,
-      weaponTypeId: model.weapon_type_id,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      corporationId: model.corporationId,
+      allianceId: model.allianceId,
+      damageDone: model.damageDone,
+      finalBlow: model.finalBlow,
+      securityStatus: model.securityStatus,
+      shipTypeId: model.shipTypeId,
+      weaponTypeId: model.weaponTypeId,
     });
   }
 }
@@ -478,12 +451,12 @@ export class KillVictim {
   static fromModel(model: any): KillVictim {
     return new KillVictim({
       id: model.id,
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      corporationId: model.corporation_id,
-      allianceId: model.alliance_id,
-      shipTypeId: model.ship_type_id,
-      damageTaken: model.damage_taken,
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      corporationId: model.corporationId,
+      allianceId: model.allianceId,
+      shipTypeId: model.shipTypeId,
+      damageTaken: model.damageTaken,
     });
   }
 }

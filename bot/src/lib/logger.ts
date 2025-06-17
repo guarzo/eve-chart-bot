@@ -1,8 +1,5 @@
-const pino = require("pino");
-import { config } from "dotenv";
-
-// Load environment variables
-config();
+const pino = require('pino');
+import { ValidatedConfiguration } from '../config/validated';
 
 // Define log levels
 const LOG_LEVELS = {
@@ -13,8 +10,8 @@ const LOG_LEVELS = {
   trace: 10,
 } as const;
 
-// Get log level from environment or default to info
-const logLevel = (process.env.LOG_LEVEL || "info").toLowerCase();
+// Get log level from configuration
+const logLevel = ValidatedConfiguration.logging.level;
 
 // Validate log level
 if (!Object.keys(LOG_LEVELS).includes(logLevel)) {
@@ -35,13 +32,13 @@ const baseConfig = {
 const devConfig = {
   ...baseConfig,
   transport: {
-    target: "pino-pretty",
+    target: 'pino-pretty',
     options: {
       colorize: true,
-      translateTime: "HH:MM:ss",
-      ignore: "pid,hostname",
-      messageFormat: "{msg}",
-      singleLine: true,
+      translateTime: 'HH:MM:ss',
+      ignore: 'pid,hostname',
+      messageFormat: false, // Show full message with data
+      singleLine: false, // Allow multi-line for objects
     },
   },
 };
@@ -53,9 +50,7 @@ const prodConfig = {
 };
 
 // Create logger instance based on environment
-const logger = pino(
-  process.env.NODE_ENV === "production" ? prodConfig : devConfig
-);
+const logger = pino(process.env.NODE_ENV === 'production' ? prodConfig : devConfig);
 
 // Create child logger with context
 export function createLogger(context: string) {

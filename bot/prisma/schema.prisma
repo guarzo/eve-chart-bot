@@ -8,14 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Tracks the ingestion checkpoint for each stream (e.g. RedisQ)
-model IngestionCheckpoint {
-  streamName   String   @id
-  lastSeenId   BigInt
-  lastSeenTime DateTime
-
-  @@map("ingestion_checkpoints")
-}
 
 model Character {
   eveId              BigInt          @id @map("eve_id")
@@ -25,7 +17,6 @@ model Character {
   corporationId      Int             @map("corporation_id")
   corporationTicker  String          @map("corporation_ticker")
   characterGroupId   String?         @map("character_group_id")
-  lastBackfillAt     DateTime?       @map("last_backfill_at")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
   groupMainCharacter CharacterGroup? @relation("GroupMainCharacter")
@@ -34,7 +25,6 @@ model Character {
   // Relationships
   losses            LossFact[]
   mapActivity       MapActivity[]
-  killCharacters    KillCharacter[]
 
   @@index([characterGroupId])
   @@index([corporationId])
@@ -44,13 +34,14 @@ model Character {
 
 model CharacterGroup {
   id              String      @id @default(uuid())
-  slug            String      @unique
+  mapName         String      @map("map_name")
   mainCharacterId BigInt?     @unique @map("main_character_id")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
   mainCharacter   Character?  @relation("GroupMainCharacter", fields: [mainCharacterId], references: [eveId])
   characters      Character[] @relation("GroupCharacters")
 
+  @@index([mapName])
   @@map("character_groups")
 }
 
@@ -71,83 +62,85 @@ model MapActivity {
 }
 
 model KillFact {
-  killmail_id  BigInt         @id
-  kill_time    DateTime
-  npc          Boolean
-  solo         Boolean
-  awox         Boolean
-  ship_type_id Int
-  system_id    Int
-  labels       String[]
-  total_value  BigInt
-  points       Int
-  attackers    KillAttacker[]
-  victims      KillVictim[]
-  characters   KillCharacter[]
+  killmailId      BigInt         @id @map("killmail_id")
+  killTime        DateTime       @map("kill_time")
+  npc             Boolean
+  solo            Boolean
+  awox            Boolean
+  shipTypeId      Int            @map("ship_type_id")
+  systemId        Int            @map("system_id")
+  labels          String[]
+  totalValue      BigInt         @map("total_value")
+  points          Int
+  attackers       KillAttacker[]
+  victims         KillVictim[]
+  characters      KillCharacter[]
 
+  @@index([killTime])
   @@map("KillFact")
 }
 
 model LossFact {
-  killmail_id    BigInt   @id
-  character_id   BigInt
-  kill_time      DateTime
-  ship_type_id   Int
-  system_id      Int
-  total_value    BigInt
-  attacker_count Int
+  killmailId     BigInt   @id @map("killmail_id")
+  characterId    BigInt   @map("character_id")
+  killTime       DateTime @map("kill_time")
+  shipTypeId     Int      @map("ship_type_id")
+  systemId       Int      @map("system_id")
+  totalValue     BigInt   @map("total_value")
+  attackerCount  Int      @map("attacker_count")
   labels         String[]
-  character      Character @relation(fields: [character_id], references: [eveId])
+  character      Character @relation(fields: [characterId], references: [eveId])
 
-  @@index([character_id, kill_time])
+  @@index([characterId, killTime])
   @@map("LossFact")
 }
 
 model KillAttacker {
   id              Int      @id @default(autoincrement())
-  killmail_id     BigInt
-  character_id    BigInt?
-  corporation_id  BigInt?
-  alliance_id     BigInt?
-  damage_done     Int
-  final_blow      Boolean
-  security_status Float?
-  ship_type_id    Int?
-  weapon_type_id  Int?
-  created_at      DateTime @default(now())
-  kill            KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+  killmailId      BigInt   @map("killmail_id")
+  characterId     BigInt?  @map("character_id")
+  corporationId   BigInt?  @map("corporation_id")
+  allianceId      BigInt?  @map("alliance_id")
+  damageDone      Int      @map("damage_done")
+  finalBlow       Boolean  @map("final_blow")
+  securityStatus  Float?   @map("security_status")
+  shipTypeId      Int?     @map("ship_type_id")
+  weaponTypeId    Int?     @map("weapon_type_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  kill            KillFact @relation(fields: [killmailId], references: [killmailId], onDelete: Cascade)
 
-  @@index([killmail_id])
-  @@index([character_id])
+  @@index([killmailId])
+  @@index([characterId])
+  @@index([characterId, killmailId])
   @@map("KillAttacker")
 }
 
 model KillVictim {
   id             Int      @id @default(autoincrement())
-  killmail_id    BigInt
-  character_id   BigInt?
-  corporation_id BigInt?
-  alliance_id    BigInt?
-  ship_type_id   Int
-  damage_taken   Int
-  created_at     DateTime @default(now())
-  kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
+  killmailId     BigInt   @map("killmail_id")
+  characterId    BigInt?  @map("character_id")
+  corporationId  BigInt?  @map("corporation_id")
+  allianceId     BigInt?  @map("alliance_id")
+  shipTypeId     Int      @map("ship_type_id")
+  damageTaken    Int      @map("damage_taken")
+  createdAt      DateTime @default(now()) @map("created_at")
+  kill           KillFact @relation(fields: [killmailId], references: [killmailId], onDelete: Cascade)
 
-  @@index([killmail_id])
-  @@index([character_id])
+  @@index([killmailId])
+  @@index([characterId])
+  @@index([characterId, killmailId])
   @@map("KillVictim")
 }
 
 model KillCharacter {
-  killmail_id    BigInt
-  character_id   BigInt
-  role           String   // "attacker" or "victim"
+  killmailId    BigInt   @map("killmail_id")
+  characterId   BigInt   @map("character_id")
+  role          String   // "attacker" or "victim"
 
   // Relationships
-  kill           KillFact @relation(fields: [killmail_id], references: [killmail_id], onDelete: Cascade)
-  character      Character @relation(fields: [character_id], references: [eveId], onDelete: Cascade)
+  kill          KillFact @relation(fields: [killmailId], references: [killmailId], onDelete: Cascade)
 
-  @@id([killmail_id, character_id])
-  @@index([character_id])
+  @@id([killmailId, characterId])
+  @@index([characterId])
   @@map("kill_characters")
 }

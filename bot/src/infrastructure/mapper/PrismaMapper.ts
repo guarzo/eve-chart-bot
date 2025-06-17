@@ -1,9 +1,40 @@
-import { ClassConstructor, plainToInstance } from "class-transformer";
+import { ClassConstructor, plainToInstance } from 'class-transformer';
 
 /**
  * Generic mapper for converting between Prisma models and domain entities
  */
 export class PrismaMapper {
+  /**
+   * Converts snake_case to camelCase
+   */
+  private static toCamelCase(str: string): string {
+    return str.replace(/_([a-z])/g, (_match, letter) => letter.toUpperCase());
+  }
+
+  /**
+   * Recursively converts an object's keys from snake_case to camelCase
+   */
+  private static convertKeysToCamelCase(obj: any): any {
+    if (obj === null || obj === undefined) {
+      return obj;
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.convertKeysToCamelCase(item));
+    }
+
+    if (typeof obj === 'object' && obj.constructor === Object) {
+      const converted: any = {};
+      for (const [key, value] of Object.entries(obj)) {
+        const camelKey = this.toCamelCase(key);
+        converted[camelKey] = this.convertKeysToCamelCase(value);
+      }
+      return converted;
+    }
+
+    return obj;
+  }
+
   /**
    * Maps a Prisma model to a domain entity
    * @param model The Prisma model instance
@@ -11,7 +42,10 @@ export class PrismaMapper {
    * @returns A new instance of the domain entity
    */
   static map<T>(model: any, EntityClass: ClassConstructor<T>): T {
-    return plainToInstance(EntityClass, model, {
+    // Convert snake_case keys to camelCase before mapping
+    const convertedModel = this.convertKeysToCamelCase(model);
+
+    return plainToInstance(EntityClass, convertedModel, {
       excludeExtraneousValues: true,
       enableImplicitConversion: true,
     });
@@ -24,7 +58,7 @@ export class PrismaMapper {
    * @returns Array of domain entity instances
    */
   static mapArray<T>(models: any[], EntityClass: ClassConstructor<T>): T[] {
-    return models.map((model) => this.map(model, EntityClass));
+    return models.map(model => this.map(model, EntityClass));
   }
 
   /**
@@ -36,7 +70,7 @@ export class PrismaMapper {
     const result: Record<string, any> = {};
 
     // Skip Prisma-specific fields
-    const skipFields = ["$type", "$parent", "$path", "$args"];
+    const skipFields = ['$type', '$parent', '$path', '$args'];
 
     for (const [key, value] of Object.entries(model)) {
       if (!skipFields.includes(key)) {

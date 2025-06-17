@@ -26,7 +26,7 @@ CREATE TABLE "characters" (
 -- CreateTable
 CREATE TABLE "character_groups" (
     "id" TEXT NOT NULL,
-    "slug" TEXT NOT NULL,
+    "map_name" TEXT NOT NULL,
     "main_character_id" BIGINT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -38,7 +38,13 @@ CREATE TABLE "character_groups" (
 CREATE INDEX "characters_character_group_id_idx" ON "characters"("character_group_id");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "character_groups_slug_key" ON "character_groups"("slug");
+CREATE INDEX "characters_corporation_id_idx" ON "characters"("corporation_id");
+
+-- CreateIndex
+CREATE INDEX "characters_alliance_id_idx" ON "characters"("alliance_id");
+
+-- CreateIndex
+CREATE INDEX "character_groups_map_name_idx" ON "character_groups"("map_name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "character_groups_main_character_id_key" ON "character_groups"("main_character_id");

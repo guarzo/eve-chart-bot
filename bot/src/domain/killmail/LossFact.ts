@@ -1,8 +1,12 @@
+import { BaseEntity } from '../BaseEntity';
+import { ensureRequiredBigInt } from '../../shared/utilities/conversion';
+import { validateRequired, validatePositive, validateNonNegative } from '../../shared/validation/validation';
+
 /**
  * LossFact domain entity
  * Represents a character's loss in EVE Online
  */
-export class LossFact {
+export class LossFact extends BaseEntity {
   /** Killmail ID from EVE Online */
   readonly killmailId: bigint;
 
@@ -24,8 +28,7 @@ export class LossFact {
   /** Number of attackers on the killmail */
   attackerCount: number;
 
-  /** Labels or tags applied to this loss */
-  labels: string[];
+  // Labels are inherited from BaseEntity
 
   /**
    * Create a new LossFact instance
@@ -40,60 +43,33 @@ export class LossFact {
     attackerCount: number;
     labels?: string[];
   }) {
-    // Convert string IDs to bigint if needed
-    this.killmailId =
-      typeof props.killmailId === "string"
-        ? BigInt(props.killmailId)
-        : props.killmailId;
+    super();
 
-    this.characterId =
-      typeof props.characterId === "string"
-        ? BigInt(props.characterId)
-        : props.characterId;
+    // Convert string IDs to bigint using utility
+    this.killmailId = ensureRequiredBigInt(props.killmailId);
+    this.characterId = ensureRequiredBigInt(props.characterId);
 
     this.killTime = props.killTime;
     this.shipTypeId = props.shipTypeId;
     this.systemId = props.systemId;
-
-    this.totalValue =
-      typeof props.totalValue === "string"
-        ? BigInt(props.totalValue)
-        : props.totalValue;
-
+    this.totalValue = ensureRequiredBigInt(props.totalValue);
     this.attackerCount = props.attackerCount;
-    this.labels = props.labels || [];
+    this.labels = props.labels ?? [];
 
     this.validate();
   }
 
   /**
-   * Validate the loss fact data
+   * Validate the loss fact data using shared validation utilities
    * @throws Error if data is invalid
    */
   private validate(): void {
-    if (!this.killmailId) {
-      throw new Error("LossFact must have a killmail ID");
-    }
-
-    if (!this.characterId) {
-      throw new Error("LossFact must have a character ID");
-    }
-
-    if (!this.killTime) {
-      throw new Error("LossFact must have a kill time");
-    }
-
-    if (this.shipTypeId <= 0) {
-      throw new Error("LossFact must have a valid ship type ID");
-    }
-
-    if (this.systemId <= 0) {
-      throw new Error("LossFact must have a valid system ID");
-    }
-
-    if (this.attackerCount < 0) {
-      throw new Error("LossFact attacker count cannot be negative");
-    }
+    validateRequired('killmailId', this.killmailId);
+    validateRequired('characterId', this.characterId);
+    validateRequired('killTime', this.killTime);
+    validatePositive('shipTypeId', this.shipTypeId);
+    validatePositive('systemId', this.systemId);
+    validateNonNegative('attackerCount', this.attackerCount);
   }
 
   /**
@@ -121,60 +97,18 @@ export class LossFact {
    * Get the loss type category based on ISK value
    * @returns 'cheap', 'moderate', 'expensive', or 'blingy'
    */
-  getLossCategory(): "cheap" | "moderate" | "expensive" | "blingy" {
+  getLossCategory(): 'cheap' | 'moderate' | 'expensive' | 'blingy' {
     const valueMillions = this.iskValueMillions;
 
     if (valueMillions < 10) {
-      return "cheap";
+      return 'cheap';
     } else if (valueMillions < 100) {
-      return "moderate";
+      return 'moderate';
     } else if (valueMillions < 1000) {
-      return "expensive";
+      return 'expensive';
     } else {
-      return "blingy";
+      return 'blingy';
     }
-  }
-
-  /**
-   * Add a label to this loss
-   */
-  addLabel(label: string): void {
-    if (!this.labels.includes(label)) {
-      this.labels.push(label);
-    }
-  }
-
-  /**
-   * Remove a label from this loss
-   */
-  removeLabel(label: string): void {
-    const index = this.labels.indexOf(label);
-    if (index >= 0) {
-      this.labels.splice(index, 1);
-    }
-  }
-
-  /**
-   * Check if this loss has a specific label
-   */
-  hasLabel(label: string): boolean {
-    return this.labels.includes(label);
-  }
-
-  /**
-   * Convert to a plain object for persistence
-   */
-  toObject() {
-    return {
-      killmailId: this.killmailId,
-      characterId: this.characterId,
-      killTime: this.killTime,
-      shipTypeId: this.shipTypeId,
-      systemId: this.systemId,
-      totalValue: this.totalValue,
-      attackerCount: this.attackerCount,
-      labels: this.labels,
-    };
   }
 
   /**
@@ -182,14 +116,14 @@ export class LossFact {
    */
   static fromModel(model: any): LossFact {
     return new LossFact({
-      killmailId: model.killmail_id,
-      characterId: model.character_id,
-      killTime: model.kill_time,
-      shipTypeId: model.ship_type_id,
-      systemId: model.system_id,
-      totalValue: model.total_value,
-      attackerCount: model.attacker_count,
-      labels: model.labels || [],
+      killmailId: model.killmailId,
+      characterId: model.characterId,
+      killTime: model.killTime,
+      shipTypeId: model.shipTypeId,
+      systemId: model.systemId,
+      totalValue: model.totalValue,
+      attackerCount: model.attackerCount,
+      labels: model.labels ?? [],
     });
   }
 }

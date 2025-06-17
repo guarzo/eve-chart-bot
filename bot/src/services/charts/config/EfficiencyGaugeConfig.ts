@@ -1,7 +1,7 @@
-import Chart from "chart.js/auto";
-import { DoughnutController, ArcElement, Tooltip } from "chart.js";
-import type { ChartConfiguration } from "chart.js";
-import { chartPalette } from "./theme";
+import Chart from 'chart.js/auto';
+import { DoughnutController, ArcElement, Tooltip } from 'chart.js';
+import type { ChartConfiguration } from 'chart.js';
+import { chartPalette } from './theme';
 
 // Register doughnut + tooltip
 Chart.register(DoughnutController, ArcElement, Tooltip);
@@ -10,18 +10,15 @@ Chart.register(DoughnutController, ArcElement, Tooltip);
 const characterNames: string[] = [];
 const efficiencyPercents: number[] = [];
 
-export const EfficiencyGaugeConfig: ChartConfiguration<"doughnut"> = {
-  type: "doughnut",
+export const EfficiencyGaugeConfig: ChartConfiguration<'doughnut'> = {
+  type: 'doughnut',
   data: {
     labels: characterNames,
     datasets: [
       {
         // filled portion = efficiency, empty = remainder
-        data: efficiencyPercents.map((p) => [p, 100 - p]).flat(),
-        backgroundColor: efficiencyPercents.flatMap((p, i) => [
-          chartPalette[2],
-          "rgba(255,255,255,0.1)",
-        ]),
+        data: efficiencyPercents.map(p => [p, 100 - p]).flat(),
+        backgroundColor: efficiencyPercents.flatMap(() => [chartPalette[2], 'rgba(255,255,255,0.1)']),
         borderWidth: 0,
       },
     ],
@@ -29,7 +26,7 @@ export const EfficiencyGaugeConfig: ChartConfiguration<"doughnut"> = {
   options: {
     rotation: -Math.PI,
     circumference: Math.PI,
-    cutout: "70%",
+    cutout: '70%',
     plugins: {
       legend: { display: false },
     },

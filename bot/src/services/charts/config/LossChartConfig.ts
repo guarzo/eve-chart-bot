@@ -1,28 +1,28 @@
-import { ChartOptions } from "../../../types/chart";
+import { ChartOptions } from '../../../types/chart';
 
 /**
  * Configuration for Loss charts
  */
 export const LossChartConfig = {
-  title: "Losses by Character Group",
+  title: 'Losses by Character Group',
   metrics: [
-    { name: "Total Losses", field: "totalLosses", color: "#DC3912" },
-    { name: "High Value Losses", field: "highValueLosses", color: "#FF9900" },
+    { name: 'Total Losses', field: 'totalLosses', color: '#DC3912' },
+    { name: 'High Value Losses', field: 'highValueLosses', color: '#FF9900' },
   ],
   options: {
     horizontal: {
-      indexAxis: "y" as "x" | "y",
+      indexAxis: 'y' as 'x' | 'y',
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
         tooltip: {
           callbacks: {
             label: function (context: any) {
-              const label = context.dataset.label || "";
+              const label = context.dataset.label || '';
               const value = context.parsed.x;
               return `${label}: ${value.toLocaleString()}`;
             },
@@ -34,7 +34,7 @@ export const LossChartConfig = {
           stacked: true,
           title: {
             display: true,
-            text: "Count",
+            text: 'Count',
           },
         },
         y: {
@@ -42,7 +42,7 @@ export const LossChartConfig = {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Character Group",
+            text: 'Character Group',
           },
         },
       },
@@ -53,12 +53,12 @@ export const LossChartConfig = {
       plugins: {
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
         tooltip: {
           callbacks: {
             label: function (context: any) {
-              const label = context.dataset.label || "";
+              const label = context.dataset.label || '';
               const value = context.parsed.y;
               return `${label}: ${value.toLocaleString()}`;
             },
@@ -70,7 +70,7 @@ export const LossChartConfig = {
           stacked: true,
           title: {
             display: true,
-            text: "Character Group",
+            text: 'Character Group',
           },
         },
         y: {
@@ -78,7 +78,7 @@ export const LossChartConfig = {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Count",
+            text: 'Count',
           },
         },
       },
@@ -89,12 +89,12 @@ export const LossChartConfig = {
       plugins: {
         legend: {
           display: true,
-          position: "top" as const,
+          position: 'top' as const,
         },
         tooltip: {
           callbacks: {
             label: function (context: any) {
-              const label = context.dataset.label || "";
+              const label = context.dataset.label || '';
               const value = context.parsed.y;
               return `${label}: ${value.toLocaleString()}`;
             },
@@ -103,35 +103,31 @@ export const LossChartConfig = {
       },
       scales: {
         x: {
-          type: "time" as const,
+          type: 'time' as const,
           time: {
-            unit: "day" as const,
+            unit: 'day' as const,
             displayFormats: {
-              hour: "HH:mm",
-              day: "MMM dd",
-              week: "MMM dd",
+              hour: 'HH:mm',
+              day: 'MMM dd',
+              week: 'MMM dd',
             },
           },
           title: {
             display: true,
-            text: "Time",
+            text: 'Time',
           },
         },
         y: {
           beginAtZero: true,
           title: {
             display: true,
-            text: "Losses",
+            text: 'Losses',
           },
         },
       },
     } as ChartOptions,
   },
-  getDefaultSummary: (
-    totalLosses: number,
-    highValueLosses: number,
-    totalIskLost: string
-  ) => {
+  getDefaultSummary: (totalLosses: number, highValueLosses: number, totalIskLost: string) => {
     return `Total ship losses: ${totalLosses.toLocaleString()}\nHigh-value losses: ${highValueLosses.toLocaleString()} (${
       totalLosses > 0 ? Math.round((highValueLosses / totalLosses) * 100) : 0
     }%)\nTotal ISK lost: ${totalIskLost}`;

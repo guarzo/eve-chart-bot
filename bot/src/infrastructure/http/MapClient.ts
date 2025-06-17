@@ -1,155 +1,166 @@
-import { UnifiedESIClient } from "./UnifiedESIClient";
+import { TypeSafeHttpClient } from '../../shared/http/TypeSafeHttpClient';
 import {
   MapActivityResponseSchema,
   UserCharactersResponseSchema,
-} from "../../types/ingestion";
-import { logger } from "../../lib/logger";
+  MapActivityResponse,
+  UserCharactersResponse,
+} from '../../shared/schemas/api-responses';
+import { logger } from '../../lib/logger';
+import { RateLimiter } from '../../shared/performance/rateLimiter';
+import { rateLimiterManager } from '../../shared/performance/RateLimiterManager';
+import { ExternalServiceError, ValidationError } from '../../shared/errors';
+import * as crypto from 'crypto';
 
 export class MapClient {
-  private readonly client: UnifiedESIClient;
-  private readonly baseUrl: string;
-  private readonly apiKey: string;
-  private lastRequestTime: number = 0;
-  private readonly rateLimitMs: number = 200; // 5 requests per second
+  private readonly client: TypeSafeHttpClient;
+  private readonly rateLimiter: RateLimiter;
 
   constructor(baseUrl: string, apiKey: string) {
-    this.baseUrl = baseUrl;
-    this.apiKey = apiKey;
-    this.client = new UnifiedESIClient({
-      baseUrl,
-      userAgent: "EVE-Chart-Bot/1.0",
+    this.client = new TypeSafeHttpClient({
+      baseURL: baseUrl,
       timeout: 10000,
+      retries: 3,
+      apiKey: apiKey,
+      headers: {
+        'User-Agent': 'EVE-Chart-Bot/1.0',
+      },
     });
-  }
 
-  /**
-   * Respect rate limits when making requests to the Map API
-   */
-  private async respectRateLimit(): Promise<void> {
-    const now = Date.now();
-    const timeSinceLastRequest = now - this.lastRequestTime;
-
-    if (timeSinceLastRequest < this.rateLimitMs) {
-      const waitTime = this.rateLimitMs - timeSinceLastRequest;
-      logger.debug(
-        `Rate limiting - waiting ${waitTime}ms before next request to Map API`
-      );
-      await new Promise((resolve) => setTimeout(resolve, waitTime));
-    }
-
-    this.lastRequestTime = Date.now();
+    // Use shared rate limiter from singleton manager
+    this.rateLimiter = rateLimiterManager.getRateLimiter('Map API');
   }
 
   /**
    * Fetch character activity data from the Map API
    */
-  async getCharacterActivity(slug: string, days: number = 7): Promise<any> {
+  async getCharacterActivity(slug: string, days: number = 7, signal?: AbortSignal): Promise<MapActivityResponse> {
+    const correlationId = crypto.randomUUID();
+
     try {
-      logger.info(
-        `Fetching character activity for map: ${slug}, days: ${days}`
-      );
-
-      // Respect rate limit
-      await this.respectRateLimit();
-
-      const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
-      const response = await this.client.fetch(url, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-      });
-
-      if (response) {
-        // Log sample of the data to help debugging
-        const dataCount = Array.isArray(response)
-          ? response.length
-          : response.data
-          ? response.data.length
-          : "unknown";
-        logger.info(`Received ${dataCount} records in response`);
-
-        // Log date range in the response
-        if (Array.isArray(response) && response.length > 0) {
-          const dates = response.map((item: any) => new Date(item.timestamp));
-          const oldestDate = new Date(
-            Math.min(...dates.map((d: Date) => d.getTime()))
-          );
-          const newestDate = new Date(
-            Math.max(...dates.map((d: Date) => d.getTime()))
-          );
-          logger.info(
-            `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
-          );
-        } else if (response.data && response.data.length > 0) {
-          const dates = response.data.map(
-            (item: any) => new Date(item.timestamp)
-          );
-          const oldestDate = new Date(
-            Math.min(...dates.map((d: Date) => d.getTime()))
-          );
-          const newestDate = new Date(
-            Math.max(...dates.map((d: Date) => d.getTime()))
-          );
-          logger.info(
-            `Date range in response: ${oldestDate.toISOString()} to ${newestDate.toISOString()}`
-          );
-        }
-
-        // Try to validate the response against our schema
-        try {
-          const validated = MapActivityResponseSchema.parse(response);
-          logger.info(
-            `Successfully validated response with ${validated.data.length} activity records`
-          );
-          return validated;
-        } catch (schemaError) {
-          logger.error(
-            `Schema validation error for map activity response:`,
-            schemaError
-          );
-          // Return the raw data anyway to see what we're getting
-          return response;
-        }
+      // Validate input parameters
+      if (!slug || typeof slug !== 'string') {
+        throw ValidationError.invalidFormat('slug', 'non-empty string', slug, {
+          correlationId,
+          operation: 'map.getCharacterActivity',
+          metadata: { days },
+        });
       }
 
-      logger.warn(`No data received from map API`);
-      return { data: [] };
+      if (days <= 0 || days > 365) {
+        throw ValidationError.outOfRange('days', 1, 365, days.toString(), {
+          correlationId,
+          operation: 'map.getCharacterActivity',
+          metadata: { slug },
+        });
+      }
+
+      logger.info('Fetching character activity from Map API', {
+        correlationId,
+        slug,
+        days,
+      });
+
+      // Respect rate limit with retry logic
+      await this.rateLimiter.wait(signal);
+
+      const url = `/api/map/character-activity?slug=${slug}&days=${days}`;
+      const response = await this.client.get(url, MapActivityResponseSchema, undefined, { signal });
+
+      const dataCount = response.data.length;
+
+      logger.info('Received character activity data', {
+        correlationId,
+        dataCount,
+        slug,
+        days,
+      });
+
+      // Log date range in the response
+      if (response.data.length > 0) {
+        const dates = response.data.map(item => new Date(item.timestamp));
+        const oldestDate = new Date(Math.min(...dates.map(d => d.getTime())));
+        const newestDate = new Date(Math.max(...dates.map(d => d.getTime())));
+
+        logger.debug('Date range in response', {
+          correlationId,
+          oldestDate: oldestDate.toISOString(),
+          newestDate: newestDate.toISOString(),
+        });
+      }
+
+      logger.info('Successfully validated character activity response', {
+        correlationId,
+        validatedRecords: response.data.length,
+      });
+
+      return response;
     } catch (error) {
-      logger.error(`Error fetching character activity from Map API:`, error);
-      throw error;
+      throw ExternalServiceError.mapApiError(
+        error instanceof Error ? error.message : 'Failed to get character activity',
+        `/api/map/character-activity?slug=${slug}&days=${days}`,
+        undefined,
+        {
+          correlationId,
+          operation: 'getCharacterActivity',
+          metadata: { slug, days },
+        },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
-  async getUserCharacters(slug: string) {
-    try {
-      await this.respectRateLimit();
-      logger.info(`Fetching user characters for slug: ${slug}`);
+  async getUserCharacters(slug: string, signal?: AbortSignal): Promise<UserCharactersResponse> {
+    const correlationId = crypto.randomUUID();
 
-      const response = await this.client.fetch("/api/map/user_characters", {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
-        params: {
-          slug,
-        },
+    try {
+      // Validate input parameters
+      if (!slug || typeof slug !== 'string') {
+        throw ValidationError.invalidFormat('slug', 'non-empty string', slug, {
+          correlationId,
+          operation: 'map.getUserCharacters',
+        });
+      }
+
+      logger.info('Fetching user characters from Map API', {
+        correlationId,
+        slug,
       });
 
-      const parsedData = UserCharactersResponseSchema.parse(response);
-      logger.info(`Parsed ${parsedData.data.length} user entries`);
-      logger.info(
-        `Total characters: ${parsedData.data.reduce(
-          (acc, user) => acc + user.characters.length,
-          0
-        )}`
-      );
+      // Respect rate limit with retry logic
+      await this.rateLimiter.wait(signal);
+
+      const url = `/api/map/user_characters?slug=${slug}`;
+      const parsedData = await this.client.get(url, UserCharactersResponseSchema, undefined, { signal });
+      const totalCharacters = parsedData.data.reduce((acc, user) => acc + user.characters.length, 0);
+
+      logger.info('Successfully fetched and validated user characters', {
+        correlationId,
+        userEntries: parsedData.data.length,
+        totalCharacters,
+        slug,
+      });
 
       return parsedData;
     } catch (error) {
-      logger.error(
-        { error, slug },
-        "Failed to fetch user characters from Map API"
+      throw ExternalServiceError.mapApiError(
+        error instanceof Error ? error.message : 'Failed to get user characters',
+        '/api/map/user_characters',
+        undefined,
+        {
+          correlationId,
+          operation: 'getUserCharacters',
+          metadata: { slug },
+        },
+        error instanceof Error ? error : undefined
       );
-      throw error;
     }
+  }
+
+  /**
+   * Clean up resources
+   */
+  cleanup(): void {
+    // Rate limiter is now managed by the singleton, no need to reset here
+    // The manager will handle cleanup centrally
   }
 }

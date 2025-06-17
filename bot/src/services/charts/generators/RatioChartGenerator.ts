@@ -1,9 +1,10 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData } from "../../../types/chart";
-import { logger } from "../../../lib/logger";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { LossRepository } from "../../../infrastructure/repositories/LossRepository";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData } from '../../../types/chart';
+import { logger } from '../../../lib/logger';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { LossRepository } from '../../../infrastructure/repositories/LossRepository';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
+import { errorHandler, ChartError, ValidationError, ValidationIssue } from '../../../shared/errors';
 
 /**
  * Generator for kill-death ratio charts
@@ -36,110 +37,275 @@ export class RatioChartGenerator extends BaseChartGenerator {
     }>;
     displayType: string;
   }): Promise<ChartData> {
-    logger.info("Generating kill-death ratio chart");
+    const correlationId = errorHandler.createCorrelationId();
 
-    const { startDate, endDate, characterGroups } = options;
+    try {
+      // Input validation
+      this.validateChartOptions(options, correlationId);
 
-    // Prepare data arrays
-    const filteredLabels: string[] = [];
-    const kdRatios: number[] = [];
-    const efficiencies: number[] = [];
+      logger.info('Generating kill-death ratio chart', { correlationId });
 
-    for (const group of characterGroups) {
-      const characterIds = group.characters.map((char) => BigInt(char.eveId));
-      if (characterIds.length === 0) continue;
-      // Compute stats manually
-      const kills = await this.killRepository.getKillsForCharacters(
-        characterIds.map(String),
-        startDate,
-        endDate
-      );
-      const lossesSummary =
-        await this.lossRepository.getLossesSummaryByCharacters(
-          characterIds,
-          startDate,
-          endDate
-        );
-      const totalKills = kills.length;
-      const totalLosses = lossesSummary.totalLosses;
-      // Only include groups with at least one kill or death
-      if (totalKills > 0 || totalLosses > 0) {
-        // Use main character name if available
-        let label = group.name;
-        if (group.mainCharacterId) {
-          const mainChar = group.characters.find(
-            (c) => c.eveId === group.mainCharacterId
-          );
-          if (mainChar) label = mainChar.name;
-        } else if (group.characters.length > 0) {
-          label = group.characters[0].name;
+      const { startDate, endDate, characterGroups } = options;
+      logger.info(`Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`, { correlationId });
+
+      // Prepare data arrays
+      const filteredLabels: string[] = [];
+      const kdRatios: number[] = [];
+      const efficiencies: number[] = [];
+
+      logger.info(`Processing ${characterGroups.length} character groups`, { correlationId });
+
+      for (const group of characterGroups) {
+        const characterIds = group.characters.map(char => BigInt(char.eveId));
+        if (characterIds.length === 0) continue;
+
+        // Compute stats manually with retry logic
+        const [kills, lossesSummary] = await Promise.all([
+          errorHandler.withRetry(
+            () => this.killRepository.getKillsForCharacters(characterIds, startDate, endDate),
+            3,
+            1000,
+            { operation: 'fetchKillsForRatio', metadata: { groupId: group.groupId }, correlationId }
+          ),
+          errorHandler.withRetry(
+            () => this.lossRepository.getLossesSummaryByCharacters(characterIds, startDate, endDate),
+            3,
+            1000,
+            { operation: 'fetchLossesForRatio', metadata: { groupId: group.groupId }, correlationId }
+          ),
+        ]);
+        const totalKills = kills.length;
+        const totalLosses = lossesSummary.totalLosses;
+
+        logger.debug(`Group ${group.name}: ${totalKills} kills, ${totalLosses} losses`, { correlationId });
+
+        // Only include groups with at least one kill or death
+        if (totalKills > 0 || totalLosses > 0) {
+          // Use main character name if available
+          let label = group.name;
+          if (group.mainCharacterId) {
+            const mainChar = group.characters.find(c => c.eveId === group.mainCharacterId);
+            if (mainChar) label = mainChar.name;
+          } else if (group.characters.length > 0) {
+            label = group.characters[0].name;
+          }
+          filteredLabels.push(label);
+          let kdRatio = 0;
+          if (totalLosses > 0) {
+            kdRatio = totalKills / totalLosses;
+          } else if (totalKills > 0) {
+            kdRatio = totalKills;
+          }
+          let efficiency = 0;
+          if (totalKills + totalLosses > 0) {
+            efficiency = (totalKills / (totalKills + totalLosses)) * 100;
+          }
+          kdRatios.push(kdRatio);
+          efficiencies.push(efficiency);
         }
-        filteredLabels.push(label);
-        let kdRatio = 0;
-        if (totalLosses > 0) {
-          kdRatio = totalKills / totalLosses;
-        } else if (totalKills > 0) {
-          kdRatio = totalKills;
-        }
-        let efficiency = 0;
-        if (totalKills + totalLosses > 0) {
-          efficiency = (totalKills / (totalKills + totalLosses)) * 100;
-        }
-        kdRatios.push(kdRatio);
-        efficiencies.push(efficiency);
       }
-    }
 
-    // Generate summary text
-    const timeRangeText = this.getTimeRangeText(startDate, endDate);
-    let summary = `Kill-Death ratios for tracked characters (${timeRangeText})`;
+      // Check if we have any data to work with
+      if (filteredLabels.length === 0) {
+        logger.warn('No groups with kills or losses found for ratio calculation', { correlationId });
+        throw ChartError.noDataError('ratio', 'No kills or losses found in the specified time period', {
+          metadata: { startDate, endDate, characterGroupCount: characterGroups.length },
+          correlationId,
+        });
+      }
 
-    // Add top performer if there's data
-    if (Math.max(...kdRatios) > 0) {
-      const bestGroupIndex = kdRatios.indexOf(Math.max(...kdRatios));
-      summary += `\nBest performer: ${
-        filteredLabels[bestGroupIndex]
-      } with K/D ratio of ${kdRatios[bestGroupIndex].toFixed(2)}`;
-    }
+      // Generate summary text
+      const timeRangeText = this.getTimeRangeText(startDate, endDate);
+      let summary = `Kill-Death ratios for tracked characters (${timeRangeText})`;
 
-    return {
-      labels: filteredLabels,
-      datasets: [
-        {
-          label: "K/D Ratio",
-          data: kdRatios,
-          backgroundColor: "#3366CC",
-          borderColor: "#3366CC",
+      // Add top performer if there's data
+      if (Math.max(...kdRatios) > 0) {
+        const bestGroupIndex = kdRatios.indexOf(Math.max(...kdRatios));
+        summary += `\nBest performer: ${
+          filteredLabels[bestGroupIndex]
+        } with K/D ratio of ${kdRatios[bestGroupIndex].toFixed(2)}`;
+      }
+
+      logger.info(`Generated ratio data for ${filteredLabels.length} groups`, { correlationId });
+
+      return {
+        labels: filteredLabels,
+        datasets: [
+          {
+            label: 'K/D Ratio',
+            data: kdRatios,
+            backgroundColor: '#3366CC',
+            borderColor: '#3366CC',
+          },
+          {
+            label: 'Efficiency %',
+            data: efficiencies,
+            backgroundColor: '#DC3912',
+            borderColor: '#DC3912',
+          },
+        ],
+        title: `Kill-Death Ratio - ${timeRangeText}`,
+        summary,
+        displayType: 'bar',
+      };
+    } catch (error) {
+      logger.error('Error generating ratio chart', {
+        error,
+        correlationId,
+        context: {
+          operation: 'generateRatioChart',
+          hasOptions: !!options,
+          characterGroupCount: options?.characterGroups?.length || 0,
         },
+      });
+
+      if (error instanceof ChartError || error instanceof ValidationError) {
+        throw error;
+      }
+
+      throw ChartError.generationError(
+        'ratio',
+        'Failed to generate ratio chart',
         {
-          label: "Efficiency %",
-          data: efficiencies,
-          backgroundColor: "#DC3912",
-          borderColor: "#DC3912",
+          correlationId,
+          operation: 'generateRatioChart',
         },
-      ],
-      title: `Kill-Death Ratio - ${timeRangeText}`,
-      summary,
-      displayType: "bar",
-    };
+        error as Error
+      );
+    }
   }
 
   /**
    * Get a formatted string describing the time range
    */
   private getTimeRangeText(startDate: Date, endDate: Date): string {
-    const diffDays = Math.floor(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const diffDays = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
     if (diffDays <= 1) {
-      return "Last 24 hours";
+      return 'Last 24 hours';
     } else if (diffDays <= 7) {
-      return "Last 7 days";
+      return 'Last 7 days';
     } else if (diffDays <= 30) {
-      return "Last 30 days";
+      return 'Last 30 days';
     } else {
       return `${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
+    }
+  }
+
+  /**
+   * Validate chart generation options
+   */
+  private validateChartOptions(
+    options: {
+      startDate: Date;
+      endDate: Date;
+      characterGroups: Array<{
+        groupId: string;
+        name: string;
+        characters: Array<{ eveId: string; name: string }>;
+        mainCharacterId?: string;
+      }>;
+      displayType: string;
+    },
+    correlationId: string
+  ): void {
+    const issues: ValidationIssue[] = [];
+
+    // Validate dates
+    if (!options.startDate || !(options.startDate instanceof Date) || isNaN(options.startDate.getTime())) {
+      issues.push({
+        field: 'startDate',
+        message: 'Invalid start date',
+        value: options.startDate,
+        constraint: 'required',
+      });
+    }
+
+    if (!options.endDate || !(options.endDate instanceof Date) || isNaN(options.endDate.getTime())) {
+      issues.push({ field: 'endDate', message: 'Invalid end date', value: options.endDate, constraint: 'required' });
+    }
+
+    if (options.startDate && options.endDate && options.startDate >= options.endDate) {
+      issues.push({
+        field: 'dateRange',
+        message: 'Start date must be before end date',
+        value: { startDate: options.startDate, endDate: options.endDate },
+        constraint: 'dateRange',
+      });
+    }
+
+    // Validate character groups
+    if (!options.characterGroups || !Array.isArray(options.characterGroups)) {
+      issues.push({
+        field: 'characterGroups',
+        message: 'Character groups must be an array',
+        value: options.characterGroups,
+        constraint: 'type',
+      });
+    } else {
+      if (options.characterGroups.length === 0) {
+        issues.push({
+          field: 'characterGroups',
+          message: 'At least one character group is required',
+          value: options.characterGroups,
+          constraint: 'minLength',
+        });
+      }
+
+      options.characterGroups.forEach((group, index) => {
+        if (!group.groupId || typeof group.groupId !== 'string') {
+          issues.push({
+            field: `characterGroups[${index}].groupId`,
+            message: 'Group ID is required',
+            value: group.groupId,
+            constraint: 'required',
+          });
+        }
+
+        if (!group.name || typeof group.name !== 'string') {
+          issues.push({
+            field: `characterGroups[${index}].name`,
+            message: 'Group name is required',
+            value: group.name,
+            constraint: 'required',
+          });
+        }
+
+        if (!group.characters || !Array.isArray(group.characters)) {
+          issues.push({
+            field: `characterGroups[${index}].characters`,
+            message: 'Characters must be an array',
+            value: group.characters,
+            constraint: 'type',
+          });
+        } else {
+          group.characters.forEach((char, charIndex) => {
+            if (!char.eveId || typeof char.eveId !== 'string') {
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].eveId`,
+                message: 'Character eveId is required',
+                value: char.eveId,
+                constraint: 'required',
+              });
+            }
+            if (!char.name || typeof char.name !== 'string') {
+              issues.push({
+                field: `characterGroups[${index}].characters[${charIndex}].name`,
+                message: 'Character name is required',
+                value: char.name,
+                constraint: 'required',
+              });
+            }
+          });
+        }
+      });
+    }
+
+    if (issues.length > 0) {
+      throw new ValidationError('Invalid chart generation options', issues, {
+        correlationId,
+        operation: 'validateRatioChartOptions',
+      });
     }
   }
 }

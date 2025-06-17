@@ -1,2 +1,2 @@
-export * from "./KillFact";
-export * from "./LossFact";
+export * from './KillFact';
+export * from './LossFact';

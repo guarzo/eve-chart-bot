@@ -1,5 +1,5 @@
-import axios from "axios";
-import { logger } from "./logger";
+import axios from 'axios';
+import { logger } from './logger';
 
 interface ESIKillmail {
   killmail_id: number;
@@ -36,14 +36,10 @@ const MAX_RETRIES = 3;
 const INITIAL_RETRY_DELAY = 1000; // 1 second
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function fetchWithRetry<T>(
-  url: string,
-  retryCount = 0,
-  delay = INITIAL_RETRY_DELAY
-): Promise<T> {
+async function fetchWithRetry<T>(url: string, retryCount = 0, delay = INITIAL_RETRY_DELAY): Promise<T> {
   try {
     const response = await axios.get<T>(url);
     return response.data;
@@ -55,11 +51,11 @@ async function fetchWithRetry<T>(
     // Check if we should retry based on error type
     const shouldRetry =
       error instanceof Error &&
-      (error.message.includes("429") || // Rate limit
-        error.message.includes("503") || // Service unavailable
-        error.message.includes("504") || // Gateway timeout
-        error.message.includes("ECONNRESET") || // Connection reset
-        error.message.includes("ETIMEDOUT")); // Connection timeout
+      (error.message.includes('429') || // Rate limit
+        error.message.includes('503') || // Service unavailable
+        error.message.includes('504') || // Gateway timeout
+        error.message.includes('ECONNRESET') || // Connection reset
+        error.message.includes('ETIMEDOUT')); // Connection timeout
 
     if (!shouldRetry) {
       throw error;
@@ -67,7 +63,7 @@ async function fetchWithRetry<T>(
 
     // Calculate exponential backoff delay
     const nextDelay = delay * Math.pow(2, retryCount);
-    logger.warn("ESI request failed, retrying...", {
+    logger.warn('ESI request failed, retrying...', {
       url,
       retryCount: retryCount + 1,
       nextDelay,
@@ -79,14 +75,10 @@ async function fetchWithRetry<T>(
   }
 }
 
-export async function fetchESIKillmail(
-  killId: number,
-  hash: string,
-  retryCount = 0
-): Promise<ESIKillmail> {
+export async function fetchESIKillmail(killId: number, hash: string, retryCount = 0): Promise<ESIKillmail> {
   try {
     // In test environment, return mock data
-    if (process.env.NODE_ENV === "test") {
+    if (process.env.NODE_ENV === 'test') {
       return {
         killmail_id: killId,
         killmail_time: new Date().toISOString(),
@@ -128,7 +120,7 @@ export async function fetchESIKillmail(
           errorMessage: error instanceof Error ? error.message : error,
           errorStack: error instanceof Error ? error.stack : undefined,
         },
-        "Max retries reached for ESI fetch"
+        'Max retries reached for ESI fetch'
       );
       throw error;
     }
@@ -144,7 +136,7 @@ export async function fetchESIKillmail(
         delay,
         errorMessage: error instanceof Error ? error.message : error,
       },
-      "Error fetching ESI data, retrying..."
+      'Error fetching ESI data, retrying...'
     );
 
     await sleep(delay);

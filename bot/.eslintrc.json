@@ -1,0 +1,81 @@
+{
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module",
+    "project": "./tsconfig.json"
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "plugins": [
+    "@typescript-eslint"
+  ],
+  "rules": {
+    // TypeScript specific rules
+    "@typescript-eslint/no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/explicit-module-boundary-types": "off",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-non-null-assertion": "error",
+    "@typescript-eslint/prefer-nullish-coalescing": "error",
+    "@typescript-eslint/prefer-optional-chain": "error",
+    "@typescript-eslint/no-floating-promises": "error",
+    "@typescript-eslint/await-thenable": "error",
+    
+    // General JavaScript/TypeScript rules
+    "prefer-const": "error",
+    "no-var": "error",
+    "no-console": "warn",
+    "eqeqeq": ["error", "always"],
+    "no-throw-literal": "error",
+    
+    // Code style rules
+    "max-len": ["error", { 
+      "code": 120, 
+      "ignoreUrls": true,
+      "ignoreStrings": true,
+      "ignoreTemplateLiterals": true,
+      "ignoreRegExpLiterals": true
+    }],
+    "max-lines": ["error", { 
+      "max": 300, 
+      "skipBlankLines": true, 
+      "skipComments": true 
+    }],
+    "max-lines-per-function": ["warn", { 
+      "max": 50, 
+      "skipBlankLines": true, 
+      "skipComments": true 
+    }],
+    "complexity": ["warn", 10],
+    
+    // Discord.js and Node.js specific rules
+    "no-process-exit": "error",
+    "no-process-env": "off",
+    
+    // Domain-driven design rules
+    "no-magic-numbers": ["warn", { 
+      "ignore": [-1, 0, 1, 2],
+      "ignoreArrayIndexes": true,
+      "ignoreDefaultValues": true
+    }],
+    
+    // Performance rules
+    "prefer-template": "error",
+    "no-useless-concat": "error"
+  },
+  "env": {
+    "node": true,
+    "es2020": true,
+    "jest": true
+  },
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    "coverage/",
+    "logs/",
+    "*.js",
+    "*.d.ts"
+  ]
+}

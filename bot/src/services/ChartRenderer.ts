@@ -1,22 +1,19 @@
 // Use require() for CommonJS modules with ESM dependencies
 // @ts-ignore - Ignoring type checking for Chart.js imports
-const chartJS = require("chart.js");
+const chartJS = require('chart.js');
 const { Chart, registerables } = chartJS;
 
-import { createCanvas } from "canvas";
-import { logger } from "../lib/logger";
-import { theme, chartPalette } from "./charts/config/theme";
-import {
-  ChartData as CustomChartData,
-  ChartOptions as CustomChartOptions,
-} from "../types/chart";
+import { createCanvas } from 'canvas';
+import { logger } from '../lib/logger';
+import { theme, chartPalette } from './charts/config/theme';
+import { ChartData as CustomChartData, ChartOptions as CustomChartOptions } from '../types/chart';
 
 // Register Chart.js components in non-test environments
-if (process.env.NODE_ENV !== "test") {
+if (process.env.NODE_ENV !== 'test') {
   try {
     Chart.register(...registerables);
   } catch (e) {
-    logger.warn("Failed to register Chart.js components", e);
+    logger.warn('Failed to register Chart.js components', e);
   }
 }
 
@@ -39,47 +36,44 @@ export class ChartRenderer {
    */
   private convertToChartJSData(data: CustomChartData): any {
     const datasets = data.datasets.map((dataset, index) => {
-      const type = this.getChartType(dataset.displayType || dataset.type);
+      const type = this.getChartType(dataset.displayType ?? dataset.type);
       const baseDataset = {
         ...dataset,
         type,
-        backgroundColor:
-          dataset.backgroundColor || this.getBackgroundColor(index, type),
-        borderColor:
-          dataset.borderColor ||
-          this.adjustColorOpacity(this.getBackgroundColor(index, type), 0.8),
-        borderWidth: dataset.borderWidth || 1,
+        backgroundColor: dataset.backgroundColor ?? this.getBackgroundColor(index, type),
+        borderColor: dataset.borderColor ?? this.adjustColorOpacity(this.getBackgroundColor(index, type), 0.8),
+        borderWidth: dataset.borderWidth ?? 1,
       };
 
       // Add type-specific properties
       switch (type) {
-        case "line":
+        case 'line':
           return {
             ...baseDataset,
             fill: dataset.fill ?? false,
             tension: dataset.tension ?? 0.4,
             pointBackgroundColor: this.getBackgroundColor(index, type),
-            pointBorderColor: "#fff",
+            pointBorderColor: '#fff',
             pointBorderWidth: 1,
             pointRadius: 3,
             pointHoverRadius: 5,
             pointHoverBackgroundColor: this.getBackgroundColor(index, type),
-            pointHoverBorderColor: "#fff",
+            pointHoverBorderColor: '#fff',
             pointHoverBorderWidth: 2,
           };
-        case "bar":
+        case 'bar':
           return {
             ...baseDataset,
             barPercentage: 0.8,
             categoryPercentage: 0.9,
-            stack: "stack0",
+            stack: 'stack0',
           };
-        case "pie":
+        case 'pie':
           return {
             ...baseDataset,
             hoverOffset: 4,
           };
-        case "doughnut":
+        case 'doughnut':
           return {
             ...baseDataset,
             hoverOffset: 4,
@@ -100,26 +94,27 @@ export class ChartRenderer {
    */
   private getChartType(type?: string): string {
     // First handle our internal source types
-    if (type === "kills" || type === "map_activity") {
-      return "line"; // Default to line chart for these data sources
+    if (type === 'kills' || type === 'map_activity') {
+      return 'line'; // Default to line chart for these data sources
     }
 
     // Then handle display types
     switch (type) {
-      case "boxplot":
-      case "violin":
-      case "heatmap":
-      case "calendar":
-        return "bar";
+      case 'boxplot':
+      case 'violin':
+      case 'heatmap':
+      case 'calendar':
+        return 'bar';
       default:
-        return type || "bar";
+        return type ?? 'bar';
     }
   }
 
   /**
    * Get background color for a dataset
    */
-  private getBackgroundColor(index: number, _type?: string): string {
+  private getBackgroundColor(index: number, type?: string): string {
+    void type; // Explicitly mark as intentionally unused
     const colorIndex = index % this.colors.length;
     return this.colors[colorIndex];
   }
@@ -128,7 +123,7 @@ export class ChartRenderer {
    * Adjust color opacity
    */
   private adjustColorOpacity(color: string, opacity: number): string {
-    if (color.startsWith("#")) {
+    if (color.startsWith('#')) {
       const r = parseInt(color.slice(1, 3), 16);
       const g = parseInt(color.slice(3, 5), 16);
       const b = parseInt(color.slice(5, 7), 16);
@@ -140,17 +135,14 @@ export class ChartRenderer {
   /**
    * Create chart configuration
    */
-  private createChartConfig(
-    data: CustomChartData,
-    options: CustomChartOptions = {}
-  ): any {
+  private createChartConfig(data: CustomChartData, options: CustomChartOptions = {}): any {
     const chartData = this.convertToChartJSData(data);
     const chartOptions: any = {
       responsive: options.responsive ?? true,
       maintainAspectRatio: options.maintainAspectRatio ?? false,
       plugins: {
         legend: {
-          position: "top",
+          position: 'top',
           labels: {
             color: theme.text.primary,
             font: {
@@ -168,7 +160,7 @@ export class ChartRenderer {
           displayColors: true,
           callbacks: {
             label: (context: any) => {
-              const label = context.dataset.label || "";
+              const label = context.dataset.label ?? '';
               const value = context.parsed.y;
               return `${label}: ${value}`;
             },
@@ -216,16 +208,13 @@ export class ChartRenderer {
   /**
    * Render chart to buffer
    */
-  async renderToBuffer(
-    data: CustomChartData,
-    options: CustomChartOptions = {}
-  ): Promise<Buffer> {
+  async renderToBuffer(data: CustomChartData, options: CustomChartOptions = {}): Promise<Buffer> {
     try {
       const config = this.createChartConfig(data, options);
-      const canvas = createCanvas(options.width || 800, options.height || 400);
+      const canvas = createCanvas(options.width ?? 800, options.height ?? 400);
 
       // Set background color
-      const ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext('2d');
       ctx.fillStyle = theme.colors.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -236,7 +225,7 @@ export class ChartRenderer {
       // Use the correct toBuffer call
       return canvas.toBuffer();
     } catch (error) {
-      logger.error("Error rendering chart to buffer:", error);
+      logger.error('Error rendering chart to buffer:', error);
       throw error;
     }
   }
@@ -244,15 +233,12 @@ export class ChartRenderer {
   /**
    * Render chart to base64 string
    */
-  async renderToBase64(
-    data: CustomChartData,
-    options: CustomChartOptions = {}
-  ): Promise<string> {
+  async renderToBase64(data: CustomChartData, options: CustomChartOptions = {}): Promise<string> {
     try {
       const buffer = await this.renderToBuffer(data, options);
-      return buffer.toString("base64");
+      return buffer.toString('base64');
     } catch (error) {
-      logger.error("Error rendering chart to base64:", error);
+      logger.error('Error rendering chart to base64:', error);
       throw error;
     }
   }

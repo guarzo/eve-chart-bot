@@ -1,4 +1,5 @@
-import { Exclude, Expose, Transform } from "class-transformer";
+import { Exclude, Expose, Transform } from 'class-transformer';
+import { BigIntTransformer } from '../../shared/utilities/BigIntTransformer';
 
 /**
  * Character domain entity
@@ -7,7 +8,7 @@ import { Exclude, Expose, Transform } from "class-transformer";
 @Exclude()
 export class Character {
   @Expose()
-  @Transform(({ value }: { value: unknown }) => value?.toString())
+  @BigIntTransformer.stringTransform
   readonly eveId!: string;
 
   @Expose()

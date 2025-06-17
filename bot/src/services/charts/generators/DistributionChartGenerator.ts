@@ -1,12 +1,9 @@
-import { BaseChartGenerator } from "../BaseChartGenerator";
-import { ChartData, ChartDisplayType } from "../../../types/chart";
-import { KillRepository } from "../../../infrastructure/repositories/KillRepository";
-import { RepositoryManager } from "../../../infrastructure/repositories/RepositoryManager";
+import { BaseChartGenerator } from '../BaseChartGenerator';
+import { ChartData } from '../../../types/chart';
+import { KillRepository } from '../../../infrastructure/repositories/KillRepository';
+import { RepositoryManager } from '../../../infrastructure/repositories/RepositoryManager';
 
-interface DistributionData {
-  killmailId: string;
-  attackerCount: number;
-}
+// DistributionData interface removed - using kill data from repository
 
 /**
  * Generator for distribution charts
@@ -40,61 +37,49 @@ export class DistributionChartGenerator extends BaseChartGenerator {
     const { startDate, endDate, characterGroups } = options;
 
     // Get all character IDs from all groups
-    const characterIds = characterGroups.flatMap((group) =>
-      group.characters.map((c) => BigInt(c.eveId))
-    );
+    const characterIds = characterGroups.flatMap(group => group.characters.map(c => BigInt(c.eveId)));
 
-    // Get distribution data for all characters
-    const distributionData = await this.killRepository.getDistributionData(
-      characterIds.map((id) => id.toString()),
-      startDate,
-      endDate
-    );
+    // Get kill data for all characters
+    const kills = await this.killRepository.getKillsForCharacters(characterIds, startDate, endDate);
 
     // Group data by character group
-    const groupData = characterGroups.map((group) => {
-      const groupCharacterIds = group.characters.map((c) => BigInt(c.eveId));
-      const groupData = distributionData.filter((data: DistributionData) =>
-        groupCharacterIds.includes(BigInt(data.killmailId))
+    const groupData = characterGroups.map(group => {
+      const groupCharacterIds = group.characters.map(c => BigInt(c.eveId));
+      const groupKills = kills.filter(kill =>
+        kill.attackers?.some((attacker: any) => groupCharacterIds.includes(BigInt(attacker.characterId || '0')))
       );
 
-      // Calculate solo and group kills
-      const soloKills = groupData.filter(
-        (data: DistributionData) => data.attackerCount === 1
-      ).length;
-      const groupKills = groupData.filter(
-        (data: DistributionData) => data.attackerCount > 1
-      ).length;
+      // Calculate solo and group kills based on attacker count
+      const soloKills = groupKills.filter(kill => (kill.attackers?.length || 0) === 1).length;
+      const fleetKills = groupKills.filter(kill => (kill.attackers?.length || 0) > 1).length;
 
       return {
         group,
-        data: groupData,
+        data: groupKills,
         soloKills,
-        groupKills,
+        groupKills: fleetKills,
       };
     });
 
     // Sort groups by total kills
-    groupData.sort(
-      (a, b) => b.soloKills + b.groupKills - (a.soloKills + a.groupKills)
-    );
+    groupData.sort((a, b) => b.soloKills + b.groupKills - (a.soloKills + a.groupKills));
 
     // Create chart data
     return {
-      labels: groupData.map((data) => this.getGroupDisplayName(data.group)),
+      labels: groupData.map(data => this.getGroupDisplayName(data.group)),
       datasets: [
         {
-          label: "Solo Kills",
-          data: groupData.map((data) => data.soloKills),
-          backgroundColor: this.getDatasetColors("distribution").primary,
+          label: 'Solo Kills',
+          data: groupData.map(data => data.soloKills),
+          backgroundColor: this.getDatasetColors('distribution').primary,
         },
         {
-          label: "Group Kills",
-          data: groupData.map((data) => data.groupKills),
-          backgroundColor: this.getDatasetColors("distribution").secondary,
+          label: 'Group Kills',
+          data: groupData.map(data => data.groupKills),
+          backgroundColor: this.getDatasetColors('distribution').secondary,
         },
       ],
-      displayType: "horizontalBar" as ChartDisplayType,
+      displayType: 'horizontalBar',
     };
   }
 }
