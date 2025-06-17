@@ -17,5 +17,5 @@ export { ChartServiceFactory } from './ChartServiceFactory';
 export { ChartFactory } from './ChartFactory';
 
 // Performance optimizations
-export { chartWorkerManager } from './workers/ChartWorker';
+export { getChartWorkerManager, destroyChartWorkerManager } from './workers/ChartWorker';
 export { chartCacheService } from './cache/ChartCacheService';

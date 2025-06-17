@@ -71,7 +71,7 @@ export class ChartFactory {
       throw new Error(`Unknown chart type: ${type}`);
     }
 
-    const repositoryManager = new RepositoryManager();
+    const repositoryManager = RepositoryManager.getInstance();
     const colors = this.getColorsForChartType(type);
     return new GeneratorClass(repositoryManager, colors);
   }

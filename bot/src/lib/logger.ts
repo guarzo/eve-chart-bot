@@ -37,8 +37,8 @@ const devConfig = {
       colorize: true,
       translateTime: 'HH:MM:ss',
       ignore: 'pid,hostname',
-      messageFormat: '{msg}',
-      singleLine: true,
+      messageFormat: false, // Show full message with data
+      singleLine: false, // Allow multi-line for objects
     },
   },
 };

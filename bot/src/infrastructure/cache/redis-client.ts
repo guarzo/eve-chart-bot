@@ -2,17 +2,38 @@ import { Redis } from 'ioredis';
 import { ValidatedConfiguration } from '../../config/validated';
 import { logger } from '../../lib/logger';
 
-const redisUrl = ValidatedConfiguration.redis.url;
+// Lazy-loaded Redis client to reduce startup memory usage
+let redisClient: Redis | null = null;
 
-// Create a Redis client singleton
-const redisClient = new Redis(redisUrl);
+/**
+ * Get or create the Redis client instance (lazy initialization)
+ * This prevents Redis connection from being established during module import
+ */
+function getRedisClient(): Redis {
+  if (!redisClient) {
+    const redisUrl = ValidatedConfiguration.redis.url;
+    redisClient = new Redis(redisUrl);
+    
+    // Set up event handlers
+    redisClient.on('connect', () => {
+      logger.info(`Redis client connected to ${redisUrl}`);
+    });
+
+    redisClient.on('error', err => {
+      logger.error(`Redis client error: ${err.message}`);
+    });
+  }
+  return redisClient;
+}
 
 // Extend Redis client with additional methods for chart caching
 class ExtendedRedisClient {
-  private client: Redis;
-
-  constructor(client: Redis) {
-    this.client = client;
+  constructor() {
+    // Client will be lazily initialized on first use
+  }
+  
+  private get client(): Redis {
+    return getRedisClient();
   }
 
   // Proxy all Redis methods
@@ -102,17 +123,19 @@ class ExtendedRedisClient {
   }
 }
 
-// Create extended Redis client
-const extendedRedis = new ExtendedRedisClient(redisClient);
+// Create extended Redis client (lazy-loaded)
+const extendedRedis = new ExtendedRedisClient();
 
-// Log connection state
-redisClient.on('connect', () => {
-  logger.info(`Redis client connected to ${redisUrl}`);
-});
+// Export functions to get Redis clients
+export { getRedisClient as redisClient, extendedRedis as redis };
 
-redisClient.on('error', err => {
-  logger.error(`Redis client error: ${err.message}`);
-});
-
-// Export both the original and extended clients
-export { redisClient, extendedRedis as redis };
+/**
+ * Disconnect Redis client if it's connected
+ */
+export async function disconnectRedis(): Promise<void> {
+  if (redisClient) {
+    await redisClient.disconnect();
+    redisClient = null;
+    logger.info('Redis client disconnected');
+  }
+}

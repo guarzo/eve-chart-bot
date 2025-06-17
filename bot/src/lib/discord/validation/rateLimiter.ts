@@ -1,6 +1,6 @@
 import { Redis } from 'ioredis';
 import { logger } from '../../logger';
-import { redisClient as defaultRedisClient } from '../../../infrastructure/cache/redis-client';
+import { redisClient as getDefaultRedisClient } from '../../../infrastructure/cache/redis-client';
 
 export interface RateLimitConfig {
   maxRequests: number;
@@ -25,7 +25,7 @@ export class RateLimiter {
   };
 
   constructor(redisClient?: Redis) {
-    this.redis = redisClient ?? defaultRedisClient;
+    this.redis = redisClient ?? getDefaultRedisClient();
   }
 
   /**

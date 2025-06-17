@@ -61,7 +61,7 @@ export class ChartService {
    * Create a new ChartService
    */
   constructor(cache?: CacheAdapter) {
-    this.repositoryManager = new RepositoryManager();
+    this.repositoryManager = RepositoryManager.getInstance();
     this.cache =
       cache ??
       new CacheRedisAdapter(

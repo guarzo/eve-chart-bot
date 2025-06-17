@@ -32,10 +32,11 @@ export class TracingService {
   private spans = new Map<string, TraceContext>();
   private readonly maxSpans = 10000;
   private readonly spanRetentionMs = 3600000; // 1 hour
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
     // Clean up old spans periodically
-    setInterval(() => {
+    this.cleanupInterval = setInterval(() => {
       this.cleanupOldSpans();
     }, 300000); // Every 5 minutes
   }
@@ -312,6 +313,18 @@ export class TracingService {
       duration: span.duration,
       success: !span.error,
     });
+  }
+
+  /**
+   * Destroy the tracing service and clean up resources
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+    this.spans.clear();
+    logger.info('TracingService destroyed');
   }
 
   private cleanupOldSpans(): void {

@@ -56,7 +56,7 @@ export class ChartPipelineFactory {
    * Create ship usage data provider
    */
   private static createShipUsageDataProvider(config: ChartPipelineConfig): IChartDataProvider {
-    const repositoryManager = config.repositoryManager ?? new RepositoryManager();
+    const repositoryManager = config.repositoryManager ?? RepositoryManager.getInstance();
     const cacheAdapter = config.cacheAdapter ?? this.createDefaultCache();
     const useRealData = config.dataMode !== 'mock';
 

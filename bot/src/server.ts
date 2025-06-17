@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import { startupProfiler } from './utils/startupProfiler';
+startupProfiler.checkpoint('After reflect-metadata');
+
 import express, { RequestHandler } from 'express';
 import { logger } from './lib/logger';
 import { WebSocketIngestionService } from './services/ingestion/WebSocketIngestionService';
@@ -8,14 +11,13 @@ import bodyParser from 'body-parser';
 import rateLimit from 'express-rate-limit';
 import { DiscordClient } from './lib/discord/client';
 import { commands } from './lib/discord/commands';
-import { ChartServiceFactory } from './services/charts';
+import { ChartServiceFactory, destroyChartWorkerManager } from './services/charts';
 import { ChartRenderer } from './services/ChartRenderer';
 import { ChartConfigInput, ChartSourceType as ChartSourceTypeType, ChartPeriod as ChartPeriodType, ChartGroupBy as ChartGroupByType } from './types/chart';
 import { z } from 'zod';
 import { initSentry } from './lib/sentry';
 import { MapActivityService } from './services/ingestion/MapActivityService';
 import { CharacterSyncService } from './services/ingestion/CharacterSyncService';
-import { CharacterRepository } from './infrastructure/repositories/CharacterRepository';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { ValidatedConfiguration as Configuration } from './config/validated';
@@ -23,17 +25,31 @@ import { PrismaClient } from '@prisma/client';
 import { timerManager } from './shared/performance/timerManager';
 import { rateLimiterManager } from './shared/performance/RateLimiterManager';
 import { ChartPeriod, ChartSourceType, ChartGroupBy } from './shared/enums';
+import { RepositoryManager } from './infrastructure/repositories/RepositoryManager';
+import { metricsCollector } from './infrastructure/monitoring/MetricsCollector';
+import { tracingService } from './infrastructure/monitoring/TracingService';
+import { memoryMonitor } from './utils/memoryMonitor';
+import { disconnectRedis } from './infrastructure/cache/redis-client';
 
 const execAsync = promisify(exec);
 
+startupProfiler.checkpoint('After imports');
+
 // Load environment variables
 dotenvConfig();
+startupProfiler.checkpoint('After dotenv');
 
 // Initialize Sentry
 initSentry();
+startupProfiler.checkpoint('After Sentry');
 
 // Initialize Prisma
 const prisma = new PrismaClient();
+startupProfiler.checkpoint('After Prisma client');
+
+// Initialize RepositoryManager with the shared PrismaClient
+const repositoryManager = RepositoryManager.getInstance(prisma);
+startupProfiler.checkpoint('After RepositoryManager');
 
 // Constants
 const appStartTime = Date.now();
@@ -44,6 +60,7 @@ const port =
 
 // Create Express app
 const app = express();
+startupProfiler.checkpoint('After Express app');
 
 // Middleware
 app.use(cors());
@@ -54,6 +71,7 @@ app.use(
     max: 100, // limit each IP to 100 requests per windowMs
   })
 );
+startupProfiler.checkpoint('After middleware');
 
 // Initialize services
 const websocketService = new WebSocketIngestionService(
@@ -66,6 +84,7 @@ const websocketService = new WebSocketIngestionService(
   },
   prisma
 );
+startupProfiler.checkpoint('After WebSocketIngestionService');
 
 const mapService = new MapActivityService(
   Configuration.apis.map.url,
@@ -75,6 +94,7 @@ const mapService = new MapActivityService(
   Configuration.http.maxRetries,
   Configuration.http.initialRetryDelay
 );
+startupProfiler.checkpoint('After MapActivityService');
 
 const characterService = new CharacterSyncService(
   Configuration.apis.map.url,
@@ -82,16 +102,20 @@ const characterService = new CharacterSyncService(
   Configuration.http.maxRetries,
   Configuration.http.initialRetryDelay
 );
+startupProfiler.checkpoint('After CharacterSyncService');
 
 const chartServiceFactory = ChartServiceFactory.getInstance(prisma);
 const chartService = chartServiceFactory.getMainChartService();
 const chartRenderer = new ChartRenderer();
+startupProfiler.checkpoint('After chart services');
 
-// Initialize repositories
-const characterRepository = new CharacterRepository(prisma);
+// Initialize repositories from RepositoryManager
+const characterRepository = repositoryManager.getCharacterRepository();
+startupProfiler.checkpoint('After repositories');
 
 // Initialize Discord client
 const discordClient = new DiscordClient();
+startupProfiler.checkpoint('After Discord client');
 
 // Validation schemas
 const chartConfigSchema = z.object({
@@ -104,6 +128,26 @@ const chartConfigSchema = z.object({
 // Health check endpoint
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Memory monitoring endpoint
+app.get('/memory', (_req, res) => {
+  const metrics = memoryMonitor.getMetrics();
+  const memory = metrics.current;
+  
+  res.json({
+    current: {
+      heapUsed: `${Math.round(memory.heapUsed / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memory.heapTotal / 1024 / 1024)}MB`,
+      rss: `${Math.round(memory.rss / 1024 / 1024)}MB`,
+      external: `${Math.round(memory.external / 1024 / 1024)}MB`,
+      arrayBuffers: `${Math.round(memory.arrayBuffers / 1024 / 1024)}MB`,
+      heapPercent: ((memory.heapUsed / memory.heapTotal) * 100).toFixed(1) + '%'
+    },
+    growthRate: `${metrics.heapGrowthRate.toFixed(2)}MB/min`,
+    sampleCount: metrics.samples.length,
+    uptime: process.uptime()
+  });
 });
 
 // WebSocket service status endpoint
@@ -266,6 +310,13 @@ app.get('/api/diagnostics/character-groups', async (_req, res) => {
 async function startServer() {
   logger.info('Starting EVE Chart Bot server...');
 
+  // Start memory monitoring if in development
+  if (Configuration.server.nodeEnv === 'development') {
+    memoryMonitor.start(5 * 60 * 1000); // Log every 5 minutes
+  }
+
+  startupProfiler.checkpoint('Before migrations');
+
   // Run database migrations
   logger.info('Running database migrations...');
   try {
@@ -277,13 +328,16 @@ async function startServer() {
     logger.error('Error running migrations:', error);
     throw error;
   }
+  startupProfiler.checkpoint('After migrations');
 
   // Start services
   await characterService.start();
   await mapService.start();
+  startupProfiler.checkpoint('After starting services');
 
   // Initialize WebSocket service
   await websocketService.start();
+  startupProfiler.checkpoint('After WebSocket start');
 
   // Initialize Discord if token is available
   const discordToken = Configuration.discord.token;
@@ -330,6 +384,10 @@ async function startServer() {
   const server = app.listen(port, () => {
     const startupTime = (Date.now() - appStartTime) / 1000;
     logger.info(`Server is running on port ${port} (startup took ${startupTime}s)`);
+    
+    // Generate startup profiling report
+    startupProfiler.checkpoint('Server started');
+    startupProfiler.getReport();
   });
 
   // Graceful shutdown
@@ -345,6 +403,9 @@ async function startServer() {
       logger.info('HTTP server closed');
     });
 
+    // Stop memory monitor
+    memoryMonitor.stop();
+
     // Stop services
     await websocketService.stop();
     await mapService.close();
@@ -359,21 +420,22 @@ async function startServer() {
     // Clean up rate limiters
     rateLimiterManager.cleanup();
 
-    // Close database connection
-    await prisma.$disconnect();
+    // Clean up monitoring services
+    metricsCollector.destroy();
+    tracingService.destroy();
+
+    // Clean up chart workers
+    await destroyChartWorkerManager();
+    
+    // Disconnect Redis
+    await disconnectRedis();
+
+    // Clean up RepositoryManager (will disconnect Prisma)
+    await RepositoryManager.resetInstance();
 
     logger.info('Shutdown complete');
-    // Note: In production, process.exit should be called by process manager
-    if (Configuration.server.nodeEnv !== 'production') {
-      // Use a more graceful shutdown approach
-      server.close(() => {
-        // Exit gracefully after server is closed
-        setTimeout(() => {
-          // Throw error to allow process manager to handle exit
-          throw new Error('Server shutdown complete');
-        }, 100);
-      });
-    }
+    // Exit the process
+    process.exit(0);
   };
 
   process.on('SIGTERM', () => shutdown('SIGTERM'));

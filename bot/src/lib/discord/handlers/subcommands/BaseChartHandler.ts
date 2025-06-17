@@ -16,7 +16,7 @@ export abstract class BaseChartHandler {
   protected repositoryManager: RepositoryManager;
 
   constructor() {
-    this.repositoryManager = new RepositoryManager();
+    this.repositoryManager = RepositoryManager.getInstance();
     this.chartFactory = new ChartFactory();
     this.characterRepository = this.repositoryManager.getCharacterRepository();
   }

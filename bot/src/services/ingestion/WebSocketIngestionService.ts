@@ -65,6 +65,11 @@ export class WebSocketIngestionService {
 
   private subscribedCharacters: Set<number> = new Set();
   private subscribedSystems: Set<number> = new Set();
+  
+  // Size limits to prevent memory exhaustion
+  private readonly MAX_SUBSCRIBED_CHARACTERS = 50000;
+  private readonly MAX_SUBSCRIBED_SYSTEMS = 10000;
+  private cleanupInterval: NodeJS.Timeout | null = null;
 
   constructor(config: WebSocketConfig, prisma: PrismaClient) {
     this.config = {
@@ -98,6 +103,11 @@ export class WebSocketIngestionService {
       correlationId,
       url: this.config.url,
     });
+    
+    // Start periodic cleanup to prevent unbounded growth
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupSubscriptions();
+    }, 3600000); // Every hour
 
     try {
       await errorHandler.withRetry(
@@ -162,6 +172,12 @@ export class WebSocketIngestionService {
       logger.debug('Disconnected WebSocket', {
         correlationId,
       });
+    }
+
+    // Clear cleanup interval
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
     }
 
     this.connected = false;
@@ -411,7 +427,14 @@ export class WebSocketIngestionService {
       await this.socket
         .sendMessage(this.TOPIC, 'subscribe_characters', payload)
         .then(() => {
-          addCharacterIds.forEach(id => this.subscribedCharacters.add(id));
+          addCharacterIds.forEach(id => {
+            // Check size limit before adding
+            if (this.subscribedCharacters.size < this.MAX_SUBSCRIBED_CHARACTERS) {
+              this.subscribedCharacters.add(id);
+            } else {
+              logger.warn(`Reached max subscribed characters limit (${this.MAX_SUBSCRIBED_CHARACTERS}), skipping character ${id}`);
+            }
+          });
           logger.info(
             `Successfully added subscription for ${addCharacterIds.length} characters${preload ? ' with preload' : ''}`,
             { totalSubscribed: this.subscribedCharacters.size }
@@ -450,7 +473,14 @@ export class WebSocketIngestionService {
 
     try {
       await this.socket.sendMessage(this.TOPIC, 'subscribe_systems', payload);
-      systemIds.forEach(id => this.subscribedSystems.add(id));
+      systemIds.forEach(id => {
+        // Check size limit before adding
+        if (this.subscribedSystems.size < this.MAX_SUBSCRIBED_SYSTEMS) {
+          this.subscribedSystems.add(id);
+        } else {
+          logger.warn(`Reached max subscribed systems limit (${this.MAX_SUBSCRIBED_SYSTEMS}), skipping system ${id}`);
+        }
+      });
       logger.info(`Successfully subscribed to ${systemIds.length} systems${preload ? ' with preload' : ''}`, {
         systemIds: systemIds.slice(0, 10), // Log first 10 for debugging
         totalCount: systemIds.length,
@@ -528,12 +558,34 @@ export class WebSocketIngestionService {
     };
   }
 
+  private cleanupSubscriptions(): void {
+    const charCount = this.subscribedCharacters.size;
+    const sysCount = this.subscribedSystems.size;
+    
+    if (charCount > this.MAX_SUBSCRIBED_CHARACTERS * 0.9 || sysCount > this.MAX_SUBSCRIBED_SYSTEMS * 0.9) {
+      logger.warn('Subscription sets approaching limits', {
+        characters: `${charCount}/${this.MAX_SUBSCRIBED_CHARACTERS}`,
+        systems: `${sysCount}/${this.MAX_SUBSCRIBED_SYSTEMS}`,
+      });
+    }
+    
+    // Log current sizes for monitoring
+    logger.info('WebSocket subscription sizes', {
+      subscribedCharacters: charCount,
+      subscribedSystems: sysCount,
+    });
+  }
+
   getStatus() {
     return {
       isRunning: this.isRunning,
       isConnected: this.connected,
       subscribedCharacters: this.subscribedCharacters.size,
       subscribedSystems: this.subscribedSystems.size,
+      limits: {
+        maxCharacters: this.MAX_SUBSCRIBED_CHARACTERS,
+        maxSystems: this.MAX_SUBSCRIBED_SYSTEMS,
+      },
     };
   }
 }

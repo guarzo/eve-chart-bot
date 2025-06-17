@@ -8,8 +8,11 @@ import { logger } from '../../lib/logger';
 
 /**
  * Manager for repository instances to facilitate dependency injection
+ * Implemented as a singleton to prevent multiple PrismaClient instances
  */
 export class RepositoryManager {
+  private static instance: RepositoryManager | null = null;
+  
   private characterRepository?: CharacterRepository;
   private killRepository?: KillRepository;
   private lossRepository?: LossRepository;
@@ -18,11 +21,12 @@ export class RepositoryManager {
   private prisma: PrismaClient;
 
   /**
-   * Create a new RepositoryManager
+   * Create a new RepositoryManager (private constructor for singleton)
    */
-  constructor() {
+  private constructor(prisma?: PrismaClient) {
     try {
-      this.prisma = new PrismaClient();
+      // Use provided PrismaClient or create new one
+      this.prisma = prisma || new PrismaClient();
       // Initialize repositories with PrismaClient
       this.characterRepository = new CharacterRepository(this.prisma);
       this.killRepository = new KillRepository(this.prisma);
@@ -36,6 +40,27 @@ export class RepositoryManager {
         { operation: 'initialize_repository_manager', metadata: { error: error instanceof Error ? error.message : String(error) } },
         error as Error
       );
+    }
+  }
+
+  /**
+   * Get the singleton instance of RepositoryManager
+   * @param prisma Optional PrismaClient instance (only used on first call)
+   */
+  static getInstance(prisma?: PrismaClient): RepositoryManager {
+    if (!this.instance) {
+      this.instance = new RepositoryManager(prisma);
+    }
+    return this.instance;
+  }
+
+  /**
+   * Reset the singleton instance (useful for testing)
+   */
+  static async resetInstance(): Promise<void> {
+    if (this.instance) {
+      await this.instance.cleanup();
+      this.instance = null;
     }
   }
 
@@ -105,5 +130,12 @@ export class RepositoryManager {
         error as Error
       );
     }
+  }
+
+  /**
+   * Get the PrismaClient instance (for use in services that need direct access)
+   */
+  getPrismaClient(): PrismaClient {
+    return this.prisma;
   }
 }

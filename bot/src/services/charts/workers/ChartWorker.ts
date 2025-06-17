@@ -225,5 +225,26 @@ if (!isMainThread && parentPort) {
   });
 }
 
-// Export singleton instance
-export const chartWorkerManager = new ChartWorkerManager();
+// Lazy-loaded instance to reduce startup memory usage
+let chartWorkerManager: ChartWorkerManager | null = null;
+
+/**
+ * Get the chart worker manager instance (lazy initialization)
+ * This prevents worker threads from being created during module import
+ */
+export function getChartWorkerManager(): ChartWorkerManager {
+  if (!chartWorkerManager) {
+    chartWorkerManager = new ChartWorkerManager();
+  }
+  return chartWorkerManager;
+}
+
+/**
+ * Destroy the chart worker manager if it exists
+ */
+export async function destroyChartWorkerManager(): Promise<void> {
+  if (chartWorkerManager) {
+    await chartWorkerManager.destroy();
+    chartWorkerManager = null;
+  }
+}

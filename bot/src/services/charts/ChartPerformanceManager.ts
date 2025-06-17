@@ -1,4 +1,4 @@
-import { chartWorkerManager } from './workers/ChartWorker';
+import { destroyChartWorkerManager } from './workers/ChartWorker';
 import { chartCacheService } from './cache/ChartCacheService';
 import { logger } from '../../lib/logger';
 
@@ -70,7 +70,7 @@ export class ChartPerformanceManager {
 
     try {
       // Cleanup worker threads
-      await chartWorkerManager.destroy();
+      await destroyChartWorkerManager();
       logger.info('Chart worker threads cleaned up');
 
       // Execute any additional shutdown handlers

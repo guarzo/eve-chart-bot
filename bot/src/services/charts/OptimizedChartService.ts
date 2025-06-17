@@ -1,5 +1,5 @@
 import { BaseChartService } from './BaseChartService';
-import { chartWorkerManager } from './workers/ChartWorker';
+import { getChartWorkerManager } from './workers/ChartWorker';
 import { chartCacheService } from './cache/ChartCacheService';
 import { ChartData, ChartOptions, ChartMetric } from '../../types/chart';
 import { logger } from '../../lib/logger';
@@ -81,7 +81,7 @@ export class OptimizedChartService extends BaseChartService {
 
       // Render chart using worker thread
       const renderStart = Date.now();
-      const chartBuffer = await chartWorkerManager.renderChart(chartData, options);
+      const chartBuffer = await getChartWorkerManager().renderChart(chartData, options);
       metrics.renderingTime = Date.now() - renderStart;
 
       // Cache the rendered result
