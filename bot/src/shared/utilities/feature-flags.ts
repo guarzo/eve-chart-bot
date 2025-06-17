@@ -30,9 +30,9 @@ export class FeatureFlags {
   static isEnabled(featureName: string): boolean {
     const envVarName = `FEATURE_${featureName}`;
     const value = process.env[envVarName];
-    
+
     if (!value) return false;
-    
+
     const normalizedValue = value.toLowerCase();
     return ['true', '1', 'yes', 'on'].includes(normalizedValue);
   }
@@ -43,14 +43,14 @@ export class FeatureFlags {
    */
   static getAll(): Record<string, boolean> {
     const flags: Record<string, boolean> = {};
-    
+
     for (const [key, value] of Object.entries(process.env)) {
       if (key.startsWith('FEATURE_')) {
         const featureName = key.replace('FEATURE_', '');
         flags[featureName] = this.isEnabled(featureName);
       }
     }
-    
+
     return flags;
   }
 
