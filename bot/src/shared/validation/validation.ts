@@ -334,7 +334,7 @@ export function validateDateRange(startDate: unknown, endDate: unknown): { start
     endDate: endDate instanceof Date ? endDate : new Date(String(endDate)),
   };
 
-  return validateWithSchema(DateRangeSchema, dateRange, 'Date range');
+  return validateWithSchema(DateRangeSchema, dateRange);
 }
 
 /**

@@ -30,8 +30,8 @@ export class RepositoryManager {
       // Initialize repositories with PrismaClient
       this.characterRepository = new CharacterRepository(this.prisma);
       this.killRepository = new KillRepository(this.prisma);
-      this.lossRepository = new LossRepository(this.prisma);
-      this.mapActivityRepository = new MapActivityRepository(this.prisma);
+      this.lossRepository = new LossRepository();
+      this.mapActivityRepository = new MapActivityRepository();
 
       logger.info('RepositoryManager initialized successfully');
     } catch (error) {
