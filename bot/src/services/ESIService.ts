@@ -2,7 +2,7 @@ import { UnifiedESIClient } from '../infrastructure/http/UnifiedESIClient';
 import { CacheRedisAdapter } from '../cache/CacheRedisAdapter';
 import { logger } from '../lib/logger';
 import { ValidatedConfiguration as Configuration } from '../config/validated';
-import { errorHandler } from '../shared/errors';
+import { errorHandler } from '../shared/errors/ErrorHandler';
 
 // Simple validation error class for testing compatibility
 class ValidationError extends Error {

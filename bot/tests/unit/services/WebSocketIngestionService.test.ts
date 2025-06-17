@@ -97,6 +97,7 @@ describe('WebSocketIngestionService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
     
     // Mock PrismaClient
     mockPrismaClient = {} as jest.Mocked<PrismaClient>;
@@ -132,6 +133,14 @@ describe('WebSocketIngestionService', () => {
     (PhoenixWebsocket as jest.Mock).mockImplementation(() => mockPhoenixSocket);
     
     service = new WebSocketIngestionService(defaultConfig, mockPrismaClient);
+  });
+
+  afterEach(async () => {
+    // Ensure service is stopped to clean up intervals
+    if (service && service.getStatus().isRunning) {
+      await service.stop();
+    }
+    jest.useRealTimers();
   });
 
   describe('constructor', () => {
@@ -216,13 +225,8 @@ describe('WebSocketIngestionService', () => {
       await expect(service.start()).rejects.toThrow();
       expect(errorHandler.handleExternalServiceError).toHaveBeenCalledWith(
         connectionError,
-        'WebSocket',
-        'start',
-        expect.objectContaining({
-          correlationId: 'test-correlation-id',
-          operation: 'start',
-          metadata: { url: defaultConfig.url },
-        })
+        'WEBSOCKET',
+        'start'
       );
     });
 
@@ -329,6 +333,10 @@ describe('WebSocketIngestionService', () => {
         subscribedCharacters: 0,
         subscribedSystems: 0,
         isRunning: false,
+        limits: {
+          maxCharacters: 50000,
+          maxSystems: 10000,
+        },
       });
     });
 
@@ -352,6 +360,10 @@ describe('WebSocketIngestionService', () => {
         subscribedCharacters: 2,
         subscribedSystems: 0,
         isRunning: true,
+        limits: {
+          maxCharacters: 50000,
+          maxSystems: 10000,
+        },
       });
     });
   });
@@ -401,9 +413,8 @@ describe('WebSocketIngestionService', () => {
       await expect(service.start()).rejects.toThrow();
       expect(errorHandler.handleExternalServiceError).toHaveBeenCalledWith(
         timeoutError,
-        'WebSocket',
-        'start',
-        expect.any(Object)
+        'WEBSOCKET',
+        'start'
       );
     });
 

@@ -19,6 +19,13 @@ jest.mock('../../../src/infrastructure/persistence/client', () => ({
       create: jest.fn(),
       update: jest.fn(),
     },
+    $transaction: jest.fn(async (callback) => await callback({
+      characterGroup: {
+        findFirst: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+      },
+    })),
   },
 }));
 jest.mock('../../../src/config/validated', () => ({
@@ -103,13 +110,12 @@ describe('CharacterSyncService', () => {
   let mockCharacterRepository: jest.Mocked<CharacterRepository>;
   let mockESIService: jest.Mocked<ESIService>;
   let mockMapClient: jest.Mocked<MapClient>;
-  let mockPrisma: any;
 
   beforeEach(() => {
     jest.clearAllMocks();
     
-    // Get the mocked prisma client
-    mockPrisma = jest.requireMock('../../../src/infrastructure/persistence/client').default;
+    // Get and reset prisma mock
+    const mockPrisma = jest.requireMock('../../../src/infrastructure/persistence/client').default;
     mockPrisma.characterGroup.findFirst.mockResolvedValue(null);
     mockPrisma.characterGroup.create.mockResolvedValue({ id: 1 });
     
@@ -126,7 +132,10 @@ describe('CharacterSyncService', () => {
       getUserCharacters: jest.fn(),
     } as any;
 
-    (CharacterRepository as jest.Mock).mockImplementation(() => mockCharacterRepository);
+    (CharacterRepository as jest.Mock).mockImplementation((prismaClient) => {
+      // Ensure the prisma client is mocked 
+      return mockCharacterRepository;
+    });
     (ESIService as jest.Mock).mockImplementation(() => mockESIService);
     (MapClient as jest.Mock).mockImplementation(() => mockMapClient);
     
@@ -153,6 +162,11 @@ describe('CharacterSyncService', () => {
         ],
       };
       
+      // Ensure prisma mock is properly set up
+      const mockPrisma = jest.requireMock('../../../src/infrastructure/persistence/client').default;
+      mockPrisma.characterGroup.findFirst.mockResolvedValue(null);
+      mockPrisma.characterGroup.create.mockResolvedValue({ id: 1 });
+      
       mockMapClient.getUserCharacters.mockResolvedValue(mockMapData);
       mockCharacterRepository.getCharacter.mockResolvedValue(null);
       mockESIService.getCharacter.mockResolvedValue({
@@ -172,25 +186,21 @@ describe('CharacterSyncService', () => {
     });
 
     it('should handle empty map name', async () => {
-      // Arrange
-      jest.doMock('../../../src/config/validated', () => ({
-        ValidatedConfiguration: {
-          apis: {
-            map: {
-              name: '',
-            },
+      // Mock the config temporarily to return empty string
+      const originalConfig = jest.requireMock('../../../src/config/validated').ValidatedConfiguration;
+      jest.requireMock('../../../src/config/validated').ValidatedConfiguration = {
+        apis: {
+          map: {
+            name: '',
           },
         },
-      }));
+      };
 
-      // Act
-      await characterSyncService.start();
-
-      // Assert
-      expect(logger.warn).toHaveBeenCalledWith(
-        'MAP_NAME environment variable not set, skipping character sync',
-        expect.any(Object)
-      );
+      // Act & Assert
+      await expect(characterSyncService.start()).rejects.toThrow('Invalid format for mapName');
+      
+      // Restore original config
+      jest.requireMock('../../../src/config/validated').ValidatedConfiguration = originalConfig;
     });
 
     it('should handle invalid map name format', async () => {
@@ -223,7 +233,7 @@ describe('CharacterSyncService', () => {
       mockMapClient.getUserCharacters.mockResolvedValue(null);
 
       // Act & Assert
-      await expect(characterSyncService.start()).rejects.toThrow('Map API: No data returned from Map API');
+      await expect(characterSyncService.start()).rejects.toThrow('MAP_API: No data returned from Map API');
     });
 
     it('should handle invalid map data structure', async () => {

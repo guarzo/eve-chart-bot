@@ -5,7 +5,7 @@ import { errorHandler, ExternalServiceError } from '../../../../src/shared/error
 
 // Mock dependencies
 jest.mock('../../../../src/lib/logger');
-jest.mock('../../../../src/shared/errors/ErrorHandler', () => {
+jest.mock('../../../../src/shared/errors', () => {
   const mockErrorHandler = {
     createCorrelationId: jest.fn(() => 'test-correlation-id'),
     withRetry: jest.fn(async (fn) => await fn()),
@@ -14,6 +14,7 @@ jest.mock('../../../../src/shared/errors/ErrorHandler', () => {
   };
   
   return {
+    ...jest.requireActual('../../../../src/shared/errors'),
     ErrorHandler: {
       getInstance: jest.fn(() => mockErrorHandler)
     },
@@ -21,36 +22,65 @@ jest.mock('../../../../src/shared/errors/ErrorHandler', () => {
   };
 });
 
-// Mock node-fetch
-const mockFetch = jest.fn();
-jest.mock('node-fetch', () => mockFetch);
+// Mock axios
+const mockAxios = {
+  create: jest.fn(),
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() }
+  }
+};
+
+const mockAxiosInstance = {
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+  interceptors: {
+    request: { use: jest.fn() },
+    response: { use: jest.fn() }
+  }
+};
+
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: mockAxios,
+  create: jest.fn(() => mockAxiosInstance)
+}));
 
 describe('TypeSafeHttpClient', () => {
   let client: TypeSafeHttpClient;
   let mockResponse: any;
 
   const defaultConfig = {
+    baseURL: 'https://api.test.com',
     timeout: 5000,
-    maxRetries: 3,
-    initialRetryDelay: 1000,
-    maxRetryDelay: 30000,
+    retries: 3,
+    headers: {},
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
     
     mockResponse = {
-      ok: true,
       status: 200,
       statusText: 'OK',
-      json: jest.fn(),
-      text: jest.fn(),
-      headers: new Map([['content-type', 'application/json']]),
+      data: {},
+      headers: { 'content-type': 'application/json' },
     };
     
-    mockFetch.mockResolvedValue(mockResponse);
+    // Setup axios create mock
+    mockAxios.create.mockReturnValue(mockAxiosInstance);
+    mockAxiosInstance.get.mockResolvedValue(mockResponse);
+    mockAxiosInstance.post.mockResolvedValue(mockResponse);
+    mockAxiosInstance.put.mockResolvedValue(mockResponse);
+    mockAxiosInstance.delete.mockResolvedValue(mockResponse);
     
-    client = new TypeSafeHttpClient('https://api.test.com', defaultConfig);
+    client = new TypeSafeHttpClient(defaultConfig);
   });
 
   describe('constructor', () => {
@@ -59,7 +89,11 @@ describe('TypeSafeHttpClient', () => {
     });
 
     it('should use default config when not provided', () => {
-      const clientWithDefaults = new TypeSafeHttpClient('https://api.test.com');
+      const clientWithDefaults = new TypeSafeHttpClient({
+        baseURL: 'https://api.test.com',
+        timeout: 5000,
+        retries: 3
+      });
       expect(clientWithDefaults).toBeInstanceOf(TypeSafeHttpClient);
     });
   });
@@ -68,19 +102,13 @@ describe('TypeSafeHttpClient', () => {
     it('should make successful GET request', async () => {
       // Arrange
       const responseData = { data: 'test' };
-      mockResponse.json.mockResolvedValue(responseData);
+      mockResponse.data = responseData;
 
       // Act
       const result = await client.get('/test-endpoint');
 
       // Assert
-      expect(mockFetch).toHaveBeenCalledWith(
-        'https://api.test.com/test-endpoint',
-        expect.objectContaining({
-          method: 'GET',
-          headers: expect.any(Object),
-        })
-      );
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/test-endpoint', undefined);
       expect(result).toEqual(responseData);
     });
 

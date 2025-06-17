@@ -1,5 +1,5 @@
-import { rateLimiterManager } from "../../../src/utils/RateLimiterManager";
-import { RateLimiter } from "../../../src/utils/rateLimiter";
+import { rateLimiterManager } from "../../../src/shared/performance/RateLimiterManager";
+import { RateLimiter } from "../../../src/shared/performance/rateLimiter";
 
 // Mock the dependencies
 jest.mock("../../../src/lib/logger", () => ({
@@ -130,8 +130,8 @@ describe("RateLimiterManager", () => {
   describe("singleton behavior", () => {
     it("should always return the same manager instance", () => {
       // Import fresh to test singleton
-      const { rateLimiterManager: manager1 } = require("../../../src/utils/RateLimiterManager");
-      const { rateLimiterManager: manager2 } = require("../../../src/utils/RateLimiterManager");
+      const { rateLimiterManager: manager1 } = require("../../../src/shared/performance/RateLimiterManager");
+      const { rateLimiterManager: manager2 } = require("../../../src/shared/performance/RateLimiterManager");
       
       expect(manager1).toBe(manager2);
     });

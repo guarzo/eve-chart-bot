@@ -1,6 +1,23 @@
 import { OptimizedKillRepository } from '../../../../src/infrastructure/repositories/OptimizedKillRepository';
 import { PrismaClient } from '@prisma/client';
 
+// Mock errorHandler
+jest.mock('../../../../src/shared/errors', () => {
+  const mockErrorHandler = {
+    createCorrelationId: jest.fn(() => 'test-correlation-id'),
+    withRetry: jest.fn(async (fn) => await fn()),
+    handleError: jest.fn((error) => { throw error; }),
+  };
+  
+  return {
+    ...jest.requireActual('../../../../src/shared/errors'),
+    ErrorHandler: {
+      getInstance: jest.fn(() => mockErrorHandler)
+    },
+    errorHandler: mockErrorHandler
+  };
+});
+
 // Mock PrismaClient
 const mockPrismaClient = {
   $transaction: jest.fn(),
@@ -292,14 +309,14 @@ describe('OptimizedKillRepository', () => {
   describe('attackersEqual', () => {
     it('should correctly identify equal attackers', () => {
       const attacker1 = {
-        character_id: BigInt(123),
-        corporation_id: BigInt(456),
-        alliance_id: BigInt(789),
-        damage_done: 100,
-        final_blow: true,
-        security_status: 0.5,
-        ship_type_id: 588,
-        weapon_type_id: 2488,
+        characterId: BigInt(123),
+        corporationId: BigInt(456),
+        allianceId: BigInt(789),
+        damageDone: 100,
+        finalBlow: true,
+        securityStatus: 0.5,
+        shipTypeId: 588,
+        weaponTypeId: 2488,
       };
 
       const attacker2 = { ...attacker1 };
@@ -311,19 +328,19 @@ describe('OptimizedKillRepository', () => {
 
     it('should correctly identify different attackers', () => {
       const attacker1 = {
-        character_id: BigInt(123),
-        corporation_id: BigInt(456),
-        alliance_id: BigInt(789),
-        damage_done: 100,
-        final_blow: true,
-        security_status: 0.5,
-        ship_type_id: 588,
-        weapon_type_id: 2488,
+        characterId: BigInt(123),
+        corporationId: BigInt(456),
+        allianceId: BigInt(789),
+        damageDone: 100,
+        finalBlow: true,
+        securityStatus: 0.5,
+        shipTypeId: 588,
+        weaponTypeId: 2488,
       };
 
       const attacker2 = {
         ...attacker1,
-        damage_done: 200, // Different damage
+        damageDone: 200, // Different damage
       };
 
       // Access private method through any cast for testing

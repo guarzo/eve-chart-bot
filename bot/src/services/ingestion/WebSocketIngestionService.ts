@@ -31,7 +31,8 @@ import { KillRepository } from '../../infrastructure/repositories/KillRepository
 import { WebSocketKillmail, WebSocketKillmailUpdate } from '../../types/websocket';
 import { WebSocketDataMapper } from './WebSocketDataMapper';
 import { PrismaClient } from '@prisma/client';
-import { errorHandler, ExternalServiceError, ValidationError } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
+import { ExternalServiceError, ValidationError } from '../../shared/errors';
 
 interface WebSocketPreloadConfig {
   enabled: boolean;

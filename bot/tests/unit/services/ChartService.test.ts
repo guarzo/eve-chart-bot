@@ -13,6 +13,17 @@ import { PrismaClient } from '@prisma/client';
 jest.mock('../../../src/lib/logger');
 jest.mock('@prisma/client');
 jest.mock('../../../src/infrastructure/repositories/RepositoryManager');
+
+// Mock ioredis
+jest.mock('ioredis', () => {
+  return jest.fn().mockImplementation(() => ({
+    get: jest.fn(),
+    set: jest.fn(),
+    del: jest.fn(),
+    exists: jest.fn(),
+    quit: jest.fn(),
+  }));
+});
 jest.mock('../../../src/infrastructure/monitoring/MetricsCollector', () => ({
   MetricsCollector: jest.fn().mockImplementation(() => ({
     incrementCounter: jest.fn(),

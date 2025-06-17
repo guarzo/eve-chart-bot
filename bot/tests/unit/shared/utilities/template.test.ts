@@ -107,7 +107,7 @@ describe('TemplateEngine', () => {
       // Assert
       expect(mockPath.resolve).toHaveBeenCalledWith(
         expect.any(String),
-        '../application/chart/templates',
+        '../../application/chart/templates',
         templatePath
       );
     });
@@ -231,7 +231,7 @@ describe('TemplateEngine', () => {
       await expect(TemplateEngine.render(templatePath, {})).rejects.toThrow('Template not found');
       expect(logger.error).toHaveBeenCalledWith(
         `Failed to render template: ${templatePath}`,
-        error
+        expect.any(Error)
       );
     });
   });

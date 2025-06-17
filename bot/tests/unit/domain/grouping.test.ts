@@ -79,7 +79,7 @@ describe("Character Grouping", () => {
       expect(result).toBe("new-group-id");
       expect(prismaMock.characterGroup.create).toHaveBeenCalledWith({
         data: {
-          map_name: "test-group",
+          mapName: "test-group",
           mainCharacterId: null,
         },
       });

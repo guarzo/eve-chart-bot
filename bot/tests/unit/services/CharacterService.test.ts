@@ -314,7 +314,7 @@ describe('CharacterService', () => {
       // Assert
       expect(result).toEqual(mockGroup);
       expect(mockCharacterRepository.createCharacterGroup).toHaveBeenCalledWith({
-        map_name: groupData.map_name,
+        mapName: groupData.map_name,
         mainCharacterId: BigInt(groupData.mainCharacterId)
       });
       expect(logger.debug).toHaveBeenCalledWith('Successfully saved character group', {

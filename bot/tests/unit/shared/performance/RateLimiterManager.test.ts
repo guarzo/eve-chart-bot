@@ -1,50 +1,52 @@
 import 'reflect-metadata';
-import { RateLimiterManager } from '../../../../src/shared/performance/RateLimiterManager';
+import { rateLimiterManager } from '../../../../src/shared/performance/RateLimiterManager';
 import { logger } from '../../../../src/lib/logger';
 
 // Mock dependencies
 jest.mock('../../../../src/lib/logger');
 
 describe('RateLimiterManager', () => {
-  let manager: RateLimiterManager;
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    manager = new RateLimiterManager();
+    rateLimiterManager.cleanup(); // Clean up from previous tests
   });
 
   afterEach(() => {
     jest.useRealTimers();
-    manager.cleanup();
+    rateLimiterManager.cleanup();
   });
 
   describe('constructor', () => {
     it('should initialize with empty limiters', () => {
-      expect(manager).toBeInstanceOf(RateLimiterManager);
+      expect(rateLimiterManager).toBeDefined();
+      expect(typeof rateLimiterManager.getRateLimiter).toBe('function');
     });
   });
 
   describe('getRateLimiter', () => {
     it('should create a new rate limiter for new key', async () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
+      const config = { minDelayMs: 1000 };
 
       // Act
-      const limiter = manager.getRateLimiter('test-service', config);
+      const limiter = rateLimiterManager.getRateLimiter('test-service', config);
 
       // Assert
       expect(limiter).toBeDefined();
-      expect(typeof limiter.waitForNextRequest).toBe('function');
+      expect(typeof limiter.wait).toBe('function');
+      expect(typeof limiter.canMakeRequest).toBe('function');
+      expect(typeof limiter.getTimeUntilNextRequest).toBe('function');
+      expect(typeof limiter.reset).toBe('function');
     });
 
     it('should return existing rate limiter for same key', () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
+      const config = { minDelayMs: 1000 };
 
       // Act
-      const limiter1 = manager.getRateLimiter('test-service', config);
-      const limiter2 = manager.getRateLimiter('test-service', config);
+      const limiter1 = rateLimiterManager.getRateLimiter('test-service', config);
+      const limiter2 = rateLimiterManager.getRateLimiter('test-service', config);
 
       // Assert
       expect(limiter1).toBe(limiter2);
@@ -52,11 +54,11 @@ describe('RateLimiterManager', () => {
 
     it('should create different limiters for different keys', () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
+      const config = { minDelayMs: 1000 };
 
       // Act
-      const limiter1 = manager.getRateLimiter('service-1', config);
-      const limiter2 = manager.getRateLimiter('service-2', config);
+      const limiter1 = rateLimiterManager.getRateLimiter('service-1', config);
+      const limiter2 = rateLimiterManager.getRateLimiter('service-2', config);
 
       // Assert
       expect(limiter1).not.toBe(limiter2);
@@ -66,150 +68,127 @@ describe('RateLimiterManager', () => {
   describe('rate limiting behavior', () => {
     it('should enforce minimum delay between requests', async () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
-      const limiter = manager.getRateLimiter('test-service', config);
+      const config = { minDelayMs: 1000 };
+      const limiter = rateLimiterManager.getRateLimiter('test-service', config);
 
-      // Act
-      const start = Date.now();
-      await limiter.waitForNextRequest();
+      // Act - first call should not wait
+      expect(limiter.canMakeRequest()).toBe(true);
+      await limiter.wait();
+      
+      // Immediately after a request, should need to wait
+      expect(limiter.canMakeRequest()).toBe(false);
+      expect(limiter.getTimeUntilNextRequest()).toBeGreaterThan(0);
       
       // Fast forward time to simulate delay
-      jest.advanceTimersByTime(500);
+      jest.advanceTimersByTime(1000);
       
-      const waitPromise = limiter.waitForNextRequest();
-      jest.advanceTimersByTime(500); // Total 1000ms elapsed
-      
-      await waitPromise;
-
-      // Assert - should have waited at least the minimum delay
-      expect(jest.getTimerCount()).toBeGreaterThanOrEqual(0);
+      // After the delay, should be able to make request again
+      expect(limiter.canMakeRequest()).toBe(true);
     });
 
-    it('should handle rate limit errors with exponential backoff', async () => {
+    it('should track time until next request correctly', async () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
-      const limiter = manager.getRateLimiter('test-service', config);
-
-      // Simulate rate limit hit
-      limiter.onRateLimited();
+      const config = { minDelayMs: 1000 };
+      const limiter = rateLimiterManager.getRateLimiter('test-service', config);
 
       // Act
-      const waitPromise = limiter.waitForNextRequest();
-      jest.advanceTimersByTime(2000); // Advance by backoff time
+      await limiter.wait(); // Make a request
       
-      await waitPromise;
-
+      const timeUntilNext = limiter.getTimeUntilNextRequest();
+      
       // Assert
-      expect(logger.debug).toHaveBeenCalledWith(
-        expect.stringContaining('Rate limiter active'),
-        expect.objectContaining({
-          service: 'test-service',
-        })
-      );
+      expect(timeUntilNext).toBeGreaterThan(0);
+      expect(timeUntilNext).toBeLessThanOrEqual(1000);
     });
 
-    it('should reset backoff after successful requests', async () => {
+    it('should allow reset of rate limiter', async () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
-      const limiter = manager.getRateLimiter('test-service', config);
+      const config = { minDelayMs: 1000 };
+      const limiter = rateLimiterManager.getRateLimiter('test-service', config);
 
-      // Simulate rate limit hit and recovery
-      limiter.onRateLimited();
-      limiter.onSuccessfulRequest();
-
-      // Act
-      const waitPromise = limiter.waitForNextRequest();
-      jest.advanceTimersByTime(1000); // Should only need minimum delay
+      // Act - make a request then reset
+      await limiter.wait();
+      expect(limiter.canMakeRequest()).toBe(false);
       
-      await waitPromise;
-
-      // Assert - Should not have excessive backoff
-      expect(jest.getTimerCount()).toBe(0);
+      limiter.reset();
+      
+      // Assert - should be able to make request immediately after reset
+      expect(limiter.canMakeRequest()).toBe(true);
     });
   });
 
   describe('cleanup', () => {
     it('should clear all rate limiters', () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
-      manager.getRateLimiter('service-1', config);
-      manager.getRateLimiter('service-2', config);
+      const config = { minDelayMs: 1000 };
+      rateLimiterManager.getRateLimiter('service-1', config);
+      rateLimiterManager.getRateLimiter('service-2', config);
 
       // Act
-      manager.cleanup();
+      rateLimiterManager.cleanup();
 
       // Assert - Should be able to create new limiters (indicating cleanup worked)
-      const newLimiter1 = manager.getRateLimiter('service-1', config);
-      const newLimiter2 = manager.getRateLimiter('service-1', config);
+      const newLimiter1 = rateLimiterManager.getRateLimiter('service-1', config);
+      const newLimiter2 = rateLimiterManager.getRateLimiter('service-1', config);
       expect(newLimiter1).toBe(newLimiter2); // Should be the same instance again
     });
 
     it('should handle cleanup when no limiters exist', () => {
       // Act & Assert - Should not throw
-      expect(() => manager.cleanup()).not.toThrow();
+      expect(() => rateLimiterManager.cleanup()).not.toThrow();
     });
   });
 
   describe('multiple services', () => {
     it('should manage different rate limits for different services', async () => {
       // Arrange
-      const fastConfig = { minDelay: 500, maxDelay: 2000 };
-      const slowConfig = { minDelay: 2000, maxDelay: 10000 };
+      const fastConfig = { minDelayMs: 500 };
+      const slowConfig = { minDelayMs: 2000 };
 
       // Act
-      const fastLimiter = manager.getRateLimiter('fast-service', fastConfig);
-      const slowLimiter = manager.getRateLimiter('slow-service', slowConfig);
+      const fastLimiter = rateLimiterManager.getRateLimiter('fast-service', fastConfig);
+      const slowLimiter = rateLimiterManager.getRateLimiter('slow-service', slowConfig);
 
       // Assert
       expect(fastLimiter).not.toBe(slowLimiter);
       
-      // Both should work independently
-      const fastPromise = fastLimiter.waitForNextRequest();
-      const slowPromise = slowLimiter.waitForNextRequest();
+      // Test that they have different delays
+      await fastLimiter.wait();
+      await slowLimiter.wait();
       
-      jest.advanceTimersByTime(2500);
-      
-      await Promise.all([fastPromise, slowPromise]);
+      expect(fastLimiter.getTimeUntilNextRequest()).toBeLessThan(1000);
+      expect(slowLimiter.getTimeUntilNextRequest()).toBeGreaterThan(1500);
     });
   });
 
-  describe('error handling', () => {
-    it('should handle concurrent rate limit hits', async () => {
+  describe('manager functionality', () => {
+    it('should provide stats for all rate limiters', () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 5000 };
-      const limiter = manager.getRateLimiter('test-service', config);
+      const config = { minDelayMs: 1000 };
+      rateLimiterManager.getRateLimiter('service-1', config);
+      rateLimiterManager.getRateLimiter('service-2', config);
 
-      // Act - Simulate multiple rate limit hits
-      limiter.onRateLimited();
-      limiter.onRateLimited();
-      limiter.onRateLimited();
-
-      const waitPromise = limiter.waitForNextRequest();
-      jest.advanceTimersByTime(8000); // Should handle exponential backoff
-      
-      await waitPromise;
+      // Act
+      const stats = rateLimiterManager.getStats();
 
       // Assert
-      expect(logger.debug).toHaveBeenCalled();
+      expect(stats).toHaveProperty('service-1');
+      expect(stats).toHaveProperty('service-2');
+      expect(stats['service-1']).toHaveProperty('canMakeRequest');
+      expect(stats['service-1']).toHaveProperty('timeUntilNext');
+      expect(typeof stats['service-1'].canMakeRequest).toBe('boolean');
+      expect(typeof stats['service-1'].timeUntilNext).toBe('number');
     });
 
-    it('should cap backoff at maximum delay', async () => {
+    it('should allow resetting specific service limiters', () => {
       // Arrange
-      const config = { minDelay: 1000, maxDelay: 3000 };
-      const limiter = manager.getRateLimiter('test-service', config);
+      const config = { minDelayMs: 1000 };
+      rateLimiterManager.getRateLimiter('service-1', config);
+      rateLimiterManager.getRateLimiter('service-2', config);
 
-      // Act - Multiple rate limits to trigger max backoff
-      for (let i = 0; i < 10; i++) {
-        limiter.onRateLimited();
-      }
-
-      const waitPromise = limiter.waitForNextRequest();
-      jest.advanceTimersByTime(3000); // Should not exceed maxDelay
-      
-      await waitPromise;
-
-      // Assert - Should have been limited to maxDelay
-      expect(jest.getTimerCount()).toBe(0);
+      // Act & Assert - Should not throw
+      expect(() => rateLimiterManager.reset('service-1')).not.toThrow();
+      expect(() => rateLimiterManager.reset('non-existent')).not.toThrow();
     });
   });
 });

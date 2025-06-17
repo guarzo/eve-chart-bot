@@ -9,7 +9,14 @@ export function ensureBigInt(value?: string | number | bigint | null): bigint | 
   if (value === null || value === undefined) return null;
   if (typeof value === 'bigint') return value;
   if (typeof value === 'number') return BigInt(value);
-  if (typeof value === 'string') return BigInt(value);
+  if (typeof value === 'string') {
+    if (value === '') return null; // Handle empty string
+    try {
+      return BigInt(value);
+    } catch {
+      return null; // Handle invalid strings
+    }
+  }
   throw new Error(`Cannot convert ${typeof value} to BigInt`);
 }
 
@@ -47,4 +54,39 @@ export function ensureDate(value: Date | string | null): Date | null {
   if (!value) return null;
   if (value instanceof Date) return value;
   return new Date(value);
+}
+
+/**
+ * Format BigInt as string
+ */
+export function formatBigInt(value: bigint): string {
+  return value.toString();
+}
+
+/**
+ * Parse string ID to BigInt safely
+ */
+export function parseStringId(value?: string | null): bigint | null {
+  return ensureBigInt(value);
+}
+
+/**
+ * Safely parse integer with default value
+ */
+export function safeParseInt(value?: string | number | null, defaultValue: number = 0): number {
+  if (value === null || value === undefined) return defaultValue;
+  if (typeof value === 'number') return Math.trunc(value);
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    return isNaN(parsed) ? defaultValue : parsed;
+  }
+  return defaultValue;
+}
+
+/**
+ * Format number as percentage
+ */
+export function formatPercentage(value: number, decimals: number = 2): string {
+  const percentage = value * 100;
+  return `${percentage.toFixed(decimals)}%`;
 }

@@ -1,21 +1,15 @@
 import 'reflect-metadata';
-import { TimerManager } from '../../../../src/shared/performance/timerManager';
+import { timerManager } from '../../../../src/shared/performance/timerManager';
 
 describe('TimerManager', () => {
-  let timerManager: TimerManager;
-
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
-    
-    // Get instance
-    timerManager = TimerManager.getInstance();
   });
 
   afterEach(() => {
     jest.useRealTimers();
-    timerManager.clearAllTimeouts();
-    timerManager.clearAllIntervals();
+    // Note: TimerManager is a singleton and manages cleanup internally
   });
 
   describe('setTimeout', () => {

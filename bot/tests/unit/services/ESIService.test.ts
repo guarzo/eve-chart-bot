@@ -174,10 +174,8 @@ describe('ESIService', () => {
 
       // Act & Assert
       await expect(esiService.getKillmail(killmailId, hash)).rejects.toThrow();
-      expect(errorHandler.handleExternalServiceError).toHaveBeenCalledWith(
+      expect(errorHandler.handleError).toHaveBeenCalledWith(
         error,
-        'ESI',
-        `killmail/${killmailId}/${hash}`,
         expect.any(Object)
       );
     });
@@ -225,10 +223,8 @@ describe('ESIService', () => {
 
       // Act & Assert
       await expect(esiService.getCharacter(characterId)).rejects.toThrow();
-      expect(errorHandler.handleExternalServiceError).toHaveBeenCalledWith(
+      expect(errorHandler.handleError).toHaveBeenCalledWith(
         error,
-        'ESI',
-        `character/${characterId}`,
         expect.any(Object)
       );
     });

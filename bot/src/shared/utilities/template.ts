@@ -30,7 +30,7 @@ export class TemplateEngine {
     // Create loading promise to prevent duplicate reads
     const loadingPromise = (async () => {
       try {
-        const fullPath = path.resolve(__dirname, '../application/chart/templates', templatePath);
+        const fullPath = path.resolve(__dirname, '../../application/chart/templates', templatePath);
         const template = await fs.readFile(fullPath, 'utf8');
         this.templateCache.set(templatePath, template);
         return template;
