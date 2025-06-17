@@ -1,7 +1,7 @@
 import { MapActivity } from '../../domain/activity/MapActivity';
 import { BaseRepository } from './BaseRepository';
 import { logger } from '../../lib/logger';
-import { errorHandler } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
 
 /**
  * Repository for map activity data access

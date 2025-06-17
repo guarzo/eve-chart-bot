@@ -11,7 +11,7 @@ jest.mock("../../../src/lib/logger", () => ({
   },
 }));
 
-jest.mock("../../../src/utils/timerManager", () => ({
+jest.mock("../../../src/shared/performance/timerManager", () => ({
   timerManager: {
     delay: jest.fn((ms) => Promise.resolve()),
   },

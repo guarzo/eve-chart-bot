@@ -1,4 +1,4 @@
-import { TemplateEngine } from "../../../src/utils/template";
+import { TemplateEngine } from "../../../src/shared/utilities/template";
 import { promises as fs } from "fs";
 import * as path from "path";
 

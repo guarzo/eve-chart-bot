@@ -3,7 +3,7 @@ import { logger } from '../../lib/logger';
 import { Character } from '../../domain/character/Character';
 import { CharacterGroup } from '../../domain/character/CharacterGroup';
 import { PrismaMapper } from '../mapper/PrismaMapper';
-import { errorHandler } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
 
 /**
  * Simplified Character Repository for WebSocket-based system

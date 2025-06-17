@@ -1,7 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 /* eslint-disable max-lines */
 import { logger } from '../../lib/logger';
-import { errorHandler, DatabaseError } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
+import { DatabaseError } from '../../shared/errors';
 import { KillFactData, VictimData, AttackerData, InvolvedCharacterData } from '../../shared/types/database';
 
 /**

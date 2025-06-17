@@ -1,5 +1,5 @@
 import { prismaMock } from "../../setup";
-import { CharacterGroupUtils } from "../../../src/utils/CharacterGroupUtils";
+import { CharacterGroupUtils } from "../../../src/shared/utilities/CharacterGroupUtils";
 
 describe("Character Grouping", () => {
   describe("createCharacterGroupSafely", () => {

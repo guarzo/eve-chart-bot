@@ -4,7 +4,7 @@ import { logger } from '../../lib/logger';
 import prisma from '../persistence/client';
 import { PrismaMapper } from '../mapper/PrismaMapper';
 import { ensureBigInt } from '../../shared/utilities/conversion';
-import { errorHandler } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
 
 /**
  * Base repository class that all specific repositories will extend.

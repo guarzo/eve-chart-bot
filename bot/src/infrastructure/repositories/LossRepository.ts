@@ -3,7 +3,7 @@ import { logger } from '../../lib/logger';
 import { LossFact } from '../../domain/killmail/LossFact';
 import { PrismaMapper } from '../mapper/PrismaMapper';
 import { buildWhereFilter } from '../../shared/utilities/query-helper';
-import { errorHandler } from '../../shared/errors';
+import { errorHandler } from '../../shared/errors/ErrorHandler';
 
 /**
  * Repository for accessing ship loss data

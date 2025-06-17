@@ -10,7 +10,7 @@ jest.mock("../../src/lib/logger", () => ({
 }));
 
 // Mock feature flags to use basic strategy
-jest.mock("../../src/utils/feature-flags", () => ({
+jest.mock("../../src/shared/utilities/feature-flags", () => ({
   flags: {
     newChartRendering: false,
   },

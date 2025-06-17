@@ -1,4 +1,4 @@
-import { MapActivitySyncService } from '../../../src/services/MapActivitySyncService';
+import { MapActivityService } from '../../../src/services/ingestion/MapActivityService';
 import { MapClient } from '../../../src/infrastructure/http/MapClient';
 import { CharacterRepository } from '../../../src/infrastructure/repositories/CharacterRepository';
 import { MapActivityRepository } from '../../../src/infrastructure/repositories/MapActivityRepository';
@@ -52,8 +52,8 @@ const mockPrismaClient = {
   $transaction: jest.fn(async (callback) => await callback(mockPrismaClient)),
 } as unknown as PrismaClient;
 
-describe('MapActivitySyncService', () => {
-  let service: MapActivitySyncService;
+describe('MapActivityService', () => {
+  let service: MapActivityService;
   let mockMapClient: jest.Mocked<MapClient>;
   let mockCharacterRepo: jest.Mocked<CharacterRepository>;
   let mockMapActivityRepo: jest.Mocked<MapActivityRepository>;
@@ -67,7 +67,7 @@ describe('MapActivitySyncService', () => {
     mockMapActivityRepo = new MapActivityRepository() as jest.Mocked<MapActivityRepository>;
     
     // Create service instance
-    service = new MapActivitySyncService(
+    service = new MapActivityService(
       mockMapClient,
       mockCharacterRepo,
       mockMapActivityRepo

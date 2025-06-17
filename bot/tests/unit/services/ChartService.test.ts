@@ -1,4 +1,4 @@
-import { ChartService } from '../../../src/services/ChartService';
+import { ChartService } from '../../../src/application/chart/ChartService';
 import { CharacterRepository } from '../../../src/infrastructure/repositories/CharacterRepository';
 import { KillRepository } from '../../../src/infrastructure/repositories/KillRepository';
 import { MapActivityRepository } from '../../../src/infrastructure/repositories/MapActivityRepository';

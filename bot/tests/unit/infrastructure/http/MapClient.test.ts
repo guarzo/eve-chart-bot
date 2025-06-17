@@ -1,6 +1,6 @@
 import { MapClient } from "../../../../src/infrastructure/http/MapClient";
-import { rateLimiterManager } from "../../../../src/utils/RateLimiterManager";
-import { RateLimiter } from "../../../../src/utils/rateLimiter";
+import { rateLimiterManager } from "../../../../src/shared/performance/RateLimiterManager";
+import { RateLimiter } from "../../../../src/shared/performance/rateLimiter";
 
 // Mock dependencies
 jest.mock("../../../../src/infrastructure/http/UnifiedESIClient");
