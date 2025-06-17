@@ -216,13 +216,9 @@ export class UnifiedChartService implements IChartService {
    * Validate chart configuration
    */
   async validateConfiguration(_config: ChartConfiguration): Promise<boolean> {
-    try {
-      // Configuration validates itself in constructor
-      // Additional async validation could go here
-      return true;
-    } catch {
-      return false;
-    }
+    // Configuration validates itself in constructor
+    // Additional async validation could go here
+    return true;
   }
 
   // Private helper methods

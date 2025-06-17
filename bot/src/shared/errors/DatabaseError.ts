@@ -161,7 +161,7 @@ export class DatabaseError extends BaseError {
       ...super.toJSON(),
       operation: this.operation,
       table: this.table,
-      query: this.query ? this.query.substring(0, 200) + '...' : undefined, // Truncate long queries
+      query: this.query ? `${this.query.substring(0, 200)  }...` : undefined, // Truncate long queries
     };
   }
 }

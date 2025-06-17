@@ -2,7 +2,7 @@ import { logger } from '../lib/logger';
 import { timerManager } from '../shared/performance/timerManager';
 
 export class MemoryMonitor {
-  private interval: NodeJS.Timeout | null = null;
+  private interval: ReturnType<typeof setInterval> | null = null;
   private samples: { timestamp: Date; memory: NodeJS.MemoryUsage }[] = [];
   private maxSamples = 100;
 

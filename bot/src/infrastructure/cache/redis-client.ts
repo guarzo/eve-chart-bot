@@ -1,4 +1,4 @@
-import { Redis } from 'ioredis';
+import Redis from 'ioredis';
 import { ValidatedConfiguration } from '../../config/validated';
 import { logger } from '../../lib/logger';
 
@@ -28,9 +28,6 @@ function getRedisClient(): Redis {
 
 // Extend Redis client with additional methods for chart caching
 class ExtendedRedisClient {
-  constructor() {
-    // Client will be lazily initialized on first use
-  }
   
   private get client(): Redis {
     return getRedisClient();

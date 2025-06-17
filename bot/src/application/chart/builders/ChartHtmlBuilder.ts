@@ -22,7 +22,7 @@ export class ChartHtmlBuilder {
    */
   static buildDataRows(chartData: ChartData, styling?: HtmlStyling): string {
     const cellStyle = styling?.table?.cell;
-    const labelStyle = styling?.table?.labelCell || cellStyle;
+    const labelStyle = styling?.table?.labelCell ?? cellStyle;
     
     const cellStyleAttr = cellStyle ? ` style="${cellStyle}"` : '';
     const labelStyleAttr = labelStyle ? ` style="${labelStyle}"` : '';

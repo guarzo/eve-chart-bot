@@ -130,9 +130,10 @@ export class DiscordError extends BaseError {
         return `The command '${this.commandName || 'unknown'}' encountered an error. Please try again.`;
       case 'PERMISSION_ERROR':
         return 'You do not have permission to use this command.';
-      case 'RATE_LIMIT_ERROR':
+      case 'RATE_LIMIT_ERROR': {
         const retryAfter = this.context?.metadata?.retryAfter;
         return `You are being rate limited. Please wait ${retryAfter ? Math.ceil(retryAfter / 1000) : 'a moment'} seconds before trying again.`;
+      }
       case 'API_ERROR':
         return 'Discord is experiencing issues. Please try again later.';
       case 'INTERACTION_ERROR':

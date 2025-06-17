@@ -67,7 +67,7 @@ export class ShipTypesDataProcessor implements IChartDataProcessor {
     
     // Process victim data
     rawData.forEach(kill => {
-      if (kill.victim && kill.victim.shipTypeName) {
+      if (kill.victim?.shipTypeName) {
         const shipType = kill.victim.shipTypeName;
         const currentCount = shipTypeMap.get(shipType) || 0;
         shipTypeMap.set(shipType, currentCount + 1);

@@ -312,8 +312,8 @@ export class MetricsCollector extends EventEmitter {
         const labelStr = labels ? `{${Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}}` : '';
         lines.push(`${name}_count${labelStr} ${stats.count}`);
         lines.push(`${name}_sum${labelStr} ${stats.sum}`);
-        lines.push(`${name}_bucket{le="95"${labels ? ',' + Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',') : ''}} ${stats.p95}`);
-        lines.push(`${name}_bucket{le="99"${labels ? ',' + Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',') : ''}} ${stats.p99}`);
+        lines.push(`${name}_bucket{le="95"${labels ? `,${  Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}` : ''}} ${stats.p95}`);
+        lines.push(`${name}_bucket{le="99"${labels ? `,${  Object.entries(labels).map(([k, v]) => `${k}="${v}"`).join(',')}` : ''}} ${stats.p99}`);
       }
     }
     

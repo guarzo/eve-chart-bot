@@ -97,7 +97,7 @@ export class KillRepositoryPerformanceComparison {
     const startTime = performance.now();
     
     // Track database queries (simplified - in real implementation you'd use Prisma middleware)
-    let queryCount = 0;
+    const queryCount = 0;
     // Monkey-patching Prisma methods is not type-safe
     // const originalQuery = this.prisma.$executeRaw;
     // this.prisma.$executeRaw = async (...args) => {

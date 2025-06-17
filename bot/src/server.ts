@@ -142,7 +142,7 @@ app.get('/memory', (_req, res) => {
       rss: `${Math.round(memory.rss / 1024 / 1024)}MB`,
       external: `${Math.round(memory.external / 1024 / 1024)}MB`,
       arrayBuffers: `${Math.round(memory.arrayBuffers / 1024 / 1024)}MB`,
-      heapPercent: ((memory.heapUsed / memory.heapTotal) * 100).toFixed(1) + '%'
+      heapPercent: `${((memory.heapUsed / memory.heapTotal) * 100).toFixed(1)  }%`
     },
     growthRate: `${metrics.heapGrowthRate.toFixed(2)}MB/min`,
     sampleCount: metrics.samples.length,

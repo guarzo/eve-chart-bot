@@ -30,8 +30,8 @@ export class RepositoryManager {
       // Initialize repositories with PrismaClient
       this.characterRepository = new CharacterRepository(this.prisma);
       this.killRepository = new KillRepository(this.prisma);
-      this.lossRepository = new LossRepository();
-      this.mapActivityRepository = new MapActivityRepository();
+      this.lossRepository = new LossRepository(this.prisma);
+      this.mapActivityRepository = new MapActivityRepository(this.prisma);
       
       logger.info('RepositoryManager initialized successfully');
     } catch (error) {
@@ -48,10 +48,10 @@ export class RepositoryManager {
    * @param prisma Optional PrismaClient instance (only used on first call)
    */
   static getInstance(prisma?: PrismaClient): RepositoryManager {
-    if (!this.instance) {
-      this.instance = new RepositoryManager(prisma);
+    if (!RepositoryManager.instance) {
+      RepositoryManager.instance = new RepositoryManager(prisma);
     }
-    return this.instance;
+    return RepositoryManager.instance;
   }
 
   /**

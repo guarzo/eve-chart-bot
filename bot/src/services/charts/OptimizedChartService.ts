@@ -412,7 +412,7 @@ export class OptimizedChartService extends BaseChartService {
   private getTimeKey(date: Date, groupBy: string): string {
     switch (groupBy) {
       case 'hour':
-        return date.toISOString().substring(0, 13) + ':00:00.000Z';
+        return `${date.toISOString().substring(0, 13)  }:00:00.000Z`;
       case 'day':
         return date.toISOString().substring(0, 10);
       case 'week': {

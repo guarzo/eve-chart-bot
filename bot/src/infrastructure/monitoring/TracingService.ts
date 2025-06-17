@@ -38,7 +38,7 @@ export class TracingService {
     // Clean up old spans periodically
     this.cleanupInterval = setInterval(() => {
       this.cleanupOldSpans();
-    }, 300000); // Every 5 minutes
+    }, 300000).unref(); // Every 5 minutes, don't block process exit
   }
 
   static getInstance(): TracingService {

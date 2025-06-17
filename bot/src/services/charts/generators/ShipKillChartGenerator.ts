@@ -163,7 +163,7 @@ export class ShipKillChartGenerator extends BaseChartGenerator {
         borderColor: ShipTypesChartConfig.colors[index % ShipTypesChartConfig.colors.length],
       };
     });
-    let totalDestroyed = 0;
+    const totalDestroyed = 0;
     // Skip calculation until getShipTypesOverTime is properly implemented
     const chartData: ChartData = {
       labels: dates.map(date => format(new Date(date), 'MMM d')),
